@@ -117,15 +117,15 @@ Selenium Cucumber test sonuçlarını otomatik raporlayan, CI/CD'de çalışan, 
 - run-manifest.json şeması
 
 ### Definition of Done
-- [ ] `mvn clean verify` tüm testleri geçer
-- [ ] `allure generate` statik rapor oluşturur
-- [ ] FastAPI `uvicorn` ile port 8000'de çalışır
-- [ ] Javalin port 8080'de çalışır
-- [ ] Email GreenMail testleri geçer
-- [ ] Jira WireMock testleri geçer
-- [ ] DOORS fake `doors.exe` testleri geçer
-- [ ] CI/CD pipeline başarıyla tetiklenir
-- [ ] Playwright snapshot testleri geçer
+- [x] `mvn clean verify` tüm testleri geçer
+- [x] `allure generate` statik rapor oluşturur
+- [x] FastAPI `uvicorn` ile port 8000'de çalışır
+- [x] Javalin port 8080'de çalışır
+- [x] Email GreenMail testleri geçer
+- [x] Jira WireMock testleri geçer
+- [x] DOORS fake `doors.exe` testleri geçer
+- [x] CI/CD pipeline başarıyla tetiklenir
+- [x] Playwright snapshot testleri geçer
 
 ---
 
@@ -233,9 +233,9 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   - `pom.xml` pattern: standard Maven multi-module with `<modules>` and `<dependencyManagement>`
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q validate` → BUILD SUCCESS
-  - [ ] `ls pom.xml test-core/pom.xml allure-integration/pom.xml` → all exist
-  - [ ] `.env.example` exists, no real secrets
+  - [x] `mvn -q validate` → BUILD SUCCESS
+  - [x] `ls pom.xml test-core/pom.xml allure-integration/pom.xml` → all exist
+  - [x] `.env.example` exists, no real secrets
 
   **QA Scenarios**:
   ```
@@ -301,9 +301,9 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   - Selenium WebDriver: `org.seleniumhq.selenium:selenium-java`
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q -pl test-core test -Dcucumber.filter.tags="@sample-fail"` → exit code ≠ 0 (test fails as expected)
-  - [ ] `mvn -q -pl test-core test -Dcucumber.filter.tags="not @sample-fail"` → exit code = 0
-  - [ ] `target/cucumber-reports/` dizininde JSON rapor oluşur
+  - [x] `mvn -q -pl test-core test -Dcucumber.filter.tags="@sample-fail"` → exit code ≠ 0 (test fails as expected)
+  - [x] `mvn -q -pl test-core test -Dcucumber.filter.tags="not @sample-fail"` → exit code = 0
+  - [x] `target/cucumber-reports/` dizininde JSON rapor oluşur
 
   **QA Scenarios**:
   ```
@@ -360,10 +360,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   - Wiki-renderer format: `textile` veya `atlassian-wiki-renderer`
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q -pl jira-service test` → WireMock testleri PASS
-  - [ ] PAT ile `GET /rest/api/2/myself` → 200, username doğru
-  - [ ] `POST /rest/api/2/issue` WireMock → 201, issue key döner
-  - [ ] Attachment upload → `X-Atlassian-Token: no-check` header var
+  - [x] `mvn -q -pl jira-service test` → WireMock testleri PASS
+  - [x] PAT ile `GET /rest/api/2/myself` → 200, username doğru
+  - [x] `POST /rest/api/2/issue` WireMock → 201, issue key döner
+  - [x] Attachment upload → `X-Atlassian-Token: no-check` header var
 
   **QA Scenarios**:
   ```
@@ -427,10 +427,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.1
 
   **Acceptance Criteria**:
-  - [ ] JSON Schema `schemas/run-manifest.schema.json` geçerli
-  - [ ] Java `RunManifest.class` Jackson serialization → valid JSON
-  - [ ] Python `RunManifest` Pydantic model → valid JSON
-  - [ ] Sample manifest `manifests/sample-run-001.json` şemaya uygun
+  - [x] JSON Schema `schemas/run-manifest.schema.json` geçerli
+  - [x] Java `RunManifest.class` Jackson serialization → valid JSON
+  - [x] Python `RunManifest` Pydantic model → valid JSON
+  - [x] Sample manifest `manifests/sample-run-001.json` şemaya uygun
 
   **QA Scenarios**:
   ```
@@ -476,10 +476,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.1
 
   **Acceptance Criteria**:
-  - [ ] `allure --version` → sürüm yazdırır
-  - [ ] `allure generate --clean target/allure-results -o target/allure-report` → HTML oluşur
-  - [ ] `ffprobe test-video.mp4` → `r_frame_rate=15/1`
-  - [ ] `ffprobe test-video.mp4` → `codec_type=video`
+  - [x] `allure --version` → sürüm yazdırır
+  - [x] `allure generate --clean target/allure-results -o target/allure-report` → HTML oluşur
+  - [x] `ffprobe test-video.mp4` → `r_frame_rate=15/1`
+  - [x] `ffprobe test-video.mp4` → `codec_type=video`
 
   **QA Scenarios**:
   ```
@@ -536,11 +536,11 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   - Allure annotations: `io.qameta.allure:allure-junit5`
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q test -Dcucumber.filter.tags="@sample-fail"` → `target/allure-results/` en az 1 `*-result.json` içerir
-  - [ ] `*-result.json` içinde `"status": "failed"` var
-  - [ ] `*-result.json` içinde `"name": "Hatalı giriş"` var
-  - [ ] `allure generate --clean target/allure-results -o target/allure-report` exit 0
-  - [ ] `test -f target/allure-report/index.html` → exists
+  - [x] `mvn -q test -Dcucumber.filter.tags="@sample-fail"` → `target/allure-results/` en az 1 `*-result.json` içerir
+  - [x] `*-result.json` içinde `"status": "failed"` var
+  - [x] `*-result.json` içinde `"name": "Hatalı giriş"` var
+  - [x] `allure generate --clean target/allure-results -o target/allure-report` exit 0
+  - [x] `test -f target/allure-report/index.html` → exists
 
   **QA Scenarios**:
   ```
@@ -593,10 +593,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.2, 0.5
 
   **Acceptance Criteria**:
-  - [ ] Fail senaryoda `*-result.json` `attachments` array'inde `video/mp4` var
-  - [ ] Fail senaryoda `*-result.json` `attachments` array'inde `image/png` var
-  - [ ] Pass senaryoda video dosyası diskte yok
-  - [ ] `ffprobe failed-scenario.mp4` → `r_frame_rate=15/1`
+  - [x] Fail senaryoda `*-result.json` `attachments` array'inde `video/mp4` var
+  - [x] Fail senaryoda `*-result.json` `attachments` array'inde `image/png` var
+  - [x] Pass senaryoda video dosyası diskte yok
+  - [x] `ffprobe failed-scenario.mp4` → `r_frame_rate=15/1`
 
   **QA Scenarios**:
   ```
@@ -652,9 +652,9 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.4, 1
 
   **Acceptance Criteria**:
-  - [ ] `manifests/sample-run-001.json` — `totalScenarios >= 2`
-  - [ ] `failed >= 1`
-  - [ ] `scenarios[].doorsAbsNumber` DOORS tag'inden parse edilmiş
+  - [x] `manifests/sample-run-001.json` — `totalScenarios >= 2`
+  - [x] `failed >= 1`
+  - [x] `scenarios[].doorsAbsNumber` DOORS tag'inden parse edilmiş
 
   **QA Scenarios**:
   ```
@@ -705,10 +705,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.4, 3
 
   **Acceptance Criteria**:
-  - [ ] `pytest fastapi-server/tests -v` → all pass
-  - [ ] `curl -i http://localhost:8000/api/v1/runs` → 401 Unauthorized
-  - [ ] `curl -H "Authorization: Bearer $(python3 fastapi-server/scripts/get_token.py)" http://localhost:8000/api/v1/runs` → 200
-  - [ ] Response body JSON Schema valid (Task 0.4 şeması)
+  - [x] `pytest fastapi-server/tests -v` → all pass
+  - [x] `curl -i http://localhost:8000/api/v1/runs` → 401 Unauthorized
+  - [x] `curl -H "Authorization: Bearer $(python3 fastapi-server/scripts/get_token.py)" http://localhost:8000/api/v1/runs` → 200
+  - [x] Response body JSON Schema valid (Task 0.4 şeması)
 
   **QA Scenarios**:
   ```
@@ -756,9 +756,9 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.4, 3
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q -pl javalin-server test` → all pass
-  - [ ] `curl -i http://localhost:8080/api/v1/runs` → 401
-  - [ ] Javalin response JSON yapısı FastAPI ile aynı (contract test)
+  - [x] `mvn -q -pl javalin-server test` → all pass
+  - [x] `curl -i http://localhost:8080/api/v1/runs` → 401
+  - [x] Javalin response JSON yapısı FastAPI ile aynı (contract test)
 
   **QA Scenarios**:
   ```
@@ -806,11 +806,11 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.4, 3
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q -pl email-service test` → GreenMail 1 mesaj alır
-  - [ ] Email subject: run ID + fail count içerir
-  - [ ] MIME: `multipart/alternative` → `text/html` + `text/plain`
-  - [ ] HTML body: web sunucu linki `/reports/{runId}` içerir
-  - [ ] No raw SMTP password in body
+  - [x] `mvn -q -pl email-service test` → GreenMail 1 mesaj alır
+  - [x] Email subject: run ID + fail count içerir
+  - [x] MIME: `multipart/alternative` → `text/html` + `text/plain`
+  - [x] HTML body: web sunucu linki `/reports/{runId}` içerir
+  - [x] No raw SMTP password in body
 
   **QA Scenarios**:
   ```
@@ -869,11 +869,11 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.3
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q -pl jira-service test` → WireMock verifies `POST /rest/api/2/issue`
-  - [ ] Request body: `project.key`, `issuetype.name=Bug`, `summary`, `description` (wiki format)
-  - [ ] Duplicate request → `409 Conflict` → existing key döner
-  - [ ] Attachment upload: `X-Atlassian-Token: no-check` header mevcut
-  - [ ] Dry-run mode: hiçbir gerçek HTTP çağrısı yapılmaz
+  - [x] `mvn -q -pl jira-service test` → WireMock verifies `POST /rest/api/2/issue`
+  - [x] Request body: `project.key`, `issuetype.name=Bug`, `summary`, `description` (wiki format)
+  - [x] Duplicate request → `409 Conflict` → existing key döner
+  - [x] Attachment upload: `X-Atlassian-Token: no-check` header mevcut
+  - [x] Dry-run mode: hiçbir gerçek HTTP çağrısı yapılmaz
 
   **QA Scenarios**:
   ```
@@ -929,11 +929,11 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 0.4
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q -pl doors-service test` → fake `doors.exe` doğru argümanları alır
-  - [ ] Temp JSON: `{"absNumber": "DOORS-12345", "status": "failed", "runId": "..."}`
-  - [ ] Timeout → controlled failure
-  - [ ] OS check: non-Windows → warning, no crash
-  - [ ] Dry-run: `doors.exe` çağrılmaz, sadece log
+  - [x] `mvn -q -pl doors-service test` → fake `doors.exe` doğru argümanları alır
+  - [x] Temp JSON: `{"absNumber": "DOORS-12345", "status": "failed", "runId": "..."}`
+  - [x] Timeout → controlled failure
+  - [x] OS check: non-Windows → warning, no crash
+  - [x] Dry-run: `doors.exe` çağrılmaz, sadece log
 
   **QA Scenarios**:
   ```
@@ -985,10 +985,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 4, 5, 7
 
   **Acceptance Criteria**:
-  - [ ] Playwright: navigate → `[data-testid="run-summary"]` görünür
-  - [ ] Playwright: `[data-testid="create-jira-button"]` tıklanabilir
-  - [ ] `POST /api/v1/runs/{runId}/scenarios/{scenarioId}/jira` → 201, `{"jiraKey": "PROJ-123"}`
-  - [ ] Response: Jira issue key sayfada görünür
+  - [x] Playwright: navigate → `[data-testid="run-summary"]` görünür
+  - [x] Playwright: `[data-testid="create-jira-button"]` tıklanabilir
+  - [x] `POST /api/v1/runs/{runId}/scenarios/{scenarioId}/jira` → 201, `{"jiraKey": "PROJ-123"}`
+  - [x] Response: Jira issue key sayfada görünür
 
   **QA Scenarios**:
   ```
@@ -1047,11 +1047,11 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 3, 6, 7, 8
 
   **Acceptance Criteria**:
-  - [ ] `mvn -q -pl orchestrator test` → mock pipeline tüm stage'leri sırayla çalıştırır
-  - [ ] Non-critical fail (DOORS) → pipeline exit 0, warning log
-  - [ ] Critical fail (Allure) → pipeline exit ≠ 0
-  - [ ] Run manifest `manifests/{runId}.json` oluşur
-  - [ ] Her stage başlangıç/bitiş log'u
+  - [x] `mvn -q -pl orchestrator test` → mock pipeline tüm stage'leri sırayla çalıştırır
+  - [x] Non-critical fail (DOORS) → pipeline exit 0, warning log
+  - [x] Critical fail (Allure) → pipeline exit ≠ 0
+  - [x] Run manifest `manifests/{runId}.json` oluşur
+  - [x] Her stage başlangıç/bitiş log'u
 
   **QA Scenarios**:
   ```
@@ -1095,9 +1095,9 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 4, 5
 
   **Acceptance Criteria**:
-  - [ ] `pytest contract-tests/ -v --base-url-fastapi=http://localhost:8000 --base-url-javalin=http://localhost:8080` → all pass
-  - [ ] Tüm endpoint'ler her iki sunucuda 200 döner
-  - [ ] Response JSON key set identical
+  - [x] `pytest contract-tests/ -v --base-url-fastapi=http://localhost:8000 --base-url-javalin=http://localhost:8080` → all pass
+  - [x] Tüm endpoint'ler her iki sunucuda 200 döner
+  - [x] Response JSON key set identical
 
   **QA Scenarios**:
   ```
@@ -1144,10 +1144,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 10
 
   **Acceptance Criteria**:
-  - [ ] `Jenkinsfile` parse valid (Jenkins Syntax Check)
-  - [ ] Pipeline stages tanımlı: Checkout, Test, Report, Deploy, Notify
-  - [ ] Tüm secret'lar `${CREDENTIAL_ID}` formatında
-  - [ ] `allure report` archiving step mevcut
+  - [x] `Jenkinsfile` parse valid (Jenkins Syntax Check)
+  - [x] Pipeline stages tanımlı: Checkout, Test, Report, Deploy, Notify
+  - [x] Tüm secret'lar `${CREDENTIAL_ID}` formatında
+  - [x] `allure report` archiving step mevcut
 
   **QA Scenarios**:
   ```
@@ -1196,10 +1196,10 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
   **Blocked By**: Task 1, 6
 
   **Acceptance Criteria**:
-  - [ ] Playwright: `target/allure-report/index.html` → `[data-testid="total-counter"]` görünür
-  - [ ] Playwright: CSS `--brand-primary` değişkeni uygulanmış
-  - [ ] Playwright: custom logo `img[src*="logo"]` yüklenir
-  - [ ] Email: Playwright screenshot → baseline diff < threshold
+  - [x] Playwright: `target/allure-report/index.html` → `[data-testid="total-counter"]` görünür
+  - [x] Playwright: CSS `--brand-primary` değişkeni uygulanmış
+  - [x] Playwright: custom logo `img[src*="logo"]` yüklenir
+  - [x] Email: Playwright screenshot → baseline diff < threshold
 
   **QA Scenarios**:
   ```
@@ -1231,19 +1231,19 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 > 4 review agents in PARALLEL. ALL must APPROVE. Present results, get explicit user OK.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Her "Must Have" için implementasyon kontrolü; her "Must NOT Have" için codebase taraması. Evidence dosyaları `.sisyphus/evidence/` altında mevcut mu?
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   `mvn clean verify` + `pytest` + linter. `as any`/`@ts-ignore`, empty catch, console.log, commented-out code, unused imports kontrolü.
   Output: `Build [PASS/FAIL] | Tests [N pass/N fail] | VERDICT`
 
-- [ ] F3. **Real QA Execution** — `unspecified-high` (+ `playwright`)
+- [x] F3. **Real QA Execution** — `unspecified-high` (+ `playwright`)
   Temiz state'ten başla. Tüm task'lardaki QA senaryolarını çalıştır. Cross-task integration test. Edge cases: empty state, invalid input, rapid actions.
   Output: `Scenarios [N/N pass] | Integration [N/N] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   Her task için "What to do" vs actual diff karşılaştırması. 1:1 mapping. "Must NOT do" compliance. Cross-task contamination tespiti.
   Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | VERDICT`
 
@@ -1285,10 +1285,10 @@ jenkinsfile-validator Jenkinsfile  # or: act -W .github/workflows/test-report.ym
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" present
-- [ ] All "Must NOT Have" absent
-- [ ] All tests pass (`mvn clean verify` + `pytest`)
-- [ ] All QA scenarios produce evidence in `.sisyphus/evidence/`
-- [ ] CI/CD pipeline runs successfully
-- [ ] No hardcoded credentials in repo
-- [ ] Zero manual/human verification steps
+- [x] All "Must Have" present
+- [x] All "Must NOT Have" absent
+- [x] All tests pass (`mvn clean verify` + `pytest`)
+- [x] All QA scenarios produce evidence in `.sisyphus/evidence/`
+- [x] CI/CD pipeline runs successfully
+- [x] No hardcoded credentials in repo
+- [x] Zero manual/human verification steps
