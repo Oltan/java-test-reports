@@ -46,6 +46,22 @@ app.add_middleware(
 security = HTTPBearer()
 
 
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    manifests = load_manifests()
+    total_runs = len(manifests)
+    latest_run = None
+    if manifests:
+        sorted_manifests = sorted(manifests, key=lambda m: str(m.timestamp), reverse=True)
+        latest_run = sorted_manifests[0].model_dump()
+    template = jinja_env.get_template("dashboard.html")
+    html = template.render(
+        total_runs=total_runs,
+        latest_run=latest_run,
+    )
+    return HTMLResponse(content=html)
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str

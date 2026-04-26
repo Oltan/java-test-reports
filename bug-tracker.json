@@ -1,16 +1,1 @@
-{
-  "version": "1.0",
-  "mappings": {
-    "DOORS-12345": {
-      "jiraKey": "PROJ-7718",
-      "status": "OPEN",
-      "firstSeen": "2026-04-26T17:46:57.362057+00:00",
-      "lastSeen": "2026-04-26T17:46:57.362057+00:00",
-      "scenarioName": "Login Test",
-      "runIds": [
-        "run-001"
-      ],
-      "resolution": null
-    }
-  }
-}
+{"version": "1.0", "mappings": {}}
