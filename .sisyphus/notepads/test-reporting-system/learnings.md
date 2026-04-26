@@ -120,3 +120,9 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 - `-Dcucumber.filter.tags="@sample-fail"` only runs scenarios with that tag
 - `-Dcucumber.filter.tags="not @sample-fail"` excludes those scenarios
 - Tag expressions work at runtime via system properties
+
+## test-core Allure Cucumber7 Wiring (2026-04-26)
+- For the JUnit Platform Cucumber suite, `@ConfigurationParameter(key = PLUGIN_PROPERTY_NAME, value = "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,...")` reliably activates Allure output.
+- `test-core/src/test/resources/allure.properties` with `allure.results.directory=target/allure-results` writes module-local results under `test-core/target/allure-results` when Maven runs from the repository root.
+- `@sample-fail` intentionally exits Maven with a test error, so verification must use `|| true`; Allure still records `*-result.json` with scenario name, status, steps, timestamps, and feature tags.
+- Allure report generation works with `/home/ol_ta/tools/allure-2.33.0/bin/allure generate --clean test-core/target/allure-results -o test-core/target/allure-report`.

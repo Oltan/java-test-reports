@@ -506,7 +506,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 1. **Allure Cucumber Entegrasyonu**
+- [x] 1. **Allure Cucumber Entegrasyonu**
 
   **What to do**:
   - `allure-cucumber7-jvm` dependency ekle
@@ -568,7 +568,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 2. **Screenshot + Video Attach (ffmpeg 15fps)**
+- [x] 2. **Screenshot + Video Attach (ffmpeg 15fps)**
 
   **What to do**:
   - Cucumber Hooks: `@Before` → ffmpeg başlat, `@After` → ffmpeg durdur
