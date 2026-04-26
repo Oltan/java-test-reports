@@ -76,3 +76,47 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 - `report-model/pom.xml` added junit-jupiter-api/engine with test scope
 - Maven test passes: `mvn -q -pl report-model test` → BUILD SUCCESS
 - Python tests pass: `pytest tests/test_schema.py` → 8 passed
+
+## Cucumber Test Project Setup (2026-04-26)
+
+### Dependencies Issue
+- `cucumber-junit-platform` artifact does NOT exist in Maven Central
+- Correct artifact name is `cucumber-junit-platform-engine`
+- Updated parent POM dependencyManagement and test-core dependencies
+
+### Allure + Cucumber Gherkin Version Conflict
+- `allure-cucumber7-jvm:2.25.0` depends on `gherkin:26.2.0`
+- `cucumber-java:7.18.0` depends on `gherkin:24.1.0`
+- Conflict causes Maven resolve failure
+- Fix: exclude gherkin from allure-cucumber7-jvm:
+```xml
+<exclusions>
+    <exclusion>
+        <groupId>io.cucumber</groupId>
+        <artifactId>gherkin</artifactId>
+    </exclusion>
+</exclusions>
+```
+
+### Chrome/Chromium on WSL2
+- Windows Chrome at `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe` not directly accessible
+- Linux Chrome for Testing (148.0.7778.56) downloaded to `/tmp/chrome-linux64/`
+- Linux chromedriver downloaded to `/tmp/chromedriver-linux64/`
+- Chrome crashpad handler permissions issue → used `--single-process --no-zygote` flags
+- Chrome stable on WSL requires additional args to avoid subprocess spawn failures
+
+### JUnit Platform Suite Configuration
+- `@Suite` + `@IncludeEngines("cucumber")` + `@SelectClasspathResource("features")`
+- Surefire must be configured to include the runner class:
+```xml
+<includes>
+    <include>**/CucumberTestRunner.java</include>
+</includes>
+```
+- Runner class name ending in `Test` or `Tests` required for Surefire detection
+- Need `junit-platform-suite` dependency for `@Suite` annotations
+
+### Cucumber Filter Tags
+- `-Dcucumber.filter.tags="@sample-fail"` only runs scenarios with that tag
+- `-Dcucumber.filter.tags="not @sample-fail"` excludes those scenarios
+- Tag expressions work at runtime via system properties

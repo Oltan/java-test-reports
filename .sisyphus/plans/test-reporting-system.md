@@ -262,7 +262,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 0.2 **Phase 0: Referans Cucumber Test Projesi**
+- [x] 0.2 **Phase 0: Referans Cucumber Test Projesi**
 
   **What to do**:
   - `test-core/` modülünde örnek feature file:
