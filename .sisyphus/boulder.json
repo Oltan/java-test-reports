@@ -1,0 +1,20 @@
+{
+  "active_plan": "/mnt/c/Users/ol_ta/desktop/java_reports/.sisyphus/plans/test-reporting-system.md",
+  "started_at": "2026-04-26T12:07:28.667Z",
+  "session_ids": [
+    "ses_2369d9145ffeXT8OqFUzbKdEAZ",
+    "ses_236450bceffevTmPs7V4Hi6IlK",
+    "ses_2364479aeffe1SPKGj7AGCbjNf",
+    "ses_236440f68ffevRVGLYh72btHp6",
+    "ses_23643b211ffeWhFJPD0eWOjrTJ"
+  ],
+  "plan_name": "test-reporting-system",
+  "session_origins": {
+    "ses_2369d9145ffeXT8OqFUzbKdEAZ": "direct",
+    "ses_236450bceffevTmPs7V4Hi6IlK": "appended",
+    "ses_2364479aeffe1SPKGj7AGCbjNf": "appended",
+    "ses_236440f68ffevRVGLYh72btHp6": "appended",
+    "ses_23643b211ffeWhFJPD0eWOjrTJ": "appended"
+  },
+  "task_sessions": {}
+}
