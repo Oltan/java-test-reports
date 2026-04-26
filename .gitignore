@@ -34,4 +34,4 @@ node_modules/
 
 # Reports
 manifests/
-allure-results/
+allure-results/.sisyphus/ralph-loop.local.md
