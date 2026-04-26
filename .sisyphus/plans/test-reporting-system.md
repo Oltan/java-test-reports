@@ -630,7 +630,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 3. **run-manifest.json Writer**
+- [x] 3. **run-manifest.json Writer**
 
   **What to do**:
   - `AllureResultsParser`: `target/allure-results/*-result.json` → Java DTO
