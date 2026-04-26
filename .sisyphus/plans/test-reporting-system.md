@@ -1114,7 +1114,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 12. **CI/CD Pipeline (Jenkins / GitHub Actions)**
+- [x] 12. **CI/CD Pipeline (Jenkins / GitHub Actions)**
 
   **What to do**:
   - Pipeline dosyası: `Jenkinsfile` veya `.github/workflows/test-report.yml`
@@ -1171,7 +1171,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 13. **Allure Custom Tasarım + Email Branding**
+- [x] 13. **Allure Custom Tasarım + Email Branding**
 
   **What to do**:
   - `allure-custom-logo.svg` + `allure-custom.css` → Allure report override

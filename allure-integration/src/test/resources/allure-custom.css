@@ -1,0 +1,154 @@
+/* ===== Test Reports Brand Theme for Allure ===== */
+
+:root {
+  /* Brand palette */
+  --brand-primary: #2563eb;
+  --brand-primary-dark: #1d4ed8;
+  --brand-primary-light: #3b82f6;
+  --brand-success: #16a34a;
+  --brand-success-light: #22c55e;
+  --brand-danger: #dc2626;
+  --brand-danger-light: #ef4444;
+  --brand-warning: #f59e0b;
+  --brand-warning-light: #fbbf24;
+  --brand-info: #0ea5e9;
+  --brand-bg: #f8fafc;
+  --brand-surface: #ffffff;
+  --brand-text: #1e293b;
+  --brand-text-secondary: #64748b;
+  --brand-border: #e2e8f0;
+
+  /* Override Allure defaults */
+  --allure-primary: var(--brand-primary);
+  --allure-success: var(--brand-success);
+  --allure-failed: var(--brand-danger);
+  --allure-broken: var(--brand-warning);
+  --allure-skipped: var(--brand-info);
+}
+
+/* Side navigation branding */
+.side-nav__brand {
+  background-color: var(--brand-primary) !important;
+}
+
+.side-nav__brand-text {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+}
+
+/* Top bar accent */
+.app__nav {
+  border-bottom: 2px solid var(--brand-primary) !important;
+}
+
+/* Test result status colors */
+.step__status_status_passed,
+.step__status_status_passed .step__status {
+  color: var(--brand-success) !important;
+}
+
+.step__status_status_failed,
+.step__status_status_failed .step__status {
+  color: var(--brand-danger) !important;
+}
+
+.step__status_status_broken,
+.step__status_status_broken .step__status {
+  color: var(--brand-warning) !important;
+}
+
+.step__status_status_skipped,
+.step__status_status_skipped .step__status {
+  color: var(--brand-info) !important;
+}
+
+/* Summary chart colors */
+.widget__chart_passed {
+  fill: var(--brand-success) !important;
+}
+
+.widget__chart_failed {
+  fill: var(--brand-danger) !important;
+}
+
+.widget__chart_broken {
+  fill: var(--brand-warning) !important;
+}
+
+.widget__chart_skipped {
+  fill: var(--brand-info) !important;
+}
+
+/* Severity badges */
+.severity-blocker {
+  background-color: var(--brand-danger) !important;
+}
+
+.severity_critical {
+  background-color: #e11d48 !important;
+}
+
+.severity_major {
+  background-color: var(--brand-warning) !important;
+}
+
+.severity_normal {
+  background-color: var(--brand-primary) !important;
+}
+
+.severity_minor {
+  background-color: var(--brand-info) !important;
+}
+
+/* Tab active indicator */
+.tabs__item_active {
+  border-bottom-color: var(--brand-primary) !important;
+  color: var(--brand-primary) !important;
+}
+
+/* Links and interactive elements */
+.link {
+  color: var(--brand-primary) !important;
+}
+
+.link:hover {
+  color: var(--brand-primary-dark) !important;
+}
+
+/* Buttons */
+.button {
+  background-color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+}
+
+.button:hover {
+  background-color: var(--brand-primary-dark) !important;
+  border-color: var(--brand-primary-dark) !important;
+}
+
+/* Body background */
+body {
+  background-color: var(--brand-bg) !important;
+  color: var(--brand-text) !important;
+}
+
+/* Card surfaces */
+.card {
+  background-color: var(--brand-surface) !important;
+  border-color: var(--brand-border) !important;
+}
+
+/* Table headers */
+.table__head {
+  background-color: var(--brand-bg) !important;
+}
+
+/* Scrollbar accent */
+::-webkit-scrollbar-thumb {
+  background-color: var(--brand-primary-light) !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--brand-primary) !important;
+}
