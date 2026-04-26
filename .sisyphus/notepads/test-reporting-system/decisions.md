@@ -8,3 +8,7 @@
 ## doors-service Verification Compatibility (2026-04-26)
 - Added `build-helper-maven-plugin` in `doors-service` to include `../report-model/src/main/java` as sources instead of requiring a sibling module artifact. This preserves the required `mvn -q -pl doors-service test` command without relying on prior local installs.
 - Kept the public `DoorsClient(Path doorsExePath)` constructor at the required 120-second timeout and added package-private timeout injection only for fast timeout tests.
+
+## orchestrator Pipeline Boundaries (2026-04-26)
+- Default CLI pipeline runs the four core stages in the requested order: AllureGenerate → ManifestWrite → WebDeploy → EmailSend. JiraCreate and DoorsUpdate are implemented as optional non-critical stages but are not added to the default CLI path.
+- External integrations are injected behind small functional interfaces in stages so unit tests use fake stages/services and make no real process, SMTP, Jira, or DOORS calls.

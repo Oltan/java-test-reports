@@ -959,7 +959,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 9. **Web UI — "Create Jira Bug" Triage Sayfası**
+- [x] 9. **Web UI — "Create Jira Bug" Triage Sayfası**
 
   **What to do**:
   - FastAPI/Javalin'de HTML template endpoint: `GET /reports/{runId}/triage`
@@ -1017,7 +1017,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 10. **Orchestrator — Pipeline Stage Runner**
+- [x] 10. **Orchestrator — Pipeline Stage Runner**
 
   **What to do**:
   - Maven module: `orchestrator`
@@ -1075,7 +1075,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 11. **Contract Test — FastAPI ↔ Javalin API Parity**
+- [x] 11. **Contract Test — FastAPI ↔ Javalin API Parity**
 
   **What to do**:
   - OpenAPI/Swagger spec (her iki sunucu için ortak)

@@ -131,3 +131,9 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 - `doors-service` uses `com.testreports.doors.DoorsClient` to serialize a reduced handoff JSON: `runId` plus `results[{absNumber,status}]` from `RunManifest.scenarios[].doorsAbsNumber`.
 - WSL/Linux cannot run real IBM DOORS, but executable fake `doors.exe` test doubles are allowed so ProcessBuilder behavior is testable.
 - `mvn -q -pl doors-service test` passes after making doors-service self-contained for report-model sources and adding JUnit/Surefire config.
+
+## Orchestrator Pipeline Runner (2026-04-26)
+- Orchestrator package is `com.testreports.orchestrator` with a small `PipelineStage` interface for mockable stages.
+- Critical stages are Allure report generation and manifest writing; web deploy, email, Jira, and DOORS are non-critical and should be logged then skipped/continued on failure.
+- `ManifestWriteStage` delegates parsing to `AllureResultsParser` and initial manifest creation to `ManifestWriter`, then aligns the output filename/runId with the orchestrator `RunContext` when `--run-id` is provided.
+- Child modules that need normal JUnit discovery must override parent Surefire includes with `**/*Test.java`; parent default only targets the Cucumber runner.

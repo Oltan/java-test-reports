@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triage — Run {{ run_id }}</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface-hover: #222633;
+            --border: #2a2e3d;
+            --text: #e4e6ed;
+            --text-muted: #8b8fa3;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.08);
+            --success: #22c55e;
+            --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 2rem 2.5rem;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
+        }
+
+        header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        header p {
+            color: var(--text-muted);
+            margin-top: 0.35rem;
+            font-size: 0.9rem;
+        }
+
+        .stats {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .stat {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .stat--failed {
+            background: var(--danger-bg);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .stat--passed {
+            background: rgba(34, 197, 94, 0.08);
+            color: var(--success);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        main {
+            padding: 2rem 2.5rem;
+            max-width: 960px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            margin-bottom: 1.25rem;
+            box-shadow: var(--shadow);
+            transition: border-color 0.2s;
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+
+        .card-id {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-top: 0.2rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.65rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .badge--failed {
+            background: var(--danger-bg);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .steps {
+            margin: 0.75rem 0;
+            padding-left: 1.25rem;
+        }
+
+        .steps li {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            padding: 0.2rem 0;
+        }
+
+        .steps li.step--failed {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .error-box {
+            background: var(--danger-bg);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            margin: 0.75rem 0;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 0.82rem;
+            color: var(--danger);
+        }
+
+        .card-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            padding: 0.55rem 1.25rem;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn:active { transform: scale(0.97); }
+
+        .btn--primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn--primary:hover { background: var(--accent-hover); }
+
+        .btn--primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .jira-key {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.4rem 0.85rem;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.25);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state h2 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Triage — Run {{ run_id }}</h1>
+        <p>{{ manifest.totalScenarios }} scenarios &middot; {{ manifest.passed }} passed &middot; {{ manifest.failed }} failed</p>
+        <div class="stats">
+            <span class="stat stat--failed">{{ manifest.failed }} Failed</span>
+            <span class="stat stat--passed">{{ manifest.passed }} Passed</span>
+        </div>
+    </header>
+
+    <main>
+        {% if failures %}
+            {% for scenario in failures %}
+            <div class="card" data-testid="failure-card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">{{ scenario.name }}</div>
+                        <div class="card-id">{{ scenario.id }}</div>
+                    </div>
+                    <span class="badge badge--failed">{{ scenario.status }}</span>
+                </div>
+
+                {% if scenario.steps %}
+                <ol class="steps">
+                    {% for step in scenario.steps %}
+                    <li class="{% if step.status == 'failed' %}step--failed{% endif %}">
+                        {{ step.name }}{% if step.status == 'failed' %} ✗{% else %} ✓{% endif %}
+                    </li>
+                    {% endfor %}
+                </ol>
+                {% endif %}
+
+                {% for step in scenario.steps %}
+                    {% if step.errorMessage %}
+                    <div class="error-box">{{ step.errorMessage }}</div>
+                    {% endif %}
+                {% endfor %}
+
+                {% if scenario.attachments %}
+                <div style="margin-top: 0.5rem;">
+                    {% for att in scenario.attachments %}
+                        {% if att.type == 'image/png' %}
+                        <div style="color: var(--text-muted); font-size: 0.82rem;">
+                            📎 {{ att.name }} (screenshot placeholder)
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="card-actions">
+                    <button
+                        class="btn btn--primary"
+                        data-testid="create-jira-button"
+                        data-scenario-id="{{ scenario.id }}"
+                        onclick="createJira(this, '{{ run_id }}', '{{ scenario.id }}')"
+                    >
+                        Create Jira Bug
+                    </button>
+                    <span data-testid="jira-key-display" class="jira-key" style="display:none;"></span>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <h2>No failures to triage</h2>
+                <p>All scenarios passed for this run.</p>
+            </div>
+        {% endif %}
+    </main>
+
+    <script>
+    async function createJira(button, runId, scenarioId) {
+        button.disabled = true;
+        button.textContent = 'Creating…';
+
+        try {
+            const res = await fetch(`/api/v1/runs/${runId}/scenarios/${scenarioId}/jira`, {
+                method: 'POST',
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const data = await res.json();
+            const display = button.parentElement.querySelector('[data-testid="jira-key-display"]');
+            display.textContent = data.jiraKey;
+            display.style.display = 'inline-flex';
+            button.textContent = 'Bug Created';
+        } catch (err) {
+            button.textContent = 'Error — Retry';
+            button.disabled = false;
+            console.error(err);
+        }
+    }
+    </script>
+</body>
+</html>

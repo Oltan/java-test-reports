@@ -6,10 +6,12 @@ from typing import List, Optional
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
+from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
 from models import RunManifest, ScenarioResult
@@ -24,8 +26,11 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent / "manifests")))
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 app = FastAPI(title="Test Reports API", version="1.0.0")
+
+jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -132,6 +137,60 @@ def get_run_failures(run_id: str, _: TokenData = Depends(verify_token)):
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"Run '{run_id}' not found",
     )
+
+
+@app.get("/reports/{run_id}/triage")
+def triage_page(run_id: str):
+    manifests = load_manifests()
+    manifest = None
+    for m in manifests:
+        if m.runId == run_id:
+            manifest = m
+            break
+    if manifest is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run '{run_id}' not found",
+        )
+    failures = [s for s in manifest.scenarios if s.status == "failed"]
+    template = jinja_env.get_template("triage.html")
+    html = template.render(
+        run_id=run_id,
+        manifest=manifest.model_dump(),
+        failures=[s.model_dump() for s in failures],
+    )
+    return HTMLResponse(content=html)
+
+
+class JiraResponse(BaseModel):
+    jiraKey: str
+
+
+@app.post("/api/v1/runs/{run_id}/scenarios/{scenario_id}/jira", response_model=JiraResponse, status_code=201)
+def create_jira_bug(run_id: str, scenario_id: str):
+    manifests = load_manifests()
+    manifest = None
+    for m in manifests:
+        if m.runId == run_id:
+            manifest = m
+            break
+    if manifest is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Run '{run_id}' not found",
+        )
+    scenario = None
+    for s in manifest.scenarios:
+        if s.id == scenario_id:
+            scenario = s
+            break
+    if scenario is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Scenario '{scenario_id}' not found",
+        )
+    # Mock Jira creation — replace with real Jira service call later
+    return JiraResponse(jiraKey="PROJ-123")
 
 
 app.mount("/reports", StaticFiles(directory=str(MANIFESTS_DIR)), name="reports")
