@@ -1,0 +1,21 @@
+{
+  "active_plan": "/mnt/c/Users/ol_ta/desktop/java_reports/.sisyphus/plans/dashboard-ui-overhaul.md",
+  "started_at": "2026-04-26T19:35:56.229Z",
+  "session_ids": [
+    "ses_2369d9145ffeXT8OqFUzbKdEAZ",
+    "ses_234b4896fffe5X1dZsLCJQI1T6",
+    "ses_234b47000fferUpHI1NRBn9vEy",
+    "ses_234b3f399ffed2CsG64aItlU5W",
+    "ses_234af1480ffe6M8bbD3UDowD0L"
+  ],
+  "session_origins": {
+    "ses_2369d9145ffeXT8OqFUzbKdEAZ": "direct",
+    "ses_234b4896fffe5X1dZsLCJQI1T6": "appended",
+    "ses_234b47000fferUpHI1NRBn9vEy": "appended",
+    "ses_234b3f399ffed2CsG64aItlU5W": "appended",
+    "ses_234af1480ffe6M8bbD3UDowD0L": "appended"
+  },
+  "plan_name": "dashboard-ui-overhaul",
+  "agent": "atlas",
+  "task_sessions": {}
+}

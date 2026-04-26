@@ -1,0 +1,65 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - heading "Test Raporlama Sistemi" [level=1] [ref=e3]
+    - paragraph [ref=e4]: Otomasyon test sonuclarini izleyin, triage edin ve raporlayin
+  - main [ref=e5]:
+    - generic [ref=e6]:
+      - heading "📊 Sistem Durumu" [level=2] [ref=e7]
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - generic [ref=e10]: "4"
+          - generic [ref=e11]: Toplam Test Run
+        - generic [ref=e12]:
+          - generic [ref=e13]: "3"
+          - generic [ref=e14]: Senaryo (Son Run)
+        - generic [ref=e15]:
+          - generic [ref=e16]: "2"
+          - generic [ref=e17]: Gecen Senaryo
+        - generic [ref=e18]:
+          - generic [ref=e19]: "1"
+          - generic [ref=e20]: Basarisiz Senaryo
+    - generic [ref=e21]:
+      - heading "📄 Son Run Ozeti" [level=2] [ref=e22]
+      - generic [ref=e24]:
+        - term [ref=e25]: Run ID
+        - definition [ref=e26]: live-demo-001
+        - term [ref=e27]: Zaman
+        - definition [ref=e28]: 2026-04-26 21:10:38.931570
+        - term [ref=e29]: Ortam
+        - definition [ref=e30]: —
+        - term [ref=e31]: Durum
+        - definition [ref=e32]:
+          - generic [ref=e33]: 1 basarisiz
+    - generic [ref=e34]:
+      - heading "🔗 Hizli Linkler" [level=2] [ref=e35]
+      - generic [ref=e36]:
+        - link "📖 Swagger UI API dokumantasyonu ve test arayuzu" [ref=e37] [cursor=pointer]:
+          - /url: /docs
+          - generic [ref=e38]: 📖
+          - generic [ref=e39]: Swagger UI
+          - generic [ref=e40]: API dokumantasyonu ve test arayuzu
+        - link "🔍 Son Run Triage Basarisiz senaryolari triage et" [ref=e41] [cursor=pointer]:
+          - /url: /reports/live-demo-001/triage
+          - generic [ref=e42]: 🔍
+          - generic [ref=e43]: Son Run Triage
+          - generic [ref=e44]: Basarisiz senaryolari triage et
+        - link "📋 API — Runs Tum test runlarini listele (giris gerekli)" [ref=e45] [cursor=pointer]:
+          - /url: /api/v1/runs
+          - generic [ref=e46]: 📋
+          - generic [ref=e47]: API — Runs
+          - generic [ref=e48]: Tum test runlarini listele (giris gerekli)
+        - link "🐛 API — Bugs Bug takip kayitlarini goruntule (giris gerekli)" [ref=e49] [cursor=pointer]:
+          - /url: /api/v1/bugs
+          - generic [ref=e50]: 🐛
+          - generic [ref=e51]: API — Bugs
+          - generic [ref=e52]: Bug takip kayitlarini goruntule (giris gerekli)
+    - generic [ref=e53]:
+      - heading "🔑 Giris" [level=2] [ref=e54]
+      - generic [ref=e56]:
+        - generic [ref=e57]: Kullanici Adi
+        - textbox "Kullanici Adi" [ref=e58]:
+          - /placeholder: admin
+        - generic [ref=e59]: Sifre
+        - textbox "Sifre" [ref=e60]:
+          - /placeholder: ••••••••
+        - button "Giris Yap" [ref=e62] [cursor=pointer]

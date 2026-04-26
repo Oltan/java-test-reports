@@ -262,3 +262,4 @@ def create_bug(doors_number: str, req: BugCreateRequest, _: TokenData = Depends(
 
 
 app.mount("/reports", StaticFiles(directory=str(MANIFESTS_DIR)), name="reports")
+app.mount("/static", StaticFiles(directory="static"), name="static")

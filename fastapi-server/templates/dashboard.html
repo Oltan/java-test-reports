@@ -1,520 +1,276 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Raporlama Sistemi</title>
-    <style>
-        :root {
-            --bg: #0f1117;
-            --surface: #1a1d27;
-            --surface-hover: #222633;
-            --border: #2a2e3d;
-            --text: #e4e6ed;
-            --text-muted: #8b8fa3;
-            --accent: #6366f1;
-            --accent-hover: #818cf8;
-            --danger: #ef4444;
-            --danger-bg: rgba(239, 68, 68, 0.08);
-            --success: #22c55e;
-            --success-bg: rgba(34, 197, 94, 0.08);
-            --radius: 10px;
-            --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-        }
-
-        header {
-            padding: 2.5rem 2.5rem 2rem;
-            border-bottom: 1px solid var(--border);
-            background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
-        }
-
-        header h1 {
-            font-size: 2rem;
-            font-weight: 800;
-            letter-spacing: -0.03em;
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        header p {
-            color: var(--text-muted);
-            margin-top: 0.4rem;
-            font-size: 0.95rem;
-        }
-
-        main {
-            padding: 2rem 2.5rem;
-            max-width: 960px;
-        }
-
-        .section {
-            margin-bottom: 2rem;
-        }
-
-        .section-title {
-            font-size: 1.15rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            box-shadow: var(--shadow);
-        }
-
-        /* Stats section */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1rem;
-        }
-
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1.25rem;
-            text-align: center;
-            box-shadow: var(--shadow);
-            transition: border-color 0.2s, transform 0.2s;
-        }
-
-        .stat-card:hover {
-            border-color: var(--accent);
-            transform: translateY(-2px);
-        }
-
-        .stat-value {
-            font-size: 2.25rem;
-            font-weight: 800;
-            color: var(--accent);
-            line-height: 1;
-        }
-
-        .stat-label {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-top: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        /* Latest run */
-        .latest-run {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem 1.5rem;
-        }
-
-        .latest-run dt {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-
-        .latest-run dd {
-            font-weight: 600;
-            font-size: 0.95rem;
-            margin-bottom: 0.25rem;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.2rem 0.65rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .badge--success {
-            background: var(--success-bg);
-            color: var(--success);
-            border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        .badge--danger {
-            background: var(--danger-bg);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        /* Links section */
-        .links-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1rem;
-        }
-
-        .link-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1.25rem;
-            text-decoration: none;
-            color: var(--text);
-            transition: border-color 0.2s, transform 0.2s, background 0.2s;
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-            box-shadow: var(--shadow);
-        }
-
-        .link-card:hover {
-            border-color: var(--accent);
-            background: var(--surface-hover);
-            transform: translateY(-2px);
-        }
-
-        .link-card .link-title {
-            font-weight: 700;
-            font-size: 1rem;
-        }
-
-        .link-card .link-desc {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-
-        .link-card .link-icon {
-            font-size: 1.5rem;
-            margin-bottom: 0.25rem;
-        }
-
-        /* Login section */
-        .login-form {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            max-width: 360px;
-        }
-
-        .login-form label {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            font-weight: 600;
-        }
-
-        .login-form input {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 0.65rem 0.85rem;
-            color: var(--text);
-            font-size: 0.95rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .login-form input:focus {
-            border-color: var(--accent);
-        }
-
-        .login-form input::placeholder {
-            color: var(--text-muted);
-            opacity: 0.6;
-        }
-
-        .btn {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            padding: 0.7rem 1.5rem;
-            font-size: 0.95rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-        }
-
-        .btn:hover {
-            background: var(--accent-hover);
-        }
-
-        .btn:active {
-            transform: scale(0.98);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .login-error {
-            color: var(--danger);
-            font-size: 0.85rem;
-            min-height: 1.2rem;
-        }
-
-        /* Authenticated state */
-        .auth-info {
-            display: none;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        .auth-info.active {
-            display: flex;
-        }
-
-        .token-preview {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 0.65rem 0.85rem;
-            font-family: 'Cascadia Code', 'Fira Code', monospace;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            word-break: break-all;
-            max-height: 3.2rem;
-            overflow: hidden;
-        }
-
-        .auth-links {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .auth-links a {
-            color: var(--accent);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: color 0.2s;
-        }
-
-        .auth-links a:hover {
-            color: var(--accent-hover);
-            text-decoration: underline;
-        }
-
-        .hidden { display: none !important; }
-
-        @media (max-width: 600px) {
-            header { padding: 1.5rem 1rem; }
-            main { padding: 1.25rem 1rem; }
-            .stats-grid { grid-template-columns: 1fr 1fr; }
-            .links-grid { grid-template-columns: 1fr; }
-            .latest-run { grid-template-columns: 1fr; }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Raporlama Sistemi</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body>
-    <header>
-        <h1>Test Raporlama Sistemi</h1>
-        <p>Otomasyon test sonuclarini izleyin, triage edin ve raporlayin</p>
-    </header>
+  <div class="container">
+    <!-- HEADER -->
+    <div class="header">
+      <h1>🧪 Test Raporlama Sistemi</h1>
+      <div class="header-right">
+        <span id="login-status">🔑 Giriş Yap</span>
+      </div>
+    </div>
 
-    <main>
-        <!-- Sistem Durumu -->
-        <section class="section">
-            <h2 class="section-title">&#128202; Sistem Durumu</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{{ total_runs }}</div>
-                    <div class="stat-label">Toplam Test Run</div>
-                </div>
-                {% if latest_run %}
-                <div class="stat-card">
-                    <div class="stat-value">{{ latest_run.scenarios | length }}</div>
-                    <div class="stat-label">Senaryo (Son Run)</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{{ latest_run.scenarios | selectattr('status', 'equalto', 'passed') | list | length }}</div>
-                    <div class="stat-label">Gecen Senaryo</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{{ latest_run.scenarios | selectattr('status', 'equalto', 'failed') | list | length }}</div>
-                    <div class="stat-label">Basarisiz Senaryo</div>
-                </div>
-                {% else %}
-                <div class="stat-card">
-                    <div class="stat-value">&mdash;</div>
-                    <div class="stat-label">Henuz run yok</div>
-                </div>
-                {% endif %}
-            </div>
-        </section>
+    <!-- LOGIN SECTION (shown when not authenticated) -->
+    <div id="login-section" class="login-section">
+      <div class="login-card">
+        <h3>🔑 Giriş</h3>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="username">Kullanıcı Adı</label>
+            <input type="text" id="username" name="username" placeholder="admin" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="password">Şifre</label>
+            <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+          <div class="login-error" id="loginError"></div>
+          <button type="submit" class="btn" id="loginBtn">Giriş Yap</button>
+        </form>
+      </div>
+    </div>
 
-        <!-- Son Run Ozeti -->
-        {% if latest_run %}
-        <section class="section">
-            <h2 class="section-title">&#128196; Son Run Ozeti</h2>
-            <div class="card">
-                <dl class="latest-run">
-                    <dt>Run ID</dt>
-                    <dd>{{ latest_run.runId }}</dd>
-                    <dt>Zaman</dt>
-                    <dd>{{ latest_run.timestamp }}</dd>
-                    <dt>Ortam</dt>
-                    <dd>{{ latest_run.environment | default('—') }}</dd>
-                    <dt>Durum</dt>
-                    <dd>
-                        {% set failed_count = latest_run.scenarios | selectattr('status', 'equalto', 'failed') | list | length %}
-                        {% if failed_count > 0 %}
-                        <span class="badge badge--danger">{{ failed_count }} basarisiz</span>
-                        {% else %}
-                        <span class="badge badge--success">Tumu gecti</span>
-                        {% endif %}
-                    </dd>
-                </dl>
-            </div>
-        </section>
-        {% endif %}
+    <!-- DASHBOARD (shown when authenticated) -->
+    <div id="dashboard-content" style="display:none">
 
-        <!-- Hizli Linkler -->
-        <section class="section">
-            <h2 class="section-title">&#128279; Hizli Linkler</h2>
-            <div class="links-grid">
-                <a href="/docs" class="link-card">
-                    <span class="link-icon">&#128214;</span>
-                    <span class="link-title">Swagger UI</span>
-                    <span class="link-desc">API dokumantasyonu ve test arayuzu</span>
-                </a>
-                {% if latest_run %}
-                <a href="/reports/{{ latest_run.runId }}/triage" class="link-card">
-                    <span class="link-icon">&#128269;</span>
-                    <span class="link-title">Son Run Triage</span>
-                    <span class="link-desc">Basarisiz senaryolari triage et</span>
-                </a>
-                {% endif %}
-                <a href="/api/v1/runs" class="link-card">
-                    <span class="link-icon">&#128203;</span>
-                    <span class="link-title">API — Runs</span>
-                    <span class="link-desc">Tum test runlarini listele (giris gerekli)</span>
-                </a>
-                <a href="/api/v1/bugs" class="link-card">
-                    <span class="link-icon">&#128027;</span>
-                    <span class="link-title">API — Bugs</span>
-                    <span class="link-desc">Bug takip kayitlarini goruntule (giris gerekli)</span>
-                </a>
-            </div>
-        </section>
+      <!-- METRIC CARDS -->
+      <div class="metrics" id="metrics">
+        <div class="metric-card">
+          <div class="label">✅ Başarı Oranı</div>
+          <div class="value" style="color:var(--success)" id="success-rate">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">📊 Toplam Run</div>
+          <div class="value" style="color:var(--accent)" id="total-runs">{{ total_runs }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">⏱ Ortalama Süre</div>
+          <div class="value" style="color:var(--warning)" id="avg-duration">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">📈 Trend</div>
+          <div class="value" id="trend">--</div>
+        </div>
+      </div>
 
-        <!-- Giris -->
-        <section class="section">
-            <h2 class="section-title">&#128273; Giris</h2>
-            <div class="card">
-                <!-- Login form (shown when not authenticated) -->
-                <form id="loginForm" class="login-form" onsubmit="handleLogin(event)">
-                    <label for="username">Kullanici Adi</label>
-                    <input type="text" id="username" name="username" placeholder="admin" required autocomplete="username">
-                    <label for="password">Sifre</label>
-                    <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
-                    <div class="login-error" id="loginError"></div>
-                    <button type="submit" class="btn" id="loginBtn">Giris Yap</button>
-                </form>
+      <!-- CHARTS ROW -->
+      <div class="charts">
+        <div class="chart-box">
+          <h3>🍩 Pass/Fail Dağılımı</h3>
+          <canvas id="pieChart"></canvas>
+        </div>
+        <div class="chart-box">
+          <h3>📊 Run Bazında Karşılaştırma</h3>
+          <canvas id="barChart"></canvas>
+        </div>
+      </div>
 
-                <!-- Authenticated state (hidden by default) -->
-                <div id="authInfo" class="auth-info">
-                    <p style="color: var(--success); font-weight: 700;">&#10003; Giris basarili!</p>
-                    <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Token</label>
-                    <div class="token-preview" id="tokenPreview"></div>
-                    <div class="auth-links">
-                        <a href="/api/v1/runs">&#128203; Tum Runlar</a>
-                        <a href="/api/v1/bugs">&#128027; Bug Kayitlari</a>
-                        {% if latest_run %}
-                        <a href="/reports/{{ latest_run.runId }}/triage">&#128269; Son Run Triage</a>
-                        {% endif %}
-                    </div>
-                    <button class="btn" onclick="handleLogout()" style="background: var(--danger); margin-top: 0.5rem;">Cikis Yap</button>
-                </div>
-            </div>
-        </section>
-    </main>
+      <!-- RUN TABLE -->
+      <div class="run-table">
+        <h3>📋 Son Run'lar</h3>
+        <table>
+          <thead><tr>
+            <th>Run ID</th><th>Tarih</th><th>Geçen</th><th>Kalan</th>
+            <th>Süre</th><th>Durum</th><th></th>
+          </tr></thead>
+          <tbody id="run-tbody"></tbody>
+        </table>
+      </div>
 
-    <script>
-        function handleLogin(event) {
-            event.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorEl = document.getElementById('loginError');
-            const btn = document.getElementById('loginBtn');
+    </div>
 
-            errorEl.textContent = '';
-            btn.disabled = true;
-            btn.textContent = 'Giris yapiliyor...';
+    <div class="footer">
+      Test Raporlama Sistemi v1.0 · GitHub
+    </div>
+  </div>
 
-            fetch('/api/v1/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            })
-            .then(res => {
-                if (!res.ok) throw new Error('Gecersiz kullanici adi veya sifre');
-                return res.json();
-            })
-            .then(data => {
-                localStorage.setItem('jwt_token', data.token);
-                showAuthenticated(data.token);
-            })
-            .catch(err => {
-                errorEl.textContent = err.message;
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = 'Giris Yap';
-            });
+  <script src="/static/chart.min.js"></script>
+  <script>
+  // ── Auth ──────────────────────────────────────────────────────
+  function handleLogin(event) {
+    event.preventDefault();
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+
+    errorEl.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Giriş yapılıyor...';
+
+    fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Geçersiz kullanıcı adı veya şifre');
+      return res.json();
+    })
+    .then(data => {
+      localStorage.setItem('jwt_token', data.token);
+      showDashboard(data.token);
+    })
+    .catch(err => {
+      errorEl.textContent = err.message;
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = 'Giriş Yap';
+    });
+  }
+
+  function showDashboard(token) {
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('dashboard-content').style.display = 'block';
+    document.getElementById('login-status').innerHTML =
+      '✅ Giriş yapıldı · <a href="#" onclick="logout()" style="color:var(--danger)">Çıkış</a>';
+    loadData(token);
+  }
+
+  function logout() {
+    localStorage.removeItem('jwt_token');
+    location.reload();
+  }
+
+  // ── Data Loading ──────────────────────────────────────────────
+  async function loadData(token) {
+    try {
+      const resp = await fetch('/api/v1/runs', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!resp.ok) {
+        console.error('API error:', resp.status);
+        return;
+      }
+      const runs = await resp.json();
+      if (!runs || runs.length === 0) return;
+
+      renderMetrics(runs);
+      renderPieChart(runs[0]);
+      renderBarChart(runs);
+      renderTable(runs);
+    } catch(e) {
+      console.error('Failed to load data:', e);
+    }
+  }
+
+  // ── Metrics ───────────────────────────────────────────────────
+  function renderMetrics(runs) {
+    const total = runs.length;
+    const latest = runs[0];
+    const successRate = latest ? Math.round(latest.passed / latest.totalScenarios * 100) : 0;
+    document.getElementById('success-rate').textContent = successRate + '%';
+    document.getElementById('total-runs').textContent = total;
+    const avgDur = runs.length > 0
+      ? (runs.reduce((s, r) => s + parseFloat(r.duration || '0'), 0) / runs.length).toFixed(1)
+      : 0;
+    document.getElementById('avg-duration').textContent = avgDur + 's';
+
+    // Trend: compare last 2 runs
+    const trend = runs.length >= 2
+      ? (runs[0].passed / runs[0].totalScenarios - runs[1].passed / runs[1].totalScenarios) * 100
+      : 0;
+    const trendEl = document.getElementById('trend');
+    trendEl.textContent = (trend >= 0 ? '📈 +' : '📉 ') + Math.abs(trend).toFixed(1) + '%';
+    trendEl.style.color = trend >= 0 ? 'var(--success)' : 'var(--danger)';
+  }
+
+  // ── Pie Chart ─────────────────────────────────────────────────
+  function renderPieChart(run) {
+    if (!run) return;
+    new Chart(document.getElementById('pieChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['✅ Passed', '❌ Failed', '⏭ Skipped'],
+        datasets: [{
+          data: [run.passed, run.failed, run.skipped],
+          backgroundColor: ['#16a34a', '#dc2626', '#64748b'],
+          borderColor: '#1e293b',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: '#e2e8f0', padding: 16, font: { size: 13 } }
+          }
         }
+      }
+    });
+  }
 
-        function showAuthenticated(token) {
-            document.getElementById('loginForm').classList.add('hidden');
-            const authInfo = document.getElementById('authInfo');
-            authInfo.classList.add('active');
-            document.getElementById('tokenPreview').textContent = token.substring(0, 40) + '...';
-
-            // Update auth links with token
-            const authLinks = authInfo.querySelectorAll('.auth-links a');
-            authLinks.forEach(link => {
-                const url = new URL(link.href);
-                link.href = url.pathname;
-            });
+  // ── Bar Chart ─────────────────────────────────────────────────
+  function renderBarChart(runs) {
+    const sorted = [...runs].reverse().slice(-10);
+    new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: {
+        labels: sorted.map(r => r.runId.slice(-8)),
+        datasets: [
+          { label: '✅ Passed', data: sorted.map(r => r.passed), backgroundColor: '#16a34a', borderRadius: 4 },
+          { label: '❌ Failed', data: sorted.map(r => r.failed), backgroundColor: '#dc2626', borderRadius: 4 },
+          { label: '⏭ Skipped', data: sorted.map(r => r.skipped), backgroundColor: '#64748b', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#e2e8f0', font: { size: 12 } } }
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: '#94a3b8' }, grid: { display: false } },
+          y: { stacked: true, ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
         }
+      }
+    });
+  }
 
-        function handleLogout() {
-            localStorage.removeItem('jwt_token');
-            document.getElementById('loginForm').classList.remove('hidden');
-            document.getElementById('authInfo').classList.remove('active');
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
+  // ── Run Table ─────────────────────────────────────────────────
+  function renderTable(runs) {
+    const tbody = document.getElementById('run-tbody');
+    tbody.innerHTML = runs.slice(0, 10).map(r => `
+      <tr>
+        <td><a href="/reports/${r.runId}/triage" style="color:var(--accent)">${r.runId.slice(0, 20)}</a></td>
+        <td>${new Date(r.timestamp).toLocaleDateString('tr-TR')}</td>
+        <td><span class="badge badge-pass">${r.passed}</span></td>
+        <td><span class="badge badge-fail">${r.failed}</span></td>
+        <td>${r.duration}</td>
+        <td>${r.failed === 0 ? '✅' : '❌'}</td>
+        <td><a href="/reports/${r.runId}/triage">Detay →</a></td>
+      </tr>
+    `).join('');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────
+  (function() {
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+      // Verify token is still valid
+      fetch('/api/v1/runs', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      })
+      .then(res => {
+        if (res.ok) {
+          showDashboard(token);
+        } else {
+          localStorage.removeItem('jwt_token');
         }
-
-        // Check for existing token on load
-        (function() {
-            const token = localStorage.getItem('jwt_token');
-            if (token) {
-                // Verify token is still valid by making a test call
-                fetch('/api/v1/runs', {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                })
-                .then(res => {
-                    if (res.ok) {
-                        showAuthenticated(token);
-                    } else {
-                        localStorage.removeItem('jwt_token');
-                    }
-                })
-                .catch(() => {
-                    localStorage.removeItem('jwt_token');
-                });
-            }
-        })();
-    </script>
+      })
+      .catch(() => {
+        localStorage.removeItem('jwt_token');
+      });
+    }
+  })();
+  </script>
 </body>
 </html>
