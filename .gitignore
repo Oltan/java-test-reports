@@ -1,0 +1,37 @@
+# Maven
+target/
+*.class
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+ENV/
+env/
+.pyenv/
+
+# FastAPI
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Environment
+.env
+
+# Node
+node_modules/
+
+# Media
+*.mp4
+*.avi
+*.mov
+
+# Reports
+manifests/
+allure-results/
