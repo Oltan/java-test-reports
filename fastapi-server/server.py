@@ -230,6 +230,28 @@ class BugCreateResponse(BaseModel):
     jiraKey: str
     doorsNumber: str
 
+# 📧 Mock Email Summary
+@app.get("/api/v1/email/summary")
+def email_summary():
+    import json
+    from pathlib import Path
+    f = Path(__file__).parent.parent / "mock-email.json"
+    if f.exists():
+        return json.loads(f.read_text())
+    return {"message": "No email data"}
+
+# 🚪 Mock DOORS Status
+@app.get("/api/v1/doors/status/{doors_number}")
+def doors_status(doors_number: str):
+    import json, random
+    return {
+        "doorsNumber": doors_number,
+        "testStatus": random.choice(["passed", "failed", "skipped"]),
+        "lastTestRun": "20260426-1700-auto-001",
+        "attribute": f"Test Sonucu {random.randint(10,99)}",
+        "jiraBug": f"PROJ-{random.randint(500,999)}" if random.random() > 0.5 else None
+    }
+
 
 @app.get("/api/v1/bugs")
 def list_bugs():

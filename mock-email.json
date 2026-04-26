@@ -1,0 +1,51 @@
+{
+  "lastEmailSent": "2026-04-26T23:07:13.513316Z",
+  "totalEmailsSent": 12,
+  "recipients": [
+    "test-muhendisi@firma.com",
+    "qa-lideri@firma.com",
+    "proje-yoneticisi@firma.com"
+  ],
+  "recentSummaries": [
+    {
+      "runId": "20260425-1500-auto-690",
+      "sentAt": "2026-04-26T21:07:13.513328Z",
+      "subject": "Test Raporu: 10/9 senaryo başarılı",
+      "failedScenarios": 2,
+      "jiraIssuesCreated": 2,
+      "doorsUpdated": 0
+    },
+    {
+      "runId": "20260424-1300-auto-387",
+      "sentAt": "2026-04-26T19:07:13.513339Z",
+      "subject": "Test Raporu: 6/8 senaryo başarılı",
+      "failedScenarios": 2,
+      "jiraIssuesCreated": 1,
+      "doorsUpdated": 0
+    },
+    {
+      "runId": "20260423-1100-auto-523",
+      "sentAt": "2026-04-26T17:07:13.513344Z",
+      "subject": "Test Raporu: 7/9 senaryo başarılı",
+      "failedScenarios": 2,
+      "jiraIssuesCreated": 2,
+      "doorsUpdated": 0
+    },
+    {
+      "runId": "20260422-0900-auto-222",
+      "sentAt": "2026-04-26T15:07:13.513347Z",
+      "subject": "Test Raporu: 7/12 senaryo başarılı",
+      "failedScenarios": 2,
+      "jiraIssuesCreated": 0,
+      "doorsUpdated": 2
+    },
+    {
+      "runId": "20260421-0700-auto-176",
+      "sentAt": "2026-04-26T13:07:13.513351Z",
+      "subject": "Test Raporu: 10/9 senaryo başarılı",
+      "failedScenarios": 1,
+      "jiraIssuesCreated": 2,
+      "doorsUpdated": 1
+    }
+  ]
+}
