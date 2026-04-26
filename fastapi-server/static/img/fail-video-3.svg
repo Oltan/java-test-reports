@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240">
+  <rect width="320" height="240" fill="#0f172a" rx="8"/>
+  <circle cx="160" cy="120" r="40" fill="#3b82f6" opacity="0.8"/>
+  <polygon points="150,100 180,120 150,140" fill="white"/>
+  <text x="160" y="190" text-anchor="middle" fill="#94a3b8" font-family="Arial" font-size="14">🎬 Video 3 • 15fps</text>
+</svg>

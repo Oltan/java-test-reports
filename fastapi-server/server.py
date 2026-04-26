@@ -159,6 +159,21 @@ def get_run_failures(run_id: str):
     )
 
 
+
+@app.get("/reports/{run_id}/scenario/{scenario_id}")
+def scenario_detail(run_id: str, scenario_id: str):
+    import json
+    from pathlib import Path
+    manifest_path = Path(__file__).parent.parent / "manifests" / f"{run_id}.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail=f"Run not found")
+    manifest = json.loads(manifest_path.read_text())
+    scenario = next((s for s in manifest.get("scenarios", []) if s.get("id") == scenario_id), None)
+    if not scenario:
+        raise HTTPException(status_code=404, detail=f"Scenario not found")
+    template = jinja_env.get_template("scenario-detail.html")
+    return HTMLResponse(content=template.render(run_id=run_id, scenario=scenario, manifest=manifest))
+
 @app.get("/reports/{run_id}/triage")
 def triage_page(run_id: str, request: Request):
     manifests = load_manifests()
