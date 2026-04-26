@@ -8,8 +8,11 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class SampleManifestGenerator {
+
+    private static final Logger LOGGER = Logger.getLogger(SampleManifestGenerator.class.getName());
 
     private static final String OUTPUT_PATH = "../manifests/sample-run-001.json";
 
@@ -28,7 +31,7 @@ public class SampleManifestGenerator {
 
             File outputFile = new File(OUTPUT_PATH);
             mapper.writeValue(outputFile, manifest);
-            System.out.println("Sample manifest written to: " + outputFile.getAbsolutePath());
+            LOGGER.info("Sample manifest written to: " + outputFile.getAbsolutePath());
         } catch (IOException e) {
             System.err.println("Failed to write sample manifest: " + e.getMessage());
             System.exit(1);

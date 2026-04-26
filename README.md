@@ -55,7 +55,12 @@ mvn clean install
 mvn test
 
 # Generate Allure report
-mvn allure:serve
+mvn allure:generate --clean
+# Serve the report locally (one way)
+open allure-report/index.html
+# Or use any static file server, e.g.:
+# python -m http.server 8080 -d allure-report
+# Then visit http://localhost:8080
 ```
 
 ## Configuration

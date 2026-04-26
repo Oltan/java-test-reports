@@ -14,8 +14,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class VideoHook {
+
+    private static final Logger LOGGER = Logger.getLogger(VideoHook.class.getName());
 
     private static final Path VIDEO_DIR = Paths.get("target/videos");
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
@@ -50,15 +54,15 @@ public class VideoHook {
             if (process.isAlive()) {
                 ffmpegProcess.set(process);
                 currentVideoPath.set(videoPath);
-                System.out.println("VideoHook: Started video recording: " + videoPath);
+                LOGGER.info("VideoHook: Started video recording: " + videoPath);
             } else {
-                System.out.println("VideoHook: ffmpeg process not alive, possibly not installed");
+                LOGGER.warning("VideoHook: ffmpeg process not alive, possibly not installed");
             }
         } catch (IOException e) {
             if (isFfmpegNotFound(e)) {
-                System.out.println("VideoHook: ffmpeg not found - video recording disabled");
+                LOGGER.info("VideoHook: ffmpeg not found - video recording disabled");
             } else {
-                System.out.println("VideoHook: Failed to start video recording: " + e.getMessage());
+                LOGGER.log(Level.WARNING, "VideoHook: Failed to start video recording: " + e.getMessage());
             }
         }
     }
@@ -68,15 +72,15 @@ public class VideoHook {
         Process process = ffmpegProcess.getAndSet(null);
         if (process != null && process.isAlive()) {
             process.destroy();
-            try {
-                boolean exited = process.waitFor() != 0;
-                if (exited) {
-                    System.out.println("VideoHook: ffmpeg process exited with non-zero code");
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                process.destroyForcibly();
+try {
+            boolean exited = process.waitFor() != 0;
+            if (exited) {
+                LOGGER.warning("VideoHook: ffmpeg process exited with non-zero code");
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+        }
         }
 
         Path videoPath = currentVideoPath.getAndSet(null);
@@ -95,7 +99,7 @@ public class VideoHook {
         try {
             Files.createDirectories(VIDEO_DIR);
         } catch (IOException e) {
-            System.out.println("VideoHook: Could not create video directory: " + e.getMessage());
+            LOGGER.warning("VideoHook: Could not create video directory: " + e.getMessage());
         }
     }
 
@@ -111,10 +115,10 @@ public class VideoHook {
             if (Files.exists(videoPath)) {
                 byte[] videoBytes = Files.readAllBytes(videoPath);
                 Allure.addAttachment("Video", "video/mp4", new ByteArrayInputStream(videoBytes), "mp4");
-                System.out.println("VideoHook: Attached video: " + videoPath);
+                LOGGER.info("VideoHook: Attached video: " + videoPath);
             }
         } catch (IOException e) {
-            System.out.println("VideoHook: Failed to attach video: " + e.getMessage());
+            LOGGER.log(Level.WARNING, "VideoHook: Failed to attach video: " + e.getMessage());
         }
     }
 
@@ -122,10 +126,10 @@ public class VideoHook {
         try {
             if (Files.exists(videoPath)) {
                 Files.delete(videoPath);
-                System.out.println("VideoHook: Deleted video: " + videoPath);
+                LOGGER.info("VideoHook: Deleted video: " + videoPath);
             }
         } catch (IOException e) {
-            System.out.println("VideoHook: Failed to delete video: " + e.getMessage());
+            LOGGER.log(Level.WARNING, "VideoHook: Failed to delete video: " + e.getMessage());
         }
     }
 }

@@ -137,3 +137,10 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 - Critical stages are Allure report generation and manifest writing; web deploy, email, Jira, and DOORS are non-critical and should be logged then skipped/continued on failure.
 - `ManifestWriteStage` delegates parsing to `AllureResultsParser` and initial manifest creation to `ManifestWriter`, then aligns the output filename/runId with the orchestrator `RunContext` when `--run-id` is provided.
 - Child modules that need normal JUnit discovery must override parent Surefire includes with `**/*Test.java`; parent default only targets the Cucumber runner.
+
+## 2026-04-26 F4 Scope Fidelity Check
+- Found all 18 plan task headings and all requested key implementation marker files.
+- Parent + module POM count is 9; user module-only command returns 8 because parent pom.xml is not under */pom.xml.
+- Must-not-have scan: no spring-boot, DB dependency pattern, or hardcoded credential pattern found; jira-service contains an explanatory `not ADF` comment; README contains `mvn allure:serve`, which violates static-generation intent.
+- Git history is not exactly one commit per wave: phase0/wave1/wave3 are split across multiple commits; JiraClient.java was introduced during phase0 rather than the later Jira client wave.
+- `mvn -q validate` completed with exit code 0; LSP diagnostics unavailable because jdtls/biome are not installed.

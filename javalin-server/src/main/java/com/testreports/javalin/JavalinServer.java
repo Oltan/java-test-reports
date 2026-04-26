@@ -15,8 +15,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
+import java.util.logging.Logger;
 
 public class JavalinServer {
+
+    private static final Logger LOGGER = Logger.getLogger(JavalinServer.class.getName());
 
     private static final String JWT_SECRET = System.getProperty("jwt.secret", "dev-secret-change-me-must-be-at-least-32-chars!!");
     private static final String JWT_ALGORITHM = "HS256";
@@ -136,6 +139,6 @@ public class JavalinServer {
     public static void main(String[] args) {
         JavalinServer server = new JavalinServer();
         server.start(8080);
-        System.out.println("Javalin server started on port 8080");
+        LOGGER.info("Javalin server started on port 8080");
     }
 }
