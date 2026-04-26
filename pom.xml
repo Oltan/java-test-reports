@@ -143,7 +143,7 @@
             </dependency>
             <dependency>
                 <groupId>io.javalin</groupId>
-                <artifactId>javalin-test</artifactId>
+                <artifactId>javalin-testtools</artifactId>
                 <version>${javalin.version}</version>
             </dependency>
 

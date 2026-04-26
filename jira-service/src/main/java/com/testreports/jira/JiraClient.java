@@ -1,12 +1,15 @@
 package com.testreports.jira;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,15 +20,26 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public class JiraClient {
 
+    private static final int MAX_RETRIES = 3;
+    private static final long[] RETRY_DELAYS = {1000, 2000, 4000};
+
     private final String baseUrl;
     private final String patToken;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final boolean dryRun;
+    private final Set<String> createdIssueKeys;
 
     public JiraClient(String baseUrl, String patToken) {
+        this(baseUrl, patToken, Boolean.getBoolean("jira.dry-run"));
+    }
+
+    public JiraClient(String baseUrl, String patToken, boolean dryRun) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.patToken = patToken;
+        this.dryRun = dryRun;
         this.objectMapper = new ObjectMapper();
+        this.createdIssueKeys = new HashSet<>();
         this.httpClient = HttpClient.newBuilder()
                 .authenticator(new BasicAuthenticator("ignored", patToken))
                 .build();
@@ -35,6 +49,11 @@ public class JiraClient {
      * Creates a new Jira issue.
      */
     public JiraIssueResponse createIssue(JiraIssueRequest request) throws Exception {
+        if (dryRun) {
+            System.err.println("[DRY-RUN] Would create issue: " + request.getFields().getSummary());
+            return new JiraIssueResponse();
+        }
+
         String json = objectMapper.writeValueAsString(request);
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
@@ -44,7 +63,7 @@ public class JiraClient {
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = sendWithRetry(httpRequest);
 
         if (response.statusCode() != 201) {
             throw new JiraApiException("Failed to create issue: " + response.statusCode() + " - " + response.body());
@@ -53,10 +72,64 @@ public class JiraClient {
         return objectMapper.readValue(response.body(), JiraIssueResponse.class);
     }
 
+    private HttpResponse<String> sendWithRetry(HttpRequest request) throws Exception {
+        int attempt = 0;
+        while (true) {
+            try {
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                int status = response.statusCode();
+
+                if (response.statusCode() == 200 || response.statusCode() == 201) {
+                    return response;
+                }
+
+                if (status == 429 || status >= 500) {
+                    if (attempt < MAX_RETRIES - 1) {
+                        long delay = RETRY_DELAYS[attempt];
+                        System.err.println("[RETRY] Attempt " + (attempt + 1) + " failed with status " + status + ". Retrying in " + delay + "ms...");
+                        Thread.sleep(delay);
+                        attempt++;
+                        continue;
+                    }
+                }
+
+                return response;
+            } catch (IOException e) {
+                if (attempt < MAX_RETRIES - 1) {
+                    long delay = RETRY_DELAYS[attempt];
+                    System.err.println("[RETRY] Attempt " + (attempt + 1) + " failed with IOException: " + e.getMessage() + ". Retrying in " + delay + "ms...");
+                    Thread.sleep(delay);
+                    attempt++;
+                    continue;
+                }
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Creates a new Jira issue if no issue with the given dedupKey has been created in this session.
+     * Returns the existing issue key if already created, otherwise creates and returns new issue key.
+     */
+    public String createIssueIfNew(String dedupKey, JiraIssueRequest request) throws Exception {
+        if (createdIssueKeys.contains(dedupKey)) {
+            return null;
+        }
+
+        JiraIssueResponse response = createIssue(request);
+        createdIssueKeys.add(dedupKey);
+        return response.getKey();
+    }
+
     /**
      * Uploads an attachment to an existing issue.
      */
     public List<JiraAttachmentResponse> attachFile(String issueKey, Path file) throws Exception {
+        if (dryRun) {
+            System.err.println("[DRY-RUN] Would attach file to issue: " + issueKey);
+            return List.of();
+        }
+
         String fileName = file.getFileName().toString();
         byte[] fileContent = java.nio.file.Files.readAllBytes(file);
 
@@ -78,7 +151,7 @@ public class JiraClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = sendWithRetry(httpRequest);
 
         if (response.statusCode() != 200) {
             throw new JiraApiException("Failed to attach file: " + response.statusCode() + " - " + response.body());

@@ -126,3 +126,8 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 - `test-core/src/test/resources/allure.properties` with `allure.results.directory=target/allure-results` writes module-local results under `test-core/target/allure-results` when Maven runs from the repository root.
 - `@sample-fail` intentionally exits Maven with a test error, so verification must use `|| true`; Allure still records `*-result.json` with scenario name, status, steps, timestamps, and feature tags.
 - Allure report generation works with `/home/ol_ta/tools/allure-2.33.0/bin/allure generate --clean test-core/target/allure-results -o test-core/target/allure-report`.
+
+## DOORS Service Batch Wrapper (2026-04-26)
+- `doors-service` uses `com.testreports.doors.DoorsClient` to serialize a reduced handoff JSON: `runId` plus `results[{absNumber,status}]` from `RunManifest.scenarios[].doorsAbsNumber`.
+- WSL/Linux cannot run real IBM DOORS, but executable fake `doors.exe` test doubles are allowed so ProcessBuilder behavior is testable.
+- `mvn -q -pl doors-service test` passes after making doors-service self-contained for report-model sources and adding JUnit/Surefire config.

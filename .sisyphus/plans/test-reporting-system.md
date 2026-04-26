@@ -676,7 +676,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 4. **FastAPI Web Sunucu (Python)**
+- [x] 4. **FastAPI Web Sunucu (Python)**
 
   **What to do**:
   - Poetry projesi: `fastapi`, `uvicorn`, `pyjwt`, `pydantic`
@@ -734,7 +734,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 5. **Javalin Web Sunucu (Java)**
+- [x] 5. **Javalin Web Sunucu (Java)**
 
   **What to do**:
   - Maven module: `javalin-server` (Javalin + Undertow/Jetty)
@@ -778,7 +778,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 6. **Email Service (Simple Java Mail + Thymeleaf)**
+- [x] 6. **Email Service (Simple Java Mail + Thymeleaf)**
 
   **What to do**:
   - Maven module: `email-service`
@@ -834,7 +834,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 7. **Jira Client (REST v2 Wiki + WireMock)**
+- [x] 7. **Jira Client (REST v2 Wiki + WireMock)**
 
   **What to do**:
   - Maven module: `jira-service`
@@ -897,7 +897,7 @@ WP-0 → WP-1(Allure) → WP-4(FastAPI) + WP-6(Email) → WP-9(Triage UI) → WP
 
 ---
 
-- [ ] 8. **DOORS DXL Service (Batch + Fake Test)**
+- [x] 8. **DOORS DXL Service (Batch + Fake Test)**
 
   **What to do**:
   - Maven module: `doors-service`
