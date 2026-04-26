@@ -22,6 +22,7 @@ public class LoginSteps {
     @Given("user is on the login page")
     public void user_is_on_the_login_page() {
         driver = com.testreports.config.WebDriverFactory.createDriver();
+        com.testreports.allure.WebDriverHolder.setDriver(driver);
         driver.get("https://example.com");
     }
 
@@ -34,17 +35,15 @@ public class LoginSteps {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         wait.until(d -> d.getTitle().contains(expectedTitle));
         Assertions.assertTrue(driver.getTitle().contains(expectedTitle));
-        driver.quit();
     }
 
     @Then("user should see element that doesn't exist")
     public void user_should_see_element_that_doesnt_exist() {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
         wait.until(d -> d.findElement(By.id("this-element-does-not-exist-12345")));
-        driver.quit();
     }
 
-    @After
+    @After(order = 1001)
     public void cleanup() {
         if (driver != null) {
             driver.quit();

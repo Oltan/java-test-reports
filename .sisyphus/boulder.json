@@ -24,7 +24,10 @@
     "ses_235f4efabffe0Y4qYFP6rgOus8",
     "ses_235f4baa2ffeT4wwX794dHSUbm",
     "ses_235f47fffffeTLfKBLxKl4zlwa",
-    "ses_235ec613fffeopYoicqIPGBz1k"
+    "ses_235ec613fffeopYoicqIPGBz1k",
+    "ses_235e8ed97ffe4KX2lQgVdhcII7",
+    "ses_235e8d122ffefpgvIH4qr9T8xS",
+    "ses_235e8bc2bffe6talSGRfXeWYLv"
   ],
   "plan_name": "test-reporting-system",
   "session_origins": {
@@ -50,7 +53,10 @@
     "ses_235f4efabffe0Y4qYFP6rgOus8": "appended",
     "ses_235f4baa2ffeT4wwX794dHSUbm": "appended",
     "ses_235f47fffffeTLfKBLxKl4zlwa": "appended",
-    "ses_235ec613fffeopYoicqIPGBz1k": "appended"
+    "ses_235ec613fffeopYoicqIPGBz1k": "appended",
+    "ses_235e8ed97ffe4KX2lQgVdhcII7": "appended",
+    "ses_235e8d122ffefpgvIH4qr9T8xS": "appended",
+    "ses_235e8bc2bffe6talSGRfXeWYLv": "appended"
   },
   "task_sessions": {}
 }

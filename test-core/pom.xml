@@ -55,5 +55,10 @@
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-suite</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.testreports</groupId>
+            <artifactId>allure-integration</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 </project>
