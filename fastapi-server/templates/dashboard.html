@@ -91,6 +91,16 @@
 
   <script src="/static/chart.min.js"></script>
   <script>
+  // ── Duration Parser ──────────────────────────────────────────────
+  function parseDuration(d) {
+    if (!d || d === '0s') return 0;
+    // ISO 8601: PT58.125S → 58.125
+    const iso = d.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?/);
+    if (iso) return (+(iso[1]||0)*3600) + (+(iso[2]||0)*60) + +(iso[3]||0);
+    // Plain number: "8.2s" → 8.2
+    return parseFloat(d) || 0;
+  }
+
   // ── Auth ──────────────────────────────────────────────────────
   function handleLogin(event) {
     event.preventDefault();
@@ -168,9 +178,9 @@
     document.getElementById('success-rate').textContent = successRate + '%';
     document.getElementById('total-runs').textContent = total;
     const avgDur = runs.length > 0
-      ? (runs.reduce((s, r) => s + parseFloat(r.duration || '0'), 0) / runs.length).toFixed(1)
+      ? (runs.reduce((s, r) => s + parseDuration(r.duration), 0) / runs.length).toFixed(1)
       : 0;
-    document.getElementById('avg-duration').textContent = avgDur + 's';
+    document.getElementById('avg-duration').textContent = isNaN(avgDur) ? '--' : avgDur + 's';
 
     // Trend: compare last 2 runs
     const trend = runs.length >= 2
@@ -244,7 +254,7 @@
         <td>${new Date(r.timestamp).toLocaleDateString('tr-TR')}</td>
         <td><span class="badge badge-pass">${r.passed}</span></td>
         <td><span class="badge badge-fail">${r.failed}</span></td>
-        <td>${r.duration}</td>
+        <td>${parseDuration(r.duration).toFixed(1)}s</td>
         <td>${r.failed === 0 ? '✅' : '❌'}</td>
         <td><a href="/reports/${r.runId}/triage">Detay →</a></td>
       </tr>
