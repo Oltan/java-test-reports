@@ -4,14 +4,16 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-TEST_MANIFESTS_DIR = Path(__file__).parent.parent / "manifests"
-
-os.environ.setdefault("MANIFESTS_DIR", str(TEST_MANIFESTS_DIR))
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "admin123")
 
+import server
 from server import app
+
+# Monkey-patch manifests dir to use test-specific directory
+TEST_MANIFESTS_DIR = Path(__file__).parent.parent / "manifests"
+server.MANIFESTS_DIR = TEST_MANIFESTS_DIR
 
 client = TestClient(app)
 

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="jwt-token" content="{{ token }}">
     <title>Triage — Run {{ run_id }}</title>
     <style>
         :root {
@@ -224,7 +225,7 @@
     <main>
         {% if failures %}
             {% for scenario in failures %}
-            <div class="card" data-testid="failure-card">
+            <div class="card" data-testid="failure-card" data-doors-number="{{ scenario.doorsAbsNumber }}">
                 <div class="card-header">
                     <div>
                         <div class="card-title">{{ scenario.name }}</div>
@@ -232,6 +233,8 @@
                     </div>
                     <span class="badge badge--failed">{{ scenario.status }}</span>
                 </div>
+
+                <div data-testid="bug-status" style="margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">⏳ Loading bug status…</div>
 
                 {% if scenario.steps %}
                 <ol class="steps">
@@ -283,6 +286,37 @@
     </main>
 
     <script>
+    function getToken() { return document.querySelector('meta[name="jwt-token"]')?.content || ''; }
+
+    async function loadBugStatuses() {
+      const cards = document.querySelectorAll('[data-testid="failure-card"]');
+      for (const card of cards) {
+        const doorsNum = card.dataset.doorsNumber;
+        if (!doorsNum) continue;
+        const statusEl = card.querySelector('[data-testid="bug-status"]');
+        const btnEl = card.querySelector('[data-testid="create-jira-button"]');
+        try {
+          const resp = await fetch(`/api/v1/bugs/${doorsNum}`, {
+            headers: {'Authorization': `Bearer ${getToken()}`}
+          });
+          if (resp.ok) {
+            const bug = await resp.json();
+            const emoji = bug.status === 'OPEN' ? '🟡' : bug.status === 'CLOSED' ? '🔴' : '🟡';
+            statusEl.innerHTML = `${emoji} <a href="#" data-testid="jira-link">${bug.jiraKey}</a> (${bug.status})`;
+            statusEl.title = `First seen: ${bug.firstSeen}\nLast seen: ${bug.lastSeen}\nRuns: ${bug.runIds.length}`;
+            btnEl.disabled = true;
+            btnEl.textContent = 'Already Reported';
+          } else if (resp.status === 404) {
+            statusEl.innerHTML = '🟢 New — not yet reported';
+          } else {
+            statusEl.textContent = '⚠️ Status unknown';
+          }
+        } catch(e) {
+          statusEl.textContent = '⚠️ Status unknown';
+        }
+      }
+    }
+
     async function createJira(button, runId, scenarioId) {
         button.disabled = true;
         button.textContent = 'Creating…';
@@ -305,6 +339,8 @@
             console.error(err);
         }
     }
+
+    document.addEventListener('DOMContentLoaded', loadBugStatuses);
     </script>
 </body>
 </html>

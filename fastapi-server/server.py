@@ -15,10 +15,13 @@ from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
 from models import RunManifest, ScenarioResult
+from bug_tracker import BugTracker
 
 load_dotenv()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+
+tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 
@@ -112,7 +115,8 @@ def login(req: LoginRequest):
 @app.get("/api/v1/runs", response_model=List[RunManifest])
 def list_runs(_: TokenData = Depends(verify_token)):
     manifests = load_manifests()
-    return sorted(manifests, key=lambda m: m.timestamp, reverse=True)
+    manifests.sort(key=lambda m: str(m.timestamp), reverse=True)
+    return manifests
 
 
 @app.get("/api/v1/runs/{run_id}", response_model=RunManifest)
@@ -140,7 +144,7 @@ def get_run_failures(run_id: str, _: TokenData = Depends(verify_token)):
 
 
 @app.get("/reports/{run_id}/triage")
-def triage_page(run_id: str):
+def triage_page(run_id: str, request: Request):
     manifests = load_manifests()
     manifest = None
     for m in manifests:
@@ -153,11 +157,19 @@ def triage_page(run_id: str):
             detail=f"Run '{run_id}' not found",
         )
     failures = [s for s in manifest.scenarios if s.status == "failed"]
+
+    # Extract JWT token from Authorization header for client-side API calls
+    token = ""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+
     template = jinja_env.get_template("triage.html")
     html = template.render(
         run_id=run_id,
         manifest=manifest.model_dump(),
         failures=[s.model_dump() for s in failures],
+        token=token,
     )
     return HTMLResponse(content=html)
 
@@ -191,6 +203,46 @@ def create_jira_bug(run_id: str, scenario_id: str):
         )
     # Mock Jira creation — replace with real Jira service call later
     return JiraResponse(jiraKey="PROJ-123")
+
+
+class BugCreateRequest(BaseModel):
+    scenarioName: str
+    runId: str
+
+
+class BugCreateResponse(BaseModel):
+    jiraKey: str
+    doorsNumber: str
+
+
+@app.get("/api/v1/bugs", dependencies=[Depends(verify_token)])
+def list_bugs(_: TokenData = Depends(verify_token)):
+    return tracker.get_all()
+
+
+@app.get("/api/v1/bugs/{doors_number}", dependencies=[Depends(verify_token)])
+def get_bug(doors_number: str, _: TokenData = Depends(verify_token)):
+    mapping = tracker.get(doors_number)
+    if mapping is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No mapping found for DOORS number: {doors_number}",
+        )
+    return mapping
+
+
+@app.post("/api/v1/bugs/{doors_number}/create", response_model=BugCreateResponse, status_code=201, dependencies=[Depends(verify_token)])
+def create_bug(doors_number: str, req: BugCreateRequest, _: TokenData = Depends(verify_token)):
+    existing = tracker.get(doors_number)
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=existing,
+        )
+    # Mock Jira key: PROJ-{hash(doors_number) % 9000 + 1000}
+    jira_key = f"PROJ-{abs(hash(doors_number)) % 9000 + 1000}"
+    tracker.register(doors_number, jira_key, req.scenarioName, req.runId)
+    return BugCreateResponse(jiraKey=jira_key, doorsNumber=doors_number)
 
 
 app.mount("/reports", StaticFiles(directory=str(MANIFESTS_DIR)), name="reports")
