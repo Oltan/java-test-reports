@@ -6,14 +6,18 @@
     "ses_234b4896fffe5X1dZsLCJQI1T6",
     "ses_234b47000fferUpHI1NRBn9vEy",
     "ses_234b3f399ffed2CsG64aItlU5W",
-    "ses_234af1480ffe6M8bbD3UDowD0L"
+    "ses_234af1480ffe6M8bbD3UDowD0L",
+    "ses_234ac5825ffeLeo46iHcLvhUHm",
+    "ses_234ac1931ffeo9iTBiNCW1fI3V"
   ],
   "session_origins": {
     "ses_2369d9145ffeXT8OqFUzbKdEAZ": "direct",
     "ses_234b4896fffe5X1dZsLCJQI1T6": "appended",
     "ses_234b47000fferUpHI1NRBn9vEy": "appended",
     "ses_234b3f399ffed2CsG64aItlU5W": "appended",
-    "ses_234af1480ffe6M8bbD3UDowD0L": "appended"
+    "ses_234af1480ffe6M8bbD3UDowD0L": "appended",
+    "ses_234ac5825ffeLeo46iHcLvhUHm": "appended",
+    "ses_234ac1931ffeo9iTBiNCW1fI3V": "appended"
   },
   "plan_name": "dashboard-ui-overhaul",
   "agent": "atlas",

@@ -144,3 +144,8 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 - Must-not-have scan: no spring-boot, DB dependency pattern, or hardcoded credential pattern found; jira-service contains an explanatory `not ADF` comment; README contains `mvn allure:serve`, which violates static-generation intent.
 - Git history is not exactly one commit per wave: phase0/wave1/wave3 are split across multiple commits; JiraClient.java was introduced during phase0 rather than the later Jira client wave.
 - `mvn -q validate` completed with exit code 0; LSP diagnostics unavailable because jdtls/biome are not installed.
+
+## 2026-04-26 Turkish Integration Guide
+- Created `ENTEGRASYON_REHBERI.md` at repository root as a Turkish step-by-step integration guide for Java Selenium Cucumber projects.
+- The guide references actual project files: parent POM, `test-core` Cucumber config, `allure-integration` hooks, FastAPI server, dashboard assets, Jenkinsfile, GitHub Actions workflow, Jira service, DOORS client, and sample manifests.
+- Markdown LSP diagnostics are not available in this environment; verification used file readback plus heading and URL scans.

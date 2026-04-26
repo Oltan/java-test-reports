@@ -1,0 +1,94 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - heading "🧪 Test Raporlama Sistemi" [level=1] [ref=e4]
+    - generic [ref=e19]:
+      - text: ✅ Giriş yapıldı ·
+      - link "Çıkış" [ref=e20] [cursor=pointer]:
+        - /url: "#"
+  - generic [ref=e21]:
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]: ✅ Başarı Oranı
+        - generic [ref=e25]: 67%
+      - generic [ref=e26]:
+        - generic [ref=e27]: 📊 Toplam Run
+        - generic [ref=e28]: "4"
+      - generic [ref=e29]:
+        - generic [ref=e30]: ⏱ Ortalama Süre
+        - generic [ref=e31]: NaNs
+      - generic [ref=e32]:
+        - generic [ref=e33]: 📈 Trend
+        - generic [ref=e34]: 📈 +16.7%
+    - generic [ref=e35]:
+      - heading "🍩 Pass/Fail Dağılımı" [level=3] [ref=e37]
+      - heading "📊 Run Bazında Karşılaştırma" [level=3] [ref=e40]
+    - generic [ref=e42]:
+      - heading "📋 Son Run'lar" [level=3] [ref=e43]
+      - table [ref=e44]:
+        - rowgroup [ref=e45]:
+          - row "Run ID Tarih Geçen Kalan Süre Durum" [ref=e46]:
+            - columnheader "Run ID" [ref=e47]
+            - columnheader "Tarih" [ref=e48]
+            - columnheader "Geçen" [ref=e49]
+            - columnheader "Kalan" [ref=e50]
+            - columnheader "Süre" [ref=e51]
+            - columnheader "Durum" [ref=e52]
+            - columnheader [ref=e53]
+        - rowgroup [ref=e54]:
+          - row "live-demo-001 26.04.2026 2 1 8.2s ❌ Detay →" [ref=e55]:
+            - cell "live-demo-001" [ref=e56]:
+              - link "live-demo-001" [ref=e57] [cursor=pointer]:
+                - /url: /reports/live-demo-001/triage
+            - cell "26.04.2026" [ref=e58]
+            - cell "2" [ref=e59]:
+              - generic [ref=e60]: "2"
+            - cell "1" [ref=e61]:
+              - generic [ref=e62]: "1"
+            - cell "8.2s" [ref=e63]
+            - cell "❌" [ref=e64]
+            - cell "Detay →" [ref=e65]:
+              - link "Detay →" [ref=e66] [cursor=pointer]:
+                - /url: /reports/live-demo-001/triage
+          - row "20260426-195958-04c3 26.04.2026 1 1 0s ❌ Detay →" [ref=e67]:
+            - cell "20260426-195958-04c3" [ref=e68]:
+              - link "20260426-195958-04c3" [ref=e69] [cursor=pointer]:
+                - /url: /reports/20260426-195958-04c33b/triage
+            - cell "26.04.2026" [ref=e70]
+            - cell "1" [ref=e71]:
+              - generic [ref=e72]: "1"
+            - cell "1" [ref=e73]:
+              - generic [ref=e74]: "1"
+            - cell "0s" [ref=e75]
+            - cell "❌" [ref=e76]
+            - cell "Detay →" [ref=e77]:
+              - link "Detay →" [ref=e78] [cursor=pointer]:
+                - /url: /reports/20260426-195958-04c33b/triage
+          - row "20260426-test-001 26.04.2026 2 1 8.2s ❌ Detay →" [ref=e79]:
+            - cell "20260426-test-001" [ref=e80]:
+              - link "20260426-test-001" [ref=e81] [cursor=pointer]:
+                - /url: /reports/20260426-test-001/triage
+            - cell "26.04.2026" [ref=e82]
+            - cell "2" [ref=e83]:
+              - generic [ref=e84]: "2"
+            - cell "1" [ref=e85]:
+              - generic [ref=e86]: "1"
+            - cell "8.2s" [ref=e87]
+            - cell "❌" [ref=e88]
+            - cell "Detay →" [ref=e89]:
+              - link "Detay →" [ref=e90] [cursor=pointer]:
+                - /url: /reports/20260426-test-001/triage
+          - row "run-2026-04-26-001 26.04.2026 1 1 PT58.125S ❌ Detay →" [ref=e91]:
+            - cell "run-2026-04-26-001" [ref=e92]:
+              - link "run-2026-04-26-001" [ref=e93] [cursor=pointer]:
+                - /url: /reports/run-2026-04-26-001/triage
+            - cell "26.04.2026" [ref=e94]
+            - cell "1" [ref=e95]:
+              - generic [ref=e96]: "1"
+            - cell "1" [ref=e97]:
+              - generic [ref=e98]: "1"
+            - cell "PT58.125S" [ref=e99]
+            - cell "❌" [ref=e100]
+            - cell "Detay →" [ref=e101]:
+              - link "Detay →" [ref=e102] [cursor=pointer]:
+                - /url: /reports/run-2026-04-26-001/triage
+  - generic [ref=e18]: Test Raporlama Sistemi v1.0 · GitHub
