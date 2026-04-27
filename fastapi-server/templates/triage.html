@@ -1,346 +1,158 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="jwt-token" content="{{ token }}">
-    <title>Triage — Run {{ run_id }}</title>
-    <style>
-        :root {
-            --bg: #0f1117;
-            --surface: #1a1d27;
-            --surface-hover: #222633;
-            --border: #2a2e3d;
-            --text: #e4e6ed;
-            --text-muted: #8b8fa3;
-            --accent: #6366f1;
-            --accent-hover: #818cf8;
-            --danger: #ef4444;
-            --danger-bg: rgba(239, 68, 68, 0.08);
-            --success: #22c55e;
-            --radius: 10px;
-            --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-        }
-
-        header {
-            padding: 2rem 2.5rem;
-            border-bottom: 1px solid var(--border);
-            background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
-        }
-
-        header h1 {
-            font-size: 1.75rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        header p {
-            color: var(--text-muted);
-            margin-top: 0.35rem;
-            font-size: 0.9rem;
-        }
-
-        .stats {
-            display: flex;
-            gap: 1.5rem;
-            margin-top: 1rem;
-        }
-
-        .stat {
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius);
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .stat--failed {
-            background: var(--danger-bg);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        .stat--passed {
-            background: rgba(34, 197, 94, 0.08);
-            color: var(--success);
-            border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        main {
-            padding: 2rem 2.5rem;
-            max-width: 960px;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            margin-bottom: 1.25rem;
-            box-shadow: var(--shadow);
-            transition: border-color 0.2s;
-        }
-
-        .card:hover {
-            border-color: var(--accent);
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
-        }
-
-        .card-title {
-            font-size: 1.15rem;
-            font-weight: 600;
-        }
-
-        .card-id {
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            margin-top: 0.2rem;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.2rem 0.65rem;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        .badge--failed {
-            background: var(--danger-bg);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.25);
-        }
-
-        .steps {
-            margin: 0.75rem 0;
-            padding-left: 1.25rem;
-        }
-
-        .steps li {
-            font-size: 0.88rem;
-            color: var(--text-muted);
-            padding: 0.2rem 0;
-        }
-
-        .steps li.step--failed {
-            color: var(--danger);
-            font-weight: 600;
-        }
-
-        .error-box {
-            background: var(--danger-bg);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            border-radius: 6px;
-            padding: 0.75rem 1rem;
-            margin: 0.75rem 0;
-            font-family: 'Cascadia Code', 'Fira Code', monospace;
-            font-size: 0.82rem;
-            color: var(--danger);
-        }
-
-        .card-actions {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .btn {
-            padding: 0.55rem 1.25rem;
-            border-radius: 8px;
-            border: none;
-            font-size: 0.88rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-        }
-
-        .btn:active { transform: scale(0.97); }
-
-        .btn--primary {
-            background: var(--accent);
-            color: #fff;
-        }
-
-        .btn--primary:hover { background: var(--accent-hover); }
-
-        .btn--primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .jira-key {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.4rem 0.85rem;
-            background: rgba(34, 197, 94, 0.1);
-            border: 1px solid rgba(34, 197, 94, 0.25);
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--success);
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-muted);
-        }
-
-        .empty-state h2 {
-            font-size: 1.3rem;
-            margin-bottom: 0.5rem;
-            color: var(--text);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="run-id" content="{{ run_id }}">
+  <meta name="jira-base-url" content="{{ jira_base_url }}">
+  <title>Triage — {{ run_id }}</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body>
-    <header>
-        <h1>Triage — Run {{ run_id }}</h1>
-        <p>{{ manifest.totalScenarios }} scenarios &middot; {{ manifest.passed }} passed &middot; {{ manifest.failed }} failed</p>
-        <div class="stats">
-            <span class="stat stat--failed">{{ manifest.failed }} Failed</span>
-            <span class="stat stat--passed">{{ manifest.passed }} Passed</span>
+
+<!-- ── Nav ── -->
+<nav class="nav">
+  <div class="nav-brand">
+    <a href="/" class="nav-back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Test Reports
+  </div>
+  <div class="nav-right">
+    <span class="nav-label nav-label--muted">Run: {{ run_id }}</span>
+  </div>
+</nav>
+
+<!-- ── Header ── -->
+<header class="triage-header">
+  <div class="triage-header-inner">
+    <div>
+      <h1 class="triage-title">Failure Analysis</h1>
+      <p class="triage-sub">{{ manifest.totalScenarios }} senaryo &middot; {{ manifest.timestamp }}</p>
+    </div>
+    <div class="triage-stats">
+      <div class="tstat tstat--pass">
+        <span class="tstat-num">{{ manifest.passed }}</span>
+        <span class="tstat-label">Passed</span>
+      </div>
+      <div class="tstat tstat--fail">
+        <span class="tstat-num">{{ manifest.failed }}</span>
+        <span class="tstat-label">Failed</span>
+      </div>
+      <div class="tstat tstat--skip">
+        <span class="tstat-num">{{ manifest.skipped }}</span>
+        <span class="tstat-label">Skipped</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ── Filter bar ── -->
+<div class="filter-bar">
+  <div class="filter-inner">
+    <div class="filter-search-wrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="filter-input" class="filter-search" type="text" placeholder="Senaryo ara…">
+    </div>
+    <span class="filter-count">
+      <span id="visible-count">{{ failures|length }}</span> failure{% if failures|length != 1 %}s{% endif %}
+    </span>
+  </div>
+</div>
+
+<!-- ── Failure cards ── -->
+<main class="triage-main">
+
+  {% if failures %}
+    {% for scenario in failures %}
+    <div class="fcard" data-testid="failure-card"
+         data-scenario-id="{{ scenario.id }}"
+         {% if scenario.doorsAbsNumber %}data-doors-number="{{ scenario.doorsAbsNumber }}"{% endif %}>
+
+      <!-- Card header -->
+      <div class="fcard-header">
+        <div class="fcard-title-group">
+          <div class="fcard-title card-title" data-testid="scenario-name">{{ scenario.name }}</div>
+          <div class="fcard-id">{{ scenario.id }} &middot; {{ scenario.duration }}</div>
         </div>
-    </header>
+        <span class="badge badge-fail" data-testid="failure-badge">FAILED</span>
+      </div>
 
-    <main>
-        {% if failures %}
-            {% for scenario in failures %}
-            <div class="card" data-testid="failure-card" data-doors-number="{{ scenario.doorsAbsNumber }}">
-                <div class="card-header">
-                    <div>
-                        <div class="card-title">{{ scenario.name }}</div>
-                        <div class="card-id">{{ scenario.id }}</div>
-                    </div>
-                    <span class="badge badge--failed">{{ scenario.status }}</span>
-                </div>
+      <!-- Bug status (dynamic) -->
+      <div data-bug-status class="bug-status-row" data-testid="bug-status">
+        <span class="bug-pill bug-pill--loading">⏳ Yükleniyor…</span>
+      </div>
 
-                <div data-testid="bug-status" style="margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">⏳ Loading bug status…</div>
+      <!-- Steps -->
+      {% if scenario.steps %}
+      <ol class="steps-list">
+        {% for step in scenario.steps %}
+        <li class="step {% if step.status == 'failed' %}step--fail{% else %}step--pass{% endif %}">
+          <span class="step-icon">{% if step.status == 'failed' %}✗{% else %}✓{% endif %}</span>
+          <span class="step-name">{{ step.name }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      {% endif %}
 
-                {% if scenario.steps %}
-                <ol class="steps">
-                    {% for step in scenario.steps %}
-                    <li class="{% if step.status == 'failed' %}step--failed{% endif %}">
-                        {{ step.name }}{% if step.status == 'failed' %} ✗{% else %} ✓{% endif %}
-                    </li>
-                    {% endfor %}
-                </ol>
-                {% endif %}
-
-                {% for step in scenario.steps %}
-                    {% if step.errorMessage %}
-                    <div class="error-box">{{ step.errorMessage }}</div>
-                    {% endif %}
-                {% endfor %}
-
-                {% if scenario.attachments %}
-                <div style="margin-top: 0.5rem;">
-                    {% for att in scenario.attachments %}
-                        {% if att.type == 'image/png' %}
-                        <div style="color: var(--text-muted); font-size: 0.82rem;">
-                            📎 {{ att.name }} (screenshot placeholder)
-                        </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                <div class="card-actions">
-                    <button
-                        class="btn btn--primary"
-                        data-testid="create-jira-button"
-                        data-scenario-id="{{ scenario.id }}"
-                        onclick="createJira(this, '{{ run_id }}', '{{ scenario.id }}')"
-                    >
-                        Create Jira Bug
-                    </button>
-                    <span data-testid="jira-key-display" class="jira-key" style="display:none;"></span>
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="empty-state">
-                <h2>No failures to triage</h2>
-                <p>All scenarios passed for this run.</p>
-            </div>
+      <!-- Error messages -->
+      {% for step in scenario.steps %}
+        {% if step.errorMessage %}
+        <div class="error-box">
+          <div class="error-box-header">
+            <span class="error-box-label">Error</span>
+            <button class="btn-copy" data-copy-error="{{ step.errorMessage | e }}" data-testid="copy-error">Kopyala</button>
+          </div>
+          <pre class="error-text">{{ step.errorMessage }}</pre>
+        </div>
         {% endif %}
-    </main>
+      {% endfor %}
 
-    <script>
-    function getToken() { return document.querySelector('meta[name="jwt-token"]')?.content || ''; }
+      <!-- Attachments -->
+      {% if scenario.attachments %}
+      <div class="attachments">
+        {% for att in scenario.attachments %}
+          {% if att.type == 'image/png' %}
+          <div class="attachment-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            {{ att.name }}
+          </div>
+          {% elif att.type == 'video/mp4' %}
+          <div class="attachment-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            {{ att.name }}
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
 
-    async function loadBugStatuses() {
-      const cards = document.querySelectorAll('[data-testid="failure-card"]');
-      for (const card of cards) {
-        const doorsNum = card.dataset.doorsNumber;
-        if (!doorsNum) continue;
-        const statusEl = card.querySelector('[data-testid="bug-status"]');
-        const btnEl = card.querySelector('[data-testid="create-jira-button"]');
-        try {
-          const resp = await fetch(`/api/v1/bugs/${doorsNum}`, {
-            headers: {'Authorization': `Bearer ${getToken()}`}
-          });
-          if (resp.ok) {
-            const bug = await resp.json();
-            const emoji = bug.status === 'OPEN' ? '🟡' : bug.status === 'CLOSED' ? '🔴' : '🟡';
-            statusEl.innerHTML = `${emoji} <a href="#" data-testid="jira-link">${bug.jiraKey}</a> (${bug.status})`;
-            statusEl.title = `First seen: ${bug.firstSeen}\nLast seen: ${bug.lastSeen}\nRuns: ${bug.runIds.length}`;
-            btnEl.disabled = true;
-            btnEl.textContent = 'Already Reported';
-          } else if (resp.status === 404) {
-            statusEl.innerHTML = '🟢 New — not yet reported';
-          } else {
-            statusEl.textContent = '⚠️ Status unknown';
-          }
-        } catch(e) {
-          statusEl.textContent = '⚠️ Status unknown';
-        }
-      }
-    }
+      <!-- Actions -->
+      <div class="fcard-actions" data-testid="card-actions">
+        <button class="btn btn-primary" data-create-jira data-testid="create-jira-button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Create Jira Bug
+        </button>
+        <span class="jira-key-display" data-jira-key data-testid="jira-key-display" style="display:none"></span>
+      </div>
 
-    async function createJira(button, runId, scenarioId) {
-        button.disabled = true;
-        button.textContent = 'Creating…';
+    </div>
+    {% endfor %}
 
-        try {
-            const res = await fetch(`/api/v1/runs/${runId}/scenarios/${scenarioId}/jira`, {
-                method: 'POST',
-            });
+  {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🎉</div>
+      <h2>Tüm senaryolar geçti</h2>
+      <p>Bu çalıştırmada hiçbir başarısızlık yok.</p>
+    </div>
+  {% endif %}
+</main>
 
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+<footer class="footer">
+  Test Raporlama Sistemi v2.0 · <a href="/">Dashboard'a Dön</a>
+</footer>
 
-            const data = await res.json();
-            const display = button.parentElement.querySelector('[data-testid="jira-key-display"]');
-            display.textContent = data.jiraKey;
-            display.style.display = 'inline-flex';
-            button.textContent = 'Bug Created';
-        } catch (err) {
-            button.textContent = 'Error — Retry';
-            button.disabled = false;
-            console.error(err);
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', loadBugStatuses);
-    </script>
+<script type="module" src="/static/triage.js"></script>
 </body>
 </html>

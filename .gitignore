@@ -35,3 +35,7 @@ node_modules/
 # Reports
 manifests/
 allure-results/.sisyphus/ralph-loop.local.md
+fastapi-server/frontend/node_modules/
+fastapi-server/manifests/
+manifests/
+bug-tracker.json

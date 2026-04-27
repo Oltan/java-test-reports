@@ -36,12 +36,12 @@
         <module>test-core</module>
         <module>allure-integration</module>
         <module>report-model</module>
-        <module>javalin-server</module>
         <module>email-service</module>
         <module>jira-service</module>
         <module>doors-service</module>
         <module>orchestrator</module>
         <!-- fastapi-server is Python, not a Maven module -->
+        <!-- javalin-server removed: FastAPI is the sole web server -->
     </modules>
 
     <dependencyManagement>
