@@ -30,6 +30,23 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent / "manifests")))
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+RUN_ALIASES_FILE = Path(__file__).parent.parent / "run-aliases.json"
+
+import threading
+_aliases_lock = threading.Lock()
+
+def _load_aliases() -> dict:
+    if not RUN_ALIASES_FILE.exists():
+        return {}
+    with _aliases_lock:
+        return json.loads(RUN_ALIASES_FILE.read_text())
+
+def _save_aliases(data: dict) -> None:
+    with _aliases_lock:
+        RUN_ALIASES_FILE.write_text(json.dumps(data, indent=2))
+
+def get_run_alias(run_id: str) -> str:
+    return _load_aliases().get(run_id, run_id)
 
 tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
 jira_client = JiraClient()
@@ -37,6 +54,7 @@ jira_client = JiraClient()
 app = FastAPI(title="Test Reports API", version="1.0.0")
 
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
+jinja_env.tests["contains"] = lambda value, item: item in value if value else False
 
 app.add_middleware(
     CORSMiddleware,
@@ -293,6 +311,74 @@ def create_bug(doors_number: str, req: BugCreateRequest, _: TokenData = Depends(
     tracker.register(doors_number, jira_key, req.scenarioName, req.runId)
     return BugCreateResponse(jiraKey=jira_key, doorsNumber=doors_number)
 
+
+class RenameRequest(BaseModel):
+    displayName: str
+
+@app.patch("/api/v1/runs/{run_id}", response_model=dict, dependencies=[Depends(verify_token)])
+def rename_run(run_id: str, req: RenameRequest, _: TokenData = Depends(verify_token)):
+    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    aliases = _load_aliases()
+    aliases[run_id] = req.displayName
+    _save_aliases(aliases)
+    return {"runId": run_id, "displayName": req.displayName}
+
+class BugStatusResult(BaseModel):
+    scenarioId: str
+    doorsAbsNumber: Optional[str] = None
+    jiraKey: Optional[str] = None
+    jiraUrl: Optional[str] = None
+    status: Optional[str] = None
+    isReported: bool = False
+
+@app.get("/api/v1/runs/{run_id}/bug-status", response_model=List[BugStatusResult])
+def get_bug_statuses(run_id: str):
+    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    manifest = json.loads(manifest_path.read_text())
+    results = []
+    for s in manifest.get("scenarios", []):
+        doors = s.get("doorsAbsNumber")
+        result = BugStatusResult(
+            scenarioId=s.get("id", ""),
+            doorsAbsNumber=doors,
+            isReported=False,
+        )
+        if doors:
+            bug = tracker.get(doors)
+            if bug:
+                result.jiraKey = bug.get("jiraKey")
+                result.jiraUrl = jira_client.issue_url(bug["jiraKey"]) if jira_client.is_configured() else None
+                result.status = bug.get("status")
+                result.isReported = True
+        results.append(result)
+    return results
+
+@app.get("/reports/{run_id}", response_class=HTMLResponse)
+def run_detail(run_id: str, request: Request):
+    manifests = load_manifests()
+    manifest = None
+    for m in manifests:
+        if m.runId == run_id:
+            manifest = m
+            break
+    if manifest is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+
+    display_name = get_run_alias(run_id)
+
+    template = jinja_env.get_template("run-detail.html")
+    html = template.render(
+        run_id=run_id,
+        display_name=display_name,
+        manifest=manifest.model_dump(),
+        scenarios=manifest.scenarios,
+        jira_base_url=os.getenv("JIRA_BASE_URL", ""),
+    )
+    return HTMLResponse(content=html)
 
 MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/reports", StaticFiles(directory=str(MANIFESTS_DIR)), name="reports")

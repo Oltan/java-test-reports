@@ -206,7 +206,7 @@ function renderTable(runs: Run[]): void {
     const hasDeps = (r.scenarios ?? []).some(s => (s.dependencies?.length ?? 0) > 0)
     return `
       <tr>
-        <td><a class="run-link" href="/reports/${r.runId}/triage">${r.runId.slice(0, 22)}</a></td>
+        <td><a class="run-link" href="/reports/${r.runId}">${r.runId.slice(0, 22)}</a></td>
         <td class="td-muted">${date}</td>
         <td><span class="badge badge-pass">${r.passed}</span></td>
         <td><span class="badge badge-fail">${r.failed}</span></td>

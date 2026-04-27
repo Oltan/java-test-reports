@@ -44,3 +44,6 @@ bug-tracker.json
 
 # WSL/Windows artifacts
 *Zone.Identifier
+
+# Runtime state
+run-aliases.json
