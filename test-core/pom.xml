@@ -60,5 +60,10 @@
             <artifactId>allure-integration</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>com.testreports</groupId>
+            <artifactId>extent-integration</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 </project>
