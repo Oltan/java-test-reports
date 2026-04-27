@@ -432,8 +432,19 @@ tr:hover td { background: rgba(255,255,255,.025); }
 .error-text { padding: 12px 14px; font-family: 'Cascadia Code','Fira Code',monospace; font-size: 0.78rem; color: var(--red); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow-y: auto; }
 
 /* ── Attachments ────────────────────────────────────────────────────── */
-.attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.attachments { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+
 .attachment-item { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+.attachment-item a { color: var(--accent-h); }
+.attachment-item a:hover { text-decoration: underline; }
+
+.attachment-media { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.attachment-label { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .04em; }
+.attachment-img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; cursor: zoom-in; transition: opacity .2s; }
+.attachment-img:hover { opacity: .85; }
+.attachment-video { display: block; width: 100%; max-height: 320px; background: #000; }
+.attachment-missing .attachment-img { display: none; }
+.attachment-missing::after { content: "Dosya bulunamad\u0131"; display: block; padding: 12px; font-size: 0.8rem; color: var(--text-muted); }
 
 /* ── Actions ────────────────────────────────────────────────────────── */
 .fcard-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
@@ -490,3 +501,11 @@ tr:hover td { background: rgba(255,255,255,.025); }
   .triage-stats  { gap: 8px; }
   .tstat         { padding: 10px 14px; }
 }
+
+/* ── Lightbox ───────────────────────────────────────────────────────── */
+.lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,.88);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9998; cursor: zoom-out;
+}
+.lightbox-img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 6px; }

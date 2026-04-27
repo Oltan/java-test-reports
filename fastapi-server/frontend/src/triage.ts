@@ -159,9 +159,23 @@ function setupCopyButtons(): void {
   })
 }
 
+// ── Lightbox for screenshots ───────────────────────────────────────
+function setupLightbox(): void {
+  document.querySelectorAll<HTMLImageElement>('.attachment-img').forEach(img => {
+    img.addEventListener('click', () => {
+      const overlay = document.createElement('div')
+      overlay.className = 'lightbox'
+      overlay.innerHTML = `<img src="${img.src}" alt="${img.alt}" class="lightbox-img">`
+      overlay.addEventListener('click', () => overlay.remove())
+      document.body.appendChild(overlay)
+    })
+  })
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadBugStatuses()
   setupFilter()
   setupButtons()
   setupCopyButtons()
+  setupLightbox()
 })
