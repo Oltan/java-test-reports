@@ -149,3 +149,20 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 - Created `ENTEGRASYON_REHBERI.md` at repository root as a Turkish step-by-step integration guide for Java Selenium Cucumber projects.
 - The guide references actual project files: parent POM, `test-core` Cucumber config, `allure-integration` hooks, FastAPI server, dashboard assets, Jenkinsfile, GitHub Actions workflow, Jira service, DOORS client, and sample manifests.
 - Markdown LSP diagnostics are not available in this environment; verification used file readback plus heading and URL scans.
+
+## 2026-04-27 test-core Dependency Resolver
+- Added `com.testreports.runner.DependencyResolver` under `test-core/src/test/java` to parse `.feature` files as text for `@id:` and comma-separated `@dep:` tags without requiring Cucumber runtime APIs.
+- Topological ordering uses Kahn's algorithm over `Map<String, Set<String>>` where keys are scenario IDs and values are dependency IDs; unresolved dependencies are logged with `java.util.logging` and ignored for ordering.
+- `mvn -pl test-core test -Dtest=DependencyResolverTest` passes after installing sibling `extent-integration`/`allure-integration` SNAPSHOT artifacts locally.
+
+## 2026-04-27 test-core Retry Runner Port
+- Ported the surefirePlugin retry pattern into `test-core/src/test/java/com/testreports/runner/RetryTestRunner.java` using Cucumber `Main.run`, nested discovery/failure-capture plugins, dependency topological ordering, and `target/retry-state/` files.
+- Retry runner is activated by `-Dretry.count=N`; it discovers tag-filtered scenarios with a dry-run, runs initial attempts by exact scenario name, and retries captured failed `feature:line` locations so Scenario Outline failures can retry at example-row granularity.
+- Added `retry-demo.feature` plus `RetryDemoSteps` where the flaky scenario records attempt counts in `target/retry-state/{scenario}.txt` and passes on the first retry.
+- Exact verification passed after local sibling SNAPSHOT install: `mvn -pl test-core test -Dcucumber.filter.tags="@Flaky" -Dretry.count=2`.
+
+## 2026-04-27 ExtentReports to Allure Migration Guide
+- Created `GECIS_REHBERI.md` at repository root as a Turkish transition guide from `surefirePlugin-master` ExtentReports usage to the Allure based project flow.
+- The guide keeps Windows first paths and commands, using `C:\Users\ol_ta\Desktop\java_reports`, `setup.bat`, `start-server.bat`, and `scripts\run-by-tag.bat`.
+- Covered required sections: comparison, step by step Allure setup, surefirePlugin feature migration, hibrit mode, ExtentReports removal, Windows run commands, and common questions.
+- Verification used scans for forbidden WSL style path references and long dash characters in the new guide; both scans returned no matches.

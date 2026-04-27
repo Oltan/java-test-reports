@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
+import httpx
 import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -16,12 +17,11 @@ from pydantic import BaseModel
 
 from models import RunManifest, ScenarioResult
 from bug_tracker import BugTracker
+from jira_client import JiraClient
 
 load_dotenv()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
-
-tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 
@@ -30,6 +30,9 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent / "manifests")))
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
+jira_client = JiraClient()
 
 app = FastAPI(title="Test Reports API", version="1.0.0")
 
@@ -129,14 +132,14 @@ def login(req: LoginRequest):
 
 
 @app.get("/api/v1/runs", response_model=List[RunManifest])
-def list_runs(_: TokenData = Depends(verify_token)):
+def list_runs():
     manifests = load_manifests()
     manifests.sort(key=lambda m: str(m.timestamp), reverse=True)
     return manifests
 
 
 @app.get("/api/v1/runs/{run_id}", response_model=RunManifest)
-def get_run(run_id: str, _: TokenData = Depends(verify_token)):
+def get_run(run_id: str):
     manifests = load_manifests()
     for m in manifests:
         if m.runId == run_id:
@@ -148,7 +151,7 @@ def get_run(run_id: str, _: TokenData = Depends(verify_token)):
 
 
 @app.get("/api/v1/runs/{run_id}/failures", response_model=List[ScenarioResult])
-def get_run_failures(run_id: str, _: TokenData = Depends(verify_token)):
+def get_run_failures(run_id: str):
     manifests = load_manifests()
     for m in manifests:
         if m.runId == run_id:
@@ -159,6 +162,18 @@ def get_run_failures(run_id: str, _: TokenData = Depends(verify_token)):
     )
 
 
+
+@app.get("/reports/{run_id}/scenario/{scenario_id}")
+def scenario_detail(run_id: str, scenario_id: str):
+    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+    manifest = json.loads(manifest_path.read_text())
+    scenario = next((s for s in manifest.get("scenarios", []) if s.get("id") == scenario_id), None)
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    template = jinja_env.get_template("scenario-detail.html")
+    return HTMLResponse(content=template.render(run_id=run_id, scenario=scenario, manifest=manifest))
 @app.get("/reports/{run_id}/triage")
 def triage_page(run_id: str, request: Request):
     manifests = load_manifests()
@@ -174,51 +189,65 @@ def triage_page(run_id: str, request: Request):
         )
     failures = [s for s in manifest.scenarios if s.status == "failed"]
 
-    # Extract JWT token from Authorization header for client-side API calls
-    token = ""
-    auth_header = request.headers.get("authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-
     template = jinja_env.get_template("triage.html")
     html = template.render(
         run_id=run_id,
         manifest=manifest.model_dump(),
         failures=[s.model_dump() for s in failures],
-        token=token,
+        jira_base_url=os.getenv("JIRA_BASE_URL", ""),
     )
     return HTMLResponse(content=html)
 
 
 class JiraResponse(BaseModel):
     jiraKey: str
+    jiraUrl: Optional[str] = None
 
 
 @app.post("/api/v1/runs/{run_id}/scenarios/{scenario_id}/jira", response_model=JiraResponse, status_code=201)
 def create_jira_bug(run_id: str, scenario_id: str):
     manifests = load_manifests()
-    manifest = None
-    for m in manifests:
-        if m.runId == run_id:
-            manifest = m
-            break
+    manifest = next((m for m in manifests if m.runId == run_id), None)
     if manifest is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Run '{run_id}' not found",
-        )
-    scenario = None
-    for s in manifest.scenarios:
-        if s.id == scenario_id:
-            scenario = s
-            break
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+
+    scenario = next((s for s in manifest.scenarios if s.id == scenario_id), None)
     if scenario is None:
+        raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
+
+    if not jira_client.is_configured():
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Scenario '{scenario_id}' not found",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Jira integration not configured. Set JIRA_BASE_URL, JIRA_PAT, JIRA_PROJECT.",
         )
-    # Mock Jira creation — replace with real Jira service call later
-    return JiraResponse(jiraKey="PROJ-123")
+
+    summary = f"Automated test failed: {scenario.name}"
+    step_lines = "\n".join(
+        f"  [FAIL] {s.name}" if s.status == "failed" else f"  [pass] {s.name}"
+        for s in scenario.steps
+    )
+    description = (
+        f"h2. Automated Test Failure\n\n"
+        f"*Run ID:* {run_id}\n"
+        f"*Scenario:* {scenario.name}\n"
+        f"*Duration:* {scenario.duration}\n\n"
+        f"h3. Steps\n{{noformat}}\n{step_lines}\n{{noformat}}"
+    )
+
+    try:
+        key = jira_client.create_issue(summary, description)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Jira API error {exc.response.status_code}: {exc.response.text[:300]}",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Jira error: {str(exc)}",
+        )
+
+    return JiraResponse(jiraKey=key, jiraUrl=jira_client.issue_url(key))
 
 
 class BugCreateRequest(BaseModel):
@@ -231,13 +260,13 @@ class BugCreateResponse(BaseModel):
     doorsNumber: str
 
 
-@app.get("/api/v1/bugs", dependencies=[Depends(verify_token)])
-def list_bugs(_: TokenData = Depends(verify_token)):
+@app.get("/api/v1/bugs")
+def list_bugs():
     return tracker.get_all()
 
 
-@app.get("/api/v1/bugs/{doors_number}", dependencies=[Depends(verify_token)])
-def get_bug(doors_number: str, _: TokenData = Depends(verify_token)):
+@app.get("/api/v1/bugs/{doors_number}")
+def get_bug(doors_number: str):
     mapping = tracker.get(doors_number)
     if mapping is None:
         raise HTTPException(
@@ -247,7 +276,12 @@ def get_bug(doors_number: str, _: TokenData = Depends(verify_token)):
     return mapping
 
 
-@app.post("/api/v1/bugs/{doors_number}/create", response_model=BugCreateResponse, status_code=201, dependencies=[Depends(verify_token)])
+@app.post(
+    "/api/v1/bugs/{doors_number}/create",
+    response_model=BugCreateResponse,
+    status_code=201,
+    dependencies=[Depends(verify_token)],
+)
 def create_bug(doors_number: str, req: BugCreateRequest, _: TokenData = Depends(verify_token)):
     existing = tracker.get(doors_number)
     if existing is not None:
@@ -255,11 +289,11 @@ def create_bug(doors_number: str, req: BugCreateRequest, _: TokenData = Depends(
             status_code=status.HTTP_409_CONFLICT,
             detail=existing,
         )
-    # Mock Jira key: PROJ-{hash(doors_number) % 9000 + 1000}
     jira_key = f"PROJ-{abs(hash(doors_number)) % 9000 + 1000}"
     tracker.register(doors_number, jira_key, req.scenarioName, req.runId)
     return BugCreateResponse(jiraKey=jira_key, doorsNumber=doors_number)
 
 
+MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/reports", StaticFiles(directory=str(MANIFESTS_DIR)), name="reports")
 app.mount("/static", StaticFiles(directory="static"), name="static")

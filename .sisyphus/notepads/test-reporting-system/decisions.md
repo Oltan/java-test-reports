@@ -12,3 +12,12 @@
 ## orchestrator Pipeline Boundaries (2026-04-26)
 - Default CLI pipeline runs the four core stages in the requested order: AllureGenerate → ManifestWrite → WebDeploy → EmailSend. JiraCreate and DoorsUpdate are implemented as optional non-critical stages but are not added to the default CLI path.
 - External integrations are injected behind small functional interfaces in stages so unit tests use fake stages/services and make no real process, SMTP, Jira, or DOORS calls.
+
+## test-core Dependency Resolver Scope (2026-04-27)
+- Kept dependency parsing in test sources and implemented it with standard Java collections, regex, and file I/O only, matching the unit-test-only requirement and avoiding new Cucumber/runtime dependencies.
+- Duplicate `@id:` values throw immediately during parsing because IDs are intended to be unique scenario identifiers; missing dependency IDs remain non-fatal and are only warned during topological sorting.
+
+## test-core Retry Runner Activation (2026-04-27)
+- Kept `CucumberTestRunner` as the default Surefire include so existing test-core Cucumber behavior remains unchanged when `retry.count` is absent.
+- Added a `retry-runner` Maven profile activated by `-Dretry.count` that overrides Surefire includes to `RetryTestRunner` and limits JUnit Platform execution to `junit-jupiter`, avoiding duplicate execution by the normal suite runner.
+- Added explicit `cucumber-core` test-core dependency because the retry runner invokes `io.cucumber.core.cli.Main` directly rather than through the JUnit Platform Cucumber engine.
