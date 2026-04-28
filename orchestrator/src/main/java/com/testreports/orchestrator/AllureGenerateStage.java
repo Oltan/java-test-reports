@@ -22,7 +22,7 @@ public class AllureGenerateStage implements PipelineStage {
 
     @Override
     public boolean isCritical() {
-        return true;
+        return false;
     }
 
     @Override
