@@ -8,6 +8,7 @@ export default defineConfig({
       input: {
         dashboard: './src/dashboard.ts',
         triage: './src/triage.ts',
+        runDetail: './src/run-detail.ts',
       },
       output: {
         entryFileNames: '[name].js',

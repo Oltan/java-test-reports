@@ -206,7 +206,8 @@
                     <configuration>
                         <failIfNoTests>false</failIfNoTests>
                         <includes>
-                            <include>**/CucumberTestRunner.java</include>
+                            <include>**/*TestRunner.java</include>
+                            <include>**/*Test.java</include>
                         </includes>
                     </configuration>
                 </plugin>

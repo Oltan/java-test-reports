@@ -41,3 +41,8 @@ fastapi-server/frontend/node_modules/
 fastapi-server/manifests/
 manifests/
 bug-tracker.json
+# WSL/Windows artifacts
+*Zone.Identifier
+
+# Runtime state
+run-aliases.json

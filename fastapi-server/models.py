@@ -15,6 +15,12 @@ class Attachment(BaseModel):
     path: str
 
 
+class AttemptResult(BaseModel):
+    status: str = Field(pattern=r"^(passed|failed|skipped)$")
+    timestamp: str
+    errorMessage: Optional[str] = None
+
+
 class ScenarioResult(BaseModel):
     id: str
     name: str
@@ -24,6 +30,8 @@ class ScenarioResult(BaseModel):
     tags: List[str] = Field(default_factory=list)
     steps: List[StepResult] = Field(default_factory=list)
     attachments: List[Attachment] = Field(default_factory=list)
+    attempts: List[AttemptResult] = Field(default_factory=list)
+    dependencies: List[str] = Field(default_factory=list)
 
 
 class RunManifest(BaseModel):

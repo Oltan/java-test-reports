@@ -1,6 +1,11 @@
 import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
 
+interface ScenarioInfo {
+  attempts?: { status: string }[]
+  dependencies?: string[]
+}
+
 interface Run {
   runId: string
   timestamp: string
@@ -9,6 +14,7 @@ interface Run {
   failed: number
   skipped: number
   duration: string
+  scenarios?: ScenarioInfo[]
 }
 
 const TOKEN_KEY = 'jwt_token'
@@ -196,9 +202,11 @@ function renderTable(runs: Run[]): void {
     })
     const rate = Math.round((r.passed / (r.totalScenarios || 1)) * 100)
     const ok = r.failed === 0
+    const retryCount = (r.scenarios ?? []).filter(s => (s.attempts?.length ?? 0) > 1).length
+    const hasDeps = (r.scenarios ?? []).some(s => (s.dependencies?.length ?? 0) > 0)
     return `
       <tr>
-        <td><a class="run-link" href="/reports/${r.runId}/triage">${r.runId.slice(0, 22)}</a></td>
+        <td><a class="run-link" href="/reports/${r.runId}">${r.runId.slice(0, 22)}</a></td>
         <td class="td-muted">${date}</td>
         <td><span class="badge badge-pass">${r.passed}</span></td>
         <td><span class="badge badge-fail">${r.failed}</span></td>
@@ -209,6 +217,8 @@ function renderTable(runs: Run[]): void {
           <span class="prog-label">${rate}%</span>
         </td>
         <td class="td-muted">${parseFloat(r.duration).toFixed(1)}s</td>
+        <td>${retryCount > 0 ? `<span class="badge badge-retry">${retryCount} retried</span>` : '<span class="td-muted">—</span>'}</td>
+        <td>${hasDeps ? '<span class="badge badge-dep">⛓️ has deps</span>' : '<span class="td-muted">—</span>'}</td>
         <td><span class="status-pill ${ok ? 'pill-pass' : 'pill-fail'}">${ok ? 'PASSED' : 'FAILED'}</span></td>
         <td><a class="action-link" href="/reports/${r.runId}/triage">Triage →</a></td>
       </tr>`
