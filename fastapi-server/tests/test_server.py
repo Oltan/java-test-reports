@@ -44,7 +44,7 @@ def test_login_wrong_password():
         "/api/v1/auth/login",
         json={"username": "admin", "password": "wrong"},
     )
-    assert response.status_code == 200
+    assert response.status_code == 401
 
 
 # ── Test 3: GET /runs without token → 401 ──

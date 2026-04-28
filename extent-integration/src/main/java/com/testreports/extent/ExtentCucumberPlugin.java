@@ -171,6 +171,9 @@ public class ExtentCucumberPlugin implements ConcurrentEventListener {
 
     private static String uriBasename(URI uri) {
         String path = uri.getPath();
+        if (path == null) {
+            return "unknown";
+        }
         String file = path.substring(path.lastIndexOf('/') + 1);
         return file.replaceFirst("\\.feature$", "");
     }
