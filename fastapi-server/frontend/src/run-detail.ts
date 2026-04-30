@@ -44,13 +44,29 @@ function setupRename(): void {
   async function save(): Promise<void> {
     const newName = input.value.trim()
     if (!newName) { cancel(); return }
+
+    // Token kontrolü — rename için login şart
+    if (!getToken()) {
+      toast('Rename için önce giriş yapmalısınız', 'error')
+      window.location.href = '/'
+      return
+    }
+
     try {
       const res = await fetch(`/api/v1/runs/${RUN_ID}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ displayName: newName }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        if (res.status === 401) {
+          toast('Oturum süresi doldu. Lütfen tekrar giriş yapın.', 'error')
+          window.location.href = '/'
+          return
+        }
+        throw new Error(`HTTP ${res.status}`)
+      }
+      toast('İsim güncellendi', 'success')
       location.reload()
     } catch (err) {
       toast(`Rename failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'error')
