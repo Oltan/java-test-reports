@@ -22,7 +22,7 @@ public class AllureGenerateStage implements PipelineStage {
 
     @Override
     public boolean isCritical() {
-        return false;
+        return false;  // allure CLI opsiyonel — yoksa manifest üretimi yine de devam eder
     }
 
     @Override
