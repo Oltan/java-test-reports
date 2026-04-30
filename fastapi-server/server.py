@@ -205,8 +205,12 @@ def get_bug_statuses(run_id: str):
     return results
 
 
+class RenameRequest(BaseModel):
+    displayName: str
+
+
 @app.patch("/api/v1/runs/{run_id}", response_model=dict, dependencies=[Depends(verify_token)])
-def rename_run(run_id: str, req: "RenameRequest", _: TokenData = Depends(verify_token)):
+def rename_run(run_id: str, req: RenameRequest, _: TokenData = Depends(verify_token)):
     manifest_path = MANIFESTS_DIR / f"{run_id}.json"
     if not manifest_path.exists():
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
@@ -214,10 +218,6 @@ def rename_run(run_id: str, req: "RenameRequest", _: TokenData = Depends(verify_
     aliases[run_id] = req.displayName
     _save_aliases(aliases)
     return {"runId": run_id, "displayName": req.displayName}
-
-
-class RenameRequest(BaseModel):
-    displayName: str
 
 
 @app.get("/reports/{run_id}", response_class=HTMLResponse)
