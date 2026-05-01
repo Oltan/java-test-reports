@@ -1252,7 +1252,7 @@ Wave 1 (T1-T5) → Wave 2 (T6) → Wave 3 (T10) → Wave 4 (T15) → F1-F4
 
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
 
   Read the plan end-to-end. For each "Must Have": verify implementation exists.
   - Java: 3 modules only (`mvn validate` output)
@@ -1267,7 +1267,7 @@ Wave 1 (T1-T5) → Wave 2 (T6) → Wave 3 (T10) → Wave 4 (T15) → F1-F4
 
   Output: `Must Have [8/8] | Must NOT Have [5/5] | Tasks [15/15] | VERDICT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
 
   Run `export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:$PATH" && mvn -q clean verify && cd fastapi-server && python -m pytest tests/ -v`.
   Review all changed files for:
@@ -1279,7 +1279,7 @@ Wave 1 (T1-T5) → Wave 2 (T6) → Wave 3 (T10) → Wave 4 (T15) → F1-F4
 
   Output: `Java Build [PASS/FAIL] | Python Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
+- [x] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
 
   Execute EVERY QA scenario from EVERY task — follow exact steps, capture evidence.
   Test cross-feature integration:
@@ -1290,7 +1290,7 @@ Wave 1 (T1-T5) → Wave 2 (T6) → Wave 3 (T10) → Wave 4 (T15) → F1-F4
   Save evidence to `.sisyphus/evidence/final-qa/`.
   Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
 
   For each task: read "What to do", read actual diff (git log/diff).
   Verify 1:1 — everything in spec was built, nothing beyond spec.
