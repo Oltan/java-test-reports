@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Raporu — {{ run_id }}</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Test Reports
+  </div>
+  <div class="nav-right">
+    <span class="nav-label nav-label--muted">Public Report</span>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="run-header">
+    <div class="run-header-inner">
+      <div class="run-title-row">
+        <h1 class="run-title">{{ run_id }}</h1>
+      </div>
+      <div class="run-meta">
+        <span class="run-meta-item">Public Report</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="run-detail-main">
+    {% if scenarios %}
+    <div class="table-card">
+      <div class="table-header">
+        <h3 class="table-title">Senaryo Sonuçları</h3>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Senaryo</th>
+              <th>Durum</th>
+              <th>Süre (sn)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in scenarios %}
+            <tr>
+              <td>{{ s[0] }}</td>
+              <td>
+                <span class="status-pill {% if s[1] == 'PASSED' %}pill-pass{% else %}pill-fail{% endif %}">
+                  {{ s[1] }}
+                </span>
+              </td>
+              <td class="td-muted">{{ s[2] | round(1) if s[2] else '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <h2>Bu raporda senaryo bulunamadı</h2>
+      <p>Henüz sonuç yüklenmemiş olabilir.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<footer class="footer">
+  Test Raporlama Sistemi v2.0 · Allure + FastAPI
+</footer>
+
+</body>
+</html>

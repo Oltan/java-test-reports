@@ -37,13 +37,9 @@
         <module>test-core</module>
         <module>allure-integration</module>
         <module>report-model</module>
-        <module>email-service</module>
-        <module>jira-service</module>
-        <module>doors-service</module>
-        <module>orchestrator</module>
-        <module>extent-integration</module>
         <!-- fastapi-server is Python, not a Maven module -->
         <!-- javalin-server removed: FastAPI is the sole web server -->
+        <!-- Removed: email-service, jira-service, doors-service, orchestrator, extent-integration (Wave 1) -->
     </modules>
 
     <dependencyManagement>

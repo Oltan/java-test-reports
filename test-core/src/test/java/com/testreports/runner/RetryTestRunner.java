@@ -44,7 +44,7 @@ import java.util.stream.Stream;
 public class RetryTestRunner {
 
     private static final String DEFAULT_FEATURES = "src/test/resources/features";
-    private static final String DEFAULT_GLUE = "com.testreports.allure,com.testreports.extent,com.testreports.steps";
+    private static final String DEFAULT_GLUE = "com.testreports.allure,com.testreports.steps";
     private static final Path RETRY_STATE_DIR = Paths.get(System.getProperty("retry.state.dir", "target/retry-state"));
 
     private static final Pattern SCENARIO_LINE = Pattern.compile("^\\s*Scenario(?: Outline| Template)?\\s*:\\s*(.+)\\s*$");

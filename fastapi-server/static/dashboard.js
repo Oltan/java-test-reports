@@ -1,23 +1,338 @@
-import{C as u,r as k}from"./vendor.js";u.register(...k);const b="jwt_token";function h(){return localStorage.getItem(b)}function C(t){localStorage.setItem(b,t)}function m(){localStorage.removeItem(b)}function r(t){return document.getElementById(t)}async function g(t,n={}){const e=h(),a={"Content-Type":"application/json",...n.headers??{}};e&&(a.Authorization=`Bearer ${e}`);const o=await fetch(t,{...n,headers:a});if(!o.ok)throw new Error(`HTTP ${o.status}`);return o.json()}async function v(t){t.preventDefault();const n=t.target,e=n.querySelector("#username").value,a=n.querySelector("#password").value,o=r("login-error"),s=n.querySelector('button[type="submit"]');o.textContent="",s.disabled=!0,s.textContent="Giriş yapılıyor…";try{const d=await g("/api/v1/auth/login",{method:"POST",body:JSON.stringify({username:e,password:a})});C(d.token),y()}catch{o.textContent="Geçersiz kullanıcı adı veya şifre"}finally{s.disabled=!1,s.textContent="Giriş Yap"}}function S(){m(),location.reload()}function y(){r("login-section").style.display="none",r("dashboard-content").style.display="block",I()}function f(t,n,e=""){const o=Date.now(),s=()=>{const d=Math.min((Date.now()-o)/700,1),c=1-Math.pow(1-d,3);t.textContent=Math.round(c*n)+e,d<1&&requestAnimationFrame(s)};requestAnimationFrame(s)}let l=[];function w(){l.forEach(t=>t.destroy()),l=[]}function $(t){const n=r("pieChart").getContext("2d"),e=t.totalScenarios||1;l.push(new u(n,{type:"doughnut",data:{labels:["Passed","Failed","Skipped"],datasets:[{data:[t.passed,t.failed,t.skipped],backgroundColor:["#22c55e","#ef4444","#64748b"],borderColor:"#1e293b",borderWidth:3,hoverOffset:10}]},options:{responsive:!0,maintainAspectRatio:!1,cutout:"74%",plugins:{legend:{position:"bottom",labels:{color:"#94a3b8",padding:20,font:{size:13}}},tooltip:{callbacks:{label:a=>` ${a.label}: ${a.parsed} (${Math.round(a.parsed/e*100)}%)`}}}}}))}function x(t){const n=[...t].reverse().slice(-12),e=r("barChart").getContext("2d");l.push(new u(e,{type:"bar",data:{labels:n.map(a=>a.runId.slice(-6)),datasets:[{label:"Passed",data:n.map(a=>a.passed),backgroundColor:"rgba(34,197,94,0.85)",borderRadius:4,borderSkipped:!1},{label:"Failed",data:n.map(a=>a.failed),backgroundColor:"rgba(239,68,68,0.85)",borderRadius:4,borderSkipped:!1},{label:"Skipped",data:n.map(a=>a.skipped),backgroundColor:"rgba(100,116,139,0.6)",borderRadius:4,borderSkipped:!1}]},options:{responsive:!0,maintainAspectRatio:!1,plugins:{legend:{labels:{color:"#94a3b8",font:{size:12}}}},scales:{x:{stacked:!0,ticks:{color:"#64748b",font:{size:11}},grid:{display:!1}},y:{stacked:!0,ticks:{color:"#64748b"},grid:{color:"rgba(51,65,85,0.5)"},border:{display:!1}}}}}))}function E(t){const n=t[0],e=Math.round(n.passed/(n.totalScenarios||1)*100);f(r("metric-rate"),e,"%"),f(r("metric-total"),t.length);const a=t.reduce((s,d)=>s+parseFloat(d.duration||"0"),0)/t.length;r("metric-avg").textContent=a.toFixed(1)+"s";const o=r("metric-trend");if(t.length>=2){const s=(t[0].passed/(t[0].totalScenarios||1)-t[1].passed/(t[1].totalScenarios||1))*100;o.textContent=(s>=0?"▲ +":"▼ ")+Math.abs(s).toFixed(1)+"%",o.className="metric-value "+(s>=0?"trend-up":"trend-down")}else o.textContent="—"}function T(t){const n=r("run-tbody");n.innerHTML=t.slice(0,20).map(e=>{const a=new Date(e.timestamp).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),o=Math.round(e.passed/(e.totalScenarios||1)*100),s=e.failed===0,d=(e.scenarios??[]).filter(p=>{var i;return(((i=p.attempts)==null?void 0:i.length)??0)>1}).length,c=(e.scenarios??[]).some(p=>{var i;return(((i=p.dependencies)==null?void 0:i.length)??0)>0});return`
-      <tr>
-        <td><a class="run-link" href="/reports/${e.runId}">${e.runId.slice(0,22)}</a></td>
-        <td class="td-muted">${a}</td>
-        <td><span class="badge badge-pass">${e.passed}</span></td>
-        <td><span class="badge badge-fail">${e.failed}</span></td>
-        <td>
-          <div class="prog-wrap">
-            <div class="prog-bar" style="width:${o}%"></div>
-          </div>
-          <span class="prog-label">${o}%</span>
-        </td>
-        <td class="td-muted">${parseFloat(e.duration).toFixed(1)}s</td>
-        <td>${d>0?`<span class="badge badge-retry">${d} retried</span>`:'<span class="td-muted">—</span>'}</td>
-        <td>${c?'<span class="badge badge-dep">⛓️ has deps</span>':'<span class="td-muted">—</span>'}</td>
-        <td><span class="status-pill ${s?"pill-pass":"pill-fail"}">${s?"PASSED":"FAILED"}</span></td>
-        <td><a class="action-link" href="/reports/${e.runId}/triage">Triage →</a></td>
-      </tr>`}).join("")}function F(){r("dashboard-content").innerHTML=`
+import { C as Chart, r as registerables } from "./vendor.js";
+Chart.register(...registerables);
+
+const TOKEN_KEY = "jwt_token";
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+function $(id) { return document.getElementById(id); }
+
+async function apiFetch(url, opts = {}) {
+  const token = getToken();
+  const headers = { "Content-Type": "application/json", ...opts.headers ?? {} };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, { ...opts, headers });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const form = e.target;
+  const username = form.querySelector("#username").value;
+  const password = form.querySelector("#password").value;
+  const errorEl = $("login-error");
+  const btn = form.querySelector('button[type="submit"]');
+  errorEl.textContent = "";
+  btn.disabled = true;
+  btn.textContent = "Giriş yapılıyor…";
+  try {
+    const data = await apiFetch("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    setToken(data.token);
+    showDashboard();
+  } catch {
+    errorEl.textContent = "Geçersiz kullanıcı adı veya şifre";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Giriş Yap";
+  }
+}
+
+function handleLogout() {
+  clearToken();
+  location.reload();
+}
+
+function showDashboard() {
+  $("login-section").style.display = "none";
+  $("dashboard-content").style.display = "block";
+  loadDashboard();
+}
+
+function animateValue(el, target, suffix = "") {
+  const start = Date.now();
+  const tick = () => {
+    const progress = Math.min((Date.now() - start) / 700, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(eased * target) + suffix;
+    if (progress < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+let charts = [];
+
+function destroyCharts() {
+  charts.forEach(c => c.destroy());
+  charts = [];
+}
+
+function renderPieChart(metrics) {
+  const ctx = $("pieChart").getContext("2d");
+  const total = metrics.passed + metrics.failed + metrics.skipped || 1;
+  charts.push(new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: ["Passed", "Failed", "Skipped"],
+      datasets: [{
+        data: [metrics.passed, metrics.failed, metrics.skipped],
+        backgroundColor: ["#22c55e", "#ef4444", "#64748b"],
+        borderColor: getComputedStyle(document.documentElement).getPropertyValue("--surface").trim(),
+        borderWidth: 3,
+        hoverOffset: 10,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "74%",
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { color: "#94a3b8", padding: 20, font: { size: 13 } },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed / total * 100)}%)`,
+          },
+        },
+      },
+    },
+  }));
+}
+
+function renderBarChart(versionBreakdown) {
+  const ctx = $("barChart").getContext("2d");
+  const labels = versionBreakdown.map(v => v.version);
+  const passed = versionBreakdown.map(v => v.passed);
+  const failed = versionBreakdown.map(v => v.failed);
+  const skipped = versionBreakdown.map(v => v.skipped);
+
+  charts.push(new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { label: "Passed", data: passed, backgroundColor: "#22c55e", borderRadius: 4 },
+        { label: "Failed", data: failed, backgroundColor: "#ef4444", borderRadius: 4 },
+        { label: "Skipped", data: skipped, backgroundColor: "#64748b", borderRadius: 4 },
+      ],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { color: "#94a3b8", padding: 16, font: { size: 12 } },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { color: "rgba(148,163,184,.1)" },
+          ticks: { color: "#94a3b8" },
+        },
+        y: {
+          stacked: true,
+          grid: { display: false },
+          ticks: { color: "#94a3b8" },
+        },
+      },
+    },
+  }));
+}
+
+function renderMetrics(metrics) {
+  animateValue($("metric-rate"), metrics.success_rate, "%");
+  animateValue($("metric-total"), metrics.total_runs);
+  animateValue($("metric-avg"), metrics.avg_duration, "s");
+  animateValue($("metric-flaky"), metrics.flaky_count);
+}
+
+function renderTable(runs) {
+  const tbody = $("run-tbody");
+  if (!runs || runs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Veri bulunamadı</td></tr>';
+    return;
+  }
+  tbody.innerHTML = runs.map(run => {
+    const date = run.timestamp ? new Date(run.timestamp).toLocaleDateString("tr-TR") : "—";
+    const total = run.totalScenarios || 0;
+    const pct = total > 0 ? Math.round((run.passed / total) * 100) : 0;
+    const hasRetries = run.scenarios?.some(s => s.attempts?.length > 1);
+    const hasDeps = run.scenarios?.some(s => s.dependencies?.length > 0);
+    const isPass = run.failed === 0;
+    return `<tr>
+      <td><a class="run-link" href="/reports/${run.runId}">${run.runId.slice(0, 22)}</a></td>
+      <td class="td-muted">${date}</td>
+      <td><span class="badge badge-pass">${run.passed}</span></td>
+      <td><span class="badge badge-fail">${run.failed}</span></td>
+      <td>
+        <div class="prog-wrap"><div class="prog-bar" style="width:${pct}%"></div></div>
+        <span class="prog-label">${pct}%</span>
+      </td>
+      <td class="td-muted">${parseFloat(run.duration).toFixed(1)}s</td>
+      <td>${hasRetries ? '<span class="badge badge-retry">retried</span>' : '<span class="td-muted">—</span>'}</td>
+      <td>${hasDeps ? '<span class="badge badge-dep">⛓️ deps</span>' : '<span class="td-muted">—</span>'}</td>
+      <td><span class="status-pill ${isPass ? "pill-pass" : "pill-fail"}">${isPass ? "PASSED" : "FAILED"}</span></td>
+      <td><a class="action-link" href="/reports/${run.runId}/triage">Triage →</a></td>
+    </tr>`;
+  }).join("");
+}
+
+function showEmpty() {
+  $("dashboard-content").innerHTML = `
     <div class="empty-state">
       <div class="empty-icon">📊</div>
       <h2>Henüz test çalıştırılmadı</h2>
       <p>İlk test koşusu tamamlandığında burada görüntülenecek.</p>
-    </div>`}async function I(){try{const t=await g("/api/v1/runs");if(!t||t.length===0){F();return}w(),E(t),$(t[0]),x(t),T(t)}catch(t){console.error("Failed to load runs:",t)}}function L(){const t=document.getElementById("table-search");t==null||t.addEventListener("input",()=>{const n=t.value.toLowerCase();document.querySelectorAll("#run-tbody tr").forEach(e=>{var a;e.style.display=(a=e.textContent)!=null&&a.toLowerCase().includes(n)?"":"none"})})}(function(){var e,a;(e=r("login-form"))==null||e.addEventListener("submit",v),(a=r("logout-btn"))==null||a.addEventListener("click",S),L(),h()&&g("/api/v1/runs").then(()=>y()).catch(()=>{m()})})();
+    </div>`;
+}
+
+async function loadDashboard() {
+  try {
+    const [runs, metrics] = await Promise.all([
+      apiFetch("/api/v1/runs"),
+      apiFetch("/api/dashboard/metrics"),
+    ]);
+
+    destroyCharts();
+    renderMetrics(metrics);
+
+    if (metrics.version_breakdown?.length > 0) {
+      renderBarChart(metrics.version_breakdown);
+    }
+
+    if (runs && runs.length > 0) {
+      renderPieChart(metrics);
+      renderTable(runs);
+    } else {
+      showEmpty();
+    }
+  } catch (err) {
+    console.error("Failed to load dashboard:", err);
+  }
+}
+
+async function loadVersions() {
+  try {
+    const data = await apiFetch("/api/versions");
+    const select = $("version-select");
+    data.versions.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      select.appendChild(opt);
+    });
+  } catch { /* versions endpoint may fail if no data */ }
+}
+
+function getFilterParams() {
+  const version = $("version-select").value;
+  const dateRange = $("date-range").value;
+  const params = new URLSearchParams();
+  if (version) params.set("version", version);
+  if (dateRange) {
+    const parts = dateRange.split(" to ");
+    if (parts[0]) params.set("start", new Date(parts[0]).toISOString());
+    if (parts[1]) params.set("end", new Date(parts[1]).toISOString());
+  }
+  return params.toString();
+}
+
+async function handleGenerate() {
+  const params = getFilterParams();
+  const query = params ? `?${params}` : "";
+  try {
+    const metrics = await apiFetch(`/api/dashboard/metrics${query}`);
+    destroyCharts();
+    renderMetrics(metrics);
+    if (metrics.version_breakdown?.length > 0) {
+      renderBarChart(metrics.version_breakdown);
+    }
+    renderPieChart(metrics);
+  } catch (err) {
+    console.error("Failed to generate report:", err);
+  }
+}
+
+function initThemeToggle() {
+  const saved = localStorage.getItem("theme") || "dark";
+  document.documentElement.setAttribute("data-theme", saved);
+  const btn = $("theme-toggle");
+  btn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme");
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
+    destroyCharts();
+    loadDashboard();
+  });
+}
+
+function initDatePicker() {
+  const el = $("date-range");
+  if (typeof flatpickr === "undefined") return;
+  flatpickr(el, {
+    mode: "range",
+    enableTime: true,
+    dateFormat: "Y-m-d H:i",
+    locale: typeof flatpickr.l10ns?.tr !== "undefined" ? flatpickr.l10ns.tr : {},
+    time_24hr: true,
+    theme: "dark",
+  });
+}
+
+function initWebSocket() {
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${protocol}//${location.host}/ws/test-status/live`);
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.progress !== undefined) {
+        $("progress-section").style.display = "block";
+        $("progress-bar").style.width = `${data.progress}%`;
+        $("progress-pct").textContent = `${Math.round(data.progress)}%`;
+        if (data.status) $("progress-label").textContent = data.status;
+        if (data.progress >= 100) {
+          setTimeout(() => {
+            $("progress-section").style.display = "none";
+            loadDashboard();
+          }, 2000);
+        }
+      }
+    } catch { /* ignore non-JSON messages */ }
+  };
+  ws.onclose = () => { /* auto-reconnect handled by browser */ };
+}
+
+function initTableSearch() {
+  const input = $("table-search");
+  input?.addEventListener("input", () => {
+    const q = input.value.toLowerCase();
+    document.querySelectorAll("#run-tbody tr").forEach(tr => {
+      tr.style.display = tr.textContent?.toLowerCase().includes(q) ? "" : "none";
+    });
+  });
+}
+
+(function init() {
+  $("login-form")?.addEventListener("submit", handleLogin);
+  $("logout-btn")?.addEventListener("click", handleLogout);
+  $("generate-btn")?.addEventListener("click", handleGenerate);
+  initThemeToggle();
+  initTableSearch();
+
+  if (getToken()) {
+    showDashboard();
+    loadVersions();
+    initDatePicker();
+    initWebSocket();
+  }
+})();

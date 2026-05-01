@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Test Raporlama Sistemi</title>
   <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
 </head>
 <body>
 
@@ -15,6 +17,10 @@
     Test Reports
   </div>
   <div class="nav-right" id="nav-right">
+    <button class="theme-toggle" id="theme-toggle" title="Tema değiştir">
+      <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
     <span class="nav-label" id="nav-label"></span>
     <button class="nav-btn" id="logout-btn" style="display:none" onclick="void 0">Çıkış Yap</button>
   </div>
@@ -44,6 +50,28 @@
 
 <!-- ── Dashboard ── -->
 <div id="dashboard-content" class="page" style="display:none">
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="filter-inner">
+      <div class="filter-group">
+        <label class="filter-label" for="version-select">Versiyon</label>
+        <select id="version-select" class="filter-select">
+          <option value="">Tümü</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" for="date-range">Tarih Aralığı</label>
+        <div class="date-range-wrap" id="date-range-wrap">
+          <input id="date-range" class="filter-date" type="text" placeholder="Tarih seçin...">
+        </div>
+      </div>
+      <button class="btn btn-primary" id="generate-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Rapor Oluştur
+      </button>
+    </div>
+  </div>
 
   <!-- Metric cards -->
   <div class="metrics">
@@ -76,11 +104,11 @@
     </div>
     <div class="metric-card">
       <div class="metric-icon metric-icon--violet">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </div>
       <div class="metric-body">
-        <div class="metric-label">Trend</div>
-        <div class="metric-value" id="metric-trend">—</div>
+        <div class="metric-label">Flaky Sayısı</div>
+        <div class="metric-value" id="metric-flaky">—</div>
       </div>
     </div>
   </div>
@@ -94,10 +122,21 @@
       </div>
     </div>
     <div class="chart-card chart-card--lg">
-      <div class="chart-title">Run Geçmişi (son 12)</div>
+      <div class="chart-title">Versiyon Bazlı Sonuçlar</div>
       <div class="chart-body">
         <canvas id="barChart"></canvas>
       </div>
+    </div>
+  </div>
+
+  <!-- Live progress bar -->
+  <div class="progress-section" id="progress-section" style="display:none">
+    <div class="progress-header">
+      <span class="progress-label" id="progress-label">Test çalışıyor…</span>
+      <span class="progress-pct" id="progress-pct">0%</span>
+    </div>
+    <div class="prog-wrap prog-wrap--lg">
+      <div class="prog-bar prog-bar--accent" id="progress-bar" style="width:0%"></div>
     </div>
   </div>
 
@@ -137,6 +176,8 @@
   Test Raporlama Sistemi v2.0 · Allure + FastAPI
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js"></script>
 <script type="module" src="/static/vendor.js"></script>
 <script type="module" src="/static/dashboard.js"></script>
 </body>

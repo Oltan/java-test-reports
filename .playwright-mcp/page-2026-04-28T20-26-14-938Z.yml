@@ -1,0 +1,70 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+      - img [ref=e7]
+      - text: Test Reports
+    - generic [ref=e10]: "Run: run-2026-04-26-001"
+  - banner [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "Failure Analysis" [level=1] [ref=e14]
+        - paragraph [ref=e15]: 3 senaryo · 2026-04-26 10:30:00+00:00
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]: "2"
+          - generic [ref=e19]: Passed
+        - generic [ref=e20]:
+          - generic [ref=e21]: "1"
+          - generic [ref=e22]: Failed
+        - generic [ref=e23]:
+          - generic [ref=e24]: "0"
+          - generic [ref=e25]: Skipped
+  - generic [ref=e27]:
+    - generic [ref=e28]:
+      - img [ref=e29]
+      - textbox "Senaryo ara…" [ref=e32]
+    - generic [ref=e33]: 1 failure
+  - main [ref=e34]:
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e38]: Order Submission
+          - generic [ref=e39]: scenario-002 · PT42.891S
+        - generic [ref=e40]: FAILED
+      - generic [ref=e42]: New — not yet reported
+      - list [ref=e43]:
+        - listitem [ref=e44]:
+          - generic [ref=e45]: ✓
+          - generic [ref=e46]: Navigate to checkout
+        - listitem [ref=e47]:
+          - generic [ref=e48]: ✓
+          - generic [ref=e49]: Fill shipping details
+        - listitem [ref=e50]:
+          - generic [ref=e51]: ✗
+          - generic [ref=e52]: Submit order
+      - generic [ref=e53]:
+        - generic [ref=e54]:
+          - generic [ref=e55]: Error
+          - button "Kopyala" [ref=e56] [cursor=pointer]
+        - generic [ref=e57]: "Payment processing failed: card declined"
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - img [ref=e61]
+            - text: order-failure.png
+          - link:
+            - /url: /reports/screenshots/order-failure.png
+          - text: Görsel yüklenemedi
+        - generic [ref=e65]:
+          - img [ref=e66]
+          - link "test-output.log" [ref=e69] [cursor=pointer]:
+            - /url: /reports/logs/test-output.log
+      - button "Hata — Tekrar Dene" [ref=e76] [cursor=pointer]
+  - contentinfo [ref=e74]:
+    - text: Test Raporlama Sistemi v2.0 ·
+    - link "Dashboard'a Dön" [ref=e75] [cursor=pointer]:
+      - /url: /
+  - generic [ref=e77]: "Bug oluşturulamadı: Jira integration not configured. Set JIRA_BASE_URL, JIRA_PAT, JIRA_PROJECT."

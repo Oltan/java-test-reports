@@ -43,3 +43,18 @@ class RunManifest(BaseModel):
     skipped: int
     duration: str
     scenarios: List[ScenarioResult]
+
+
+class TestRunOptions(BaseModel):
+    tags: str = Field(
+        default="@smoke",
+        pattern=r"^@[\w,]+$",
+        description="Cucumber tag filter",
+    )
+    retry_count: int = Field(default=0, ge=0, le=10)
+    browser: str = Field(default="chrome", pattern=r"^(chrome|firefox|edge)$")
+    parallel: int = Field(default=1, ge=1, le=5, description="Number of parallel test executions")
+    environment: str = Field(default="staging", pattern=r"^(staging|prod|dev)$")
+    notify_email: Optional[str] = None
+    version: Optional[str] = None
+    visibility: str = Field(default="internal", pattern=r"^(internal|public)$")

@@ -1,0 +1,3 @@
+[      25ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/reports/screenshots/order-failure.png:0
+[      27ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/v1/bugs/ABS-12346:0
+[   17854ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://localhost:8000/api/v1/runs/run-2026-04-26-001/scenarios/scenario-002/jira:0

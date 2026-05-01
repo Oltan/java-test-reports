@@ -1,0 +1,76 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] Test Reports Automation System                                     [pom]
+[INFO] Allure Integration                                                 [jar]
+[INFO] ExtentReports Integration                                          [jar]
+[INFO] Test Core                                                          [jar]
+[INFO] Report Model                                                       [jar]
+[INFO] Email Service                                                      [jar]
+[INFO] Jira Service                                                       [jar]
+[INFO] DOORS Service                                                      [jar]
+[INFO] Orchestrator                                                       [jar]
+[INFO] 
+[INFO] --------------------< com.testreports:test-reports >--------------------
+[INFO] Building Test Reports Automation System 1.0.0-SNAPSHOT             [1/9]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] -----------------< com.testreports:allure-integration >-----------------
+[INFO] Building Allure Integration 1.0.0-SNAPSHOT                         [2/9]
+[INFO]   from allure-integration/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] -----------------< com.testreports:extent-integration >-----------------
+[INFO] Building ExtentReports Integration 1.0.0-SNAPSHOT                  [3/9]
+[INFO]   from extent-integration/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] ---------------------< com.testreports:test-core >----------------------
+[INFO] Building Test Core 1.0.0-SNAPSHOT                                  [4/9]
+[INFO]   from test-core/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --------------------< com.testreports:report-model >--------------------
+[INFO] Building Report Model 1.0.0-SNAPSHOT                               [5/9]
+[INFO]   from report-model/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] -------------------< com.testreports:email-service >--------------------
+[INFO] Building Email Service 1.0.0-SNAPSHOT                              [6/9]
+[INFO]   from email-service/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --------------------< com.testreports:jira-service >--------------------
+[INFO] Building Jira Service 1.0.0-SNAPSHOT                               [7/9]
+[INFO]   from jira-service/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] -------------------< com.testreports:doors-service >--------------------
+[INFO] Building DOORS Service 1.0.0-SNAPSHOT                              [8/9]
+[INFO]   from doors-service/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --------------------< com.testreports:orchestrator >--------------------
+[INFO] Building Orchestrator 1.0.0-SNAPSHOT                               [9/9]
+[INFO]   from orchestrator/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for Test Reports Automation System 1.0.0-SNAPSHOT:
+[INFO] 
+[INFO] Test Reports Automation System ..................... SUCCESS [  0.001 s]
+[INFO] Allure Integration ................................. SUCCESS [  0.000 s]
+[INFO] ExtentReports Integration .......................... SUCCESS [  0.001 s]
+[INFO] Test Core .......................................... SUCCESS [  0.000 s]
+[INFO] Report Model ....................................... SUCCESS [  0.001 s]
+[INFO] Email Service ...................................... SUCCESS [  0.000 s]
+[INFO] Jira Service ....................................... SUCCESS [  0.001 s]
+[INFO] DOORS Service ...................................... SUCCESS [  0.001 s]
+[INFO] Orchestrator ....................................... SUCCESS [  0.000 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.098 s
+[INFO] Finished at: 2026-04-28T22:19:44+03:00
+[INFO] ------------------------------------------------------------------------

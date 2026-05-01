@@ -1,13 +1,18 @@
 import json
 import os
+import shutil
+import subprocess
+import threading
 from datetime import datetime, timedelta, timezone
+from importlib import import_module
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, cast
+from uuid import uuid4
 
 import httpx
 import jwt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,11 +20,18 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
-from models import RunManifest, ScenarioResult
+from models import RunManifest, ScenarioResult, TestRunOptions
 from bug_tracker import BugTracker
+from db import get_connection, init_schema
 from jira_client import JiraClient
+from pipeline import execute_pipeline
+from doors_service import run_doors_dxl, is_doors_available  # type: ignore[reportMissingImports]
+from email_service import send_email  # type: ignore[reportMissingImports]
+from websocket_handler import manager as ws_manager, stream_test_output  # type: ignore[reportMissingImports]
 
 load_dotenv()
+
+tfs_router = import_module("tfs_client").router
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
@@ -31,9 +43,12 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent / "manifests")))
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 RUN_ALIASES_FILE = Path(__file__).parent.parent / "run-aliases.json"
+PROJECT_ROOT = Path(__file__).parent.parent
 
-import threading
 _aliases_lock = threading.Lock()
+
+running_tests: dict[str, subprocess.Popen] = {}
+tests_lock = threading.Lock()
 
 def _load_aliases() -> dict:
     if not RUN_ALIASES_FILE.exists():
@@ -52,6 +67,7 @@ tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
 jira_client = JiraClient()
 
 app = FastAPI(title="Test Reports API", version="1.0.0")
+app.include_router(tfs_router)
 
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
 jinja_env.tests["contains"] = lambda value, item: item in value if value else False
@@ -138,6 +154,114 @@ def load_manifests() -> List[RunManifest]:
     return manifests
 
 
+@app.post("/api/pipeline/run")
+async def trigger_pipeline(background_tasks: BackgroundTasks, run_id: Optional[str] = None):
+    job_id = run_id or f"auto-{uuid4()}"
+    background_tasks.add_task(execute_pipeline, job_id)
+    return {"status": "started", "run_id": job_id, "job_id": job_id}
+
+
+def _maven_executable() -> str:
+    configured = os.getenv("MAVEN_CMD")
+    if configured:
+        return configured
+    bundled = Path("/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn")
+    if bundled.exists():
+        return str(bundled)
+    return shutil.which("mvn") or "mvn"
+
+
+def _test_command(options: TestRunOptions) -> list[str]:
+    cmd = [
+        _maven_executable(),
+        "-pl",
+        "test-core",
+        "test",
+        f"-Dcucumber.filter.tags={options.tags}",
+    ]
+    if options.retry_count:
+        cmd.append(f"-Dretry.count={options.retry_count}")
+    return cmd
+
+
+def _wait_for_test_run(run_id: str, proc: subprocess.Popen) -> None:
+    try:
+        proc.wait()
+    finally:
+        with tests_lock:
+            running_tests.pop(run_id, None)
+
+
+def _launch_test_run(run_id: str, options: TestRunOptions) -> subprocess.Popen:
+    try:
+        proc = subprocess.Popen(_test_command(options), cwd=str(PROJECT_ROOT))
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to start test run: {exc}") from exc
+    with tests_lock:
+        running_tests[run_id] = proc
+    return proc
+
+
+@app.post("/api/tests/start")
+async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks):
+    """Start tests with validated options. Invalid options are rejected by Pydantic."""
+    del background_tasks
+    run_ids = []
+    for _ in range(options.parallel):
+        run_id = f"test-{uuid4().hex[:8]}"
+        proc = _launch_test_run(run_id, options)
+        thread = threading.Thread(target=_wait_for_test_run, args=(run_id, proc), daemon=True)
+        thread.start()
+        run_ids.append(run_id)
+    return {"runs": run_ids, "status": "started", "count": len(run_ids)}
+
+
+@app.get("/api/tests/running")
+async def list_running_tests():
+    with tests_lock:
+        active = list(running_tests.keys())
+    return {"running": active, "count": len(active)}
+
+
+@app.post("/api/tests/{run_id}/cancel")
+async def cancel_test(run_id: str):
+    with tests_lock:
+        proc = running_tests.pop(run_id, None)
+    if proc:
+        if proc.poll() is None:
+            proc.kill()
+        return {"status": "cancelled", "run_id": run_id}
+    return {"status": "not_found", "run_id": run_id}
+
+
+def execute_test_run(run_id: str, options: TestRunOptions) -> None:
+    """Run Maven test and track progress."""
+    proc = _launch_test_run(run_id, options)
+    _wait_for_test_run(run_id, proc)
+
+
+@app.get("/api/pipeline/status/{run_id}")
+async def pipeline_status(run_id: str):
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        rows = conn.execute(
+            """
+            SELECT stage, status, error_message
+            FROM pipeline_status
+            WHERE run_id=?
+            ORDER BY stage
+            """,
+            [run_id],
+        ).fetchall()
+    finally:
+        conn.close()
+    return {
+        "run_id": run_id,
+        "stages": [{"stage": r[0], "status": r[1], "error": r[2]} for r in rows],
+    }
+
+
 @app.post("/api/v1/auth/login", response_model=LoginResponse)
 def login(req: LoginRequest):
     if req.username != ADMIN_USERNAME or req.password != ADMIN_PASSWORD:
@@ -220,8 +344,237 @@ def rename_run(run_id: str, req: RenameRequest, _: TokenData = Depends(verify_to
     return {"runId": run_id, "displayName": req.displayName}
 
 
+@app.get("/api/versions")
+async def get_versions():
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        rows = conn.execute(
+            "SELECT DISTINCT version FROM runs WHERE version IS NOT NULL ORDER BY version DESC"
+        ).fetchall()
+        return {"versions": [r[0] for r in rows]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/dashboard/metrics")
+async def dashboard_metrics(
+    version: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+):
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        query = (
+            "SELECT COUNT(*) as runs, "
+            "COALESCE(SUM(passed),0) as passed, "
+            "COALESCE(SUM(failed),0) as failed, "
+            "COALESCE(SUM(skipped),0) as skipped, "
+            "COALESCE(AVG(CAST(total_scenarios AS DOUBLE)),0) as avg_scenarios "
+            "FROM runs WHERE 1=1"
+        )
+        params: list = []
+        if version:
+            query += " AND version = ?"
+            params.append(version)
+        if start:
+            query += " AND started_at >= ?"
+            params.append(start)
+        if end:
+            query += " AND started_at <= ?"
+            params.append(end)
+        row = conn.execute(query, params).fetchone()
+        if row is None:
+            return {"success_rate": 0, "total_runs": 0, "passed": 0, "failed": 0, "skipped": 0, "avg_duration": 0, "flaky_count": 0, "version_breakdown": []}
+
+        # Flaky count: scenarios that have both PASSED and FAILED across runs
+        flaky_query = (
+            "SELECT COUNT(DISTINCT sr.scenario_uid) FROM scenario_results sr "
+            "JOIN runs r ON sr.run_id = r.id WHERE 1=1"
+        )
+        flaky_params: list = []
+        if version:
+            flaky_query += " AND r.version = ?"
+            flaky_params.append(version)
+        if start:
+            flaky_query += " AND r.started_at >= ?"
+            flaky_params.append(start)
+        if end:
+            flaky_query += " AND r.started_at <= ?"
+            flaky_params.append(end)
+        flaky_query += (
+            " AND sr.scenario_uid IN ("
+            "  SELECT scenario_uid FROM scenario_results "
+            "  WHERE status IN ('PASSED','FAILED') "
+            "  GROUP BY scenario_uid HAVING COUNT(DISTINCT status) > 1"
+            ")"
+        )
+        flaky_result = conn.execute(flaky_query, flaky_params).fetchone()
+        flaky_count = flaky_result[0] if flaky_result else 0
+
+        total = row[1] + row[2] + row[3]
+        success_rate = round((row[1] / total * 100), 1) if total > 0 else 0
+
+        # Version breakdown for bar chart
+        version_query = (
+            "SELECT version, SUM(passed) as passed, SUM(failed) as failed, "
+            "SUM(skipped) as skipped FROM runs WHERE version IS NOT NULL"
+        )
+        v_params: list = []
+        if start:
+            version_query += " AND started_at >= ?"
+            v_params.append(start)
+        if end:
+            version_query += " AND started_at <= ?"
+            v_params.append(end)
+        version_query += " GROUP BY version ORDER BY version DESC"
+        version_rows = conn.execute(version_query, v_params).fetchall()
+        version_breakdown = [
+            {"version": r[0], "passed": r[1], "failed": r[2], "skipped": r[3]}
+            for r in version_rows
+        ]
+
+        return {
+            "success_rate": success_rate,
+            "total_runs": row[0],
+            "passed": row[1],
+            "failed": row[2],
+            "skipped": row[3],
+            "avg_duration": round(row[4], 1),
+            "flaky_count": flaky_count,
+            "version_breakdown": version_breakdown,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/dashboard/metrics")
+async def dashboard_metrics(
+    version: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+):
+    conn = get_connection(read_only=True)
+    try:
+        init_schema(conn)
+        query = (
+            "SELECT COUNT(*) as runs, "
+            "COALESCE(SUM(passed),0) as passed, "
+            "COALESCE(SUM(failed),0) as failed, "
+            "COALESCE(SUM(skipped),0) as skipped, "
+            "COALESCE(AVG(CAST(total_scenarios AS DOUBLE)),0) as avg_scenarios "
+            "FROM runs WHERE 1=1"
+        )
+        params: list = []
+        if version:
+            query += " AND version = ?"
+            params.append(version)
+        if start:
+            query += " AND started_at >= ?"
+            params.append(start)
+        if end:
+            query += " AND started_at <= ?"
+            params.append(end)
+        row = conn.execute(query, params).fetchone()
+        if row is None:
+            return {"success_rate": 0, "total_runs": 0, "passed": 0, "failed": 0, "skipped": 0, "avg_duration": 0, "flaky_count": 0, "version_breakdown": []}
+        row = cast(tuple, row)
+
+        # Flaky count: scenarios that have both PASSED and FAILED across runs
+        flaky_query = (
+            "SELECT COUNT(DISTINCT sr.scenario_uid) FROM scenario_results sr "
+            "JOIN runs r ON sr.run_id = r.id WHERE 1=1"
+        )
+        flaky_params: list = []
+        if version:
+            flaky_query += " AND r.version = ?"
+            flaky_params.append(version)
+        if start:
+            flaky_query += " AND r.started_at >= ?"
+            flaky_params.append(start)
+        if end:
+            flaky_query += " AND r.started_at <= ?"
+            flaky_params.append(end)
+        flaky_query += (
+            " AND sr.scenario_uid IN ("
+            "  SELECT scenario_uid FROM scenario_results "
+            "  WHERE status IN ('PASSED','FAILED') "
+            "  GROUP BY scenario_uid HAVING COUNT(DISTINCT status) > 1"
+            ")"
+        )
+        flaky_result = conn.execute(flaky_query, flaky_params).fetchone()
+        flaky_count = flaky_result[0] if flaky_result else 0
+
+        total = row[1] + row[2] + row[3]
+        success_rate = round((row[1] / total * 100), 1) if total > 0 else 0
+
+        # Version breakdown for bar chart
+        version_query = (
+            "SELECT version, SUM(passed) as passed, SUM(failed) as failed, "
+            "SUM(skipped) as skipped FROM runs WHERE version IS NOT NULL"
+        )
+        v_params: list = []
+        if start:
+            version_query += " AND started_at >= ?"
+            v_params.append(start)
+        if end:
+            version_query += " AND started_at <= ?"
+            v_params.append(end)
+        version_query += " GROUP BY version ORDER BY version DESC"
+        version_rows = conn.execute(version_query, v_params).fetchall()
+        version_breakdown = [
+            {"version": r[0], "passed": r[1], "failed": r[2], "skipped": r[3]}
+            for r in version_rows
+        ]
+
+        return {
+            "success_rate": success_rate,
+            "total_runs": row[0],
+            "passed": row[1],
+            "failed": row[2],
+            "skipped": row[3],
+            "avg_duration": round(row[4], 1),
+            "flaky_count": flaky_count,
+            "version_breakdown": version_breakdown,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request, _: TokenData = Depends(verify_token)):
+    template = jinja_env.get_template("dashboard.html")
+    return HTMLResponse(content=template.render())
+
+
 @app.get("/reports/{run_id}", response_class=HTMLResponse)
 def run_detail(run_id: str, request: Request):
+    # Check public visibility first (no auth required)
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        run_row = conn.execute(
+            "SELECT id, visibility FROM runs WHERE id = ?", [run_id]
+        ).fetchone()
+        if run_row and run_row[1] == "public":
+            # Public report — no auth needed
+            scenarios = conn.execute(
+                "SELECT name_at_run, status, duration_seconds FROM scenario_results WHERE run_id = ?",
+                [run_id],
+            ).fetchall()
+            template = jinja_env.get_template("public_report.html")
+            html = template.render(
+                run_id=run_id,
+                scenarios=scenarios,
+            )
+            return HTMLResponse(content=html)
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+    # Fall back to manifest-based detail (requires auth for non-public)
     manifests = load_manifests()
     manifest = None
     for m in manifests:
@@ -318,7 +671,8 @@ def create_jira_bug(run_id: str, scenario_id: str):
     )
 
     try:
-        key = jira_client.create_issue(summary, description)
+        issue = jira_client.create_issue(summary, description)
+        key = issue["key"] if isinstance(issue, dict) else issue
     except httpx.HTTPStatusError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -375,6 +729,47 @@ def create_bug(doors_number: str, req: BugCreateRequest, _: TokenData = Depends(
     jira_key = f"PROJ-{abs(hash(doors_number)) % 9000 + 1000}"
     tracker.register(doors_number, jira_key, req.scenarioName, req.runId)
     return BugCreateResponse(jiraKey=jira_key, doorsNumber=doors_number)
+
+
+class DoorsRunRequest(BaseModel):
+    script: str
+
+
+@app.post("/api/doors/run")
+async def doors_run(req: DoorsRunRequest):
+    if not is_doors_available():
+        return {"status": "unavailable", "message": "DOORS not installed"}
+    code, out, err = run_doors_dxl(req.script)
+    return {"status": "success" if code == 0 else "failed", "stdout": out, "stderr": err}
+
+
+@app.post("/api/email/send")
+async def email_send(to: str, run_id: str):
+    context = {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "started_at": "",
+        "dashboard_url": f"http://localhost:8000/reports/{run_id}",
+    }
+    try:
+        send_email(to, f"Test Raporu - {run_id}", "test_report.html", context)
+        return {"sent": True}
+    except Exception as e:
+        return {"sent": False, "error": str(e)}
+
+
+@app.websocket("/ws/test-status/{run_id}")
+async def test_status_ws(websocket: WebSocket, run_id: str):
+    await ws_manager.connect(run_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "start":
+                await stream_test_output(run_id)
+    except WebSocketDisconnect:
+        ws_manager.disconnect(run_id, websocket)
 
 
 MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)

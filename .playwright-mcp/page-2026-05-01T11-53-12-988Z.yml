@@ -1,0 +1,489 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - img [ref=e4]
+      - text: Test Reports
+    - button "Tema değiştir" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+  - generic [ref=e27]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e31]: Versiyon
+        - combobox "Versiyon" [ref=e32] [cursor=pointer]:
+          - option "Tümü" [selected]
+      - generic [ref=e33]:
+        - generic [ref=e34]: Tarih Aralığı
+        - textbox "Tarih Aralığı" [ref=e36] [cursor=pointer]:
+          - /placeholder: Tarih seçin...
+      - button "Rapor Oluştur" [ref=e37] [cursor=pointer]:
+        - img [ref=e38]
+        - text: Rapor Oluştur
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - img [ref=e43]
+        - generic [ref=e45]:
+          - generic [ref=e46]: Başarı Oranı
+          - generic [ref=e47]: 79%
+      - generic [ref=e48]:
+        - img [ref=e50]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Toplam Koşu
+          - generic [ref=e55]: "23"
+      - generic [ref=e56]:
+        - img [ref=e58]
+        - generic [ref=e61]:
+          - generic [ref=e62]: Ortalama Süre
+          - generic [ref=e63]: 10s
+      - generic [ref=e64]:
+        - img [ref=e66]
+        - generic [ref=e68]:
+          - generic [ref=e69]: Flaky Sayısı
+          - generic [ref=e70]: "11"
+    - generic [ref=e71]:
+      - generic [ref=e73]: Dağılım
+      - generic [ref=e77]: Versiyon Bazlı Sonuçlar
+    - generic [ref=e80]:
+      - generic [ref=e81]:
+        - heading "Son Çalıştırmalar" [level=3] [ref=e82]
+        - generic [ref=e83]:
+          - img [ref=e84]
+          - textbox "Ara…" [ref=e87]
+      - table [ref=e89]:
+        - rowgroup [ref=e90]:
+          - row "Run ID Tarih Geçen Kalan Başarı Süre Retry Deps Durum" [ref=e91]:
+            - columnheader "Run ID" [ref=e92]
+            - columnheader "Tarih" [ref=e93]
+            - columnheader "Geçen" [ref=e94]
+            - columnheader "Kalan" [ref=e95]
+            - columnheader "Başarı" [ref=e96]
+            - columnheader "Süre" [ref=e97]
+            - columnheader "Retry" [ref=e98]
+            - columnheader "Deps" [ref=e99]
+            - columnheader "Durum" [ref=e100]
+            - columnheader [ref=e101]
+        - rowgroup [ref=e102]:
+          - row "allure-example-2026043 30.04.2026 41 4 91% NaNs — — FAILED Triage →" [ref=e103]:
+            - cell "allure-example-2026043" [ref=e104]:
+              - link "allure-example-2026043" [ref=e105] [cursor=pointer]:
+                - /url: /reports/allure-example-20260430-161016
+            - cell "30.04.2026" [ref=e106]
+            - cell "41" [ref=e107]:
+              - generic [ref=e108]: "41"
+            - cell "4" [ref=e109]:
+              - generic [ref=e110]: "4"
+            - cell "91%" [ref=e111]: 91%
+            - cell "NaNs" [ref=e114]
+            - cell "—" [ref=e115]
+            - cell "—" [ref=e116]
+            - cell "FAILED" [ref=e117]:
+              - generic [ref=e118]: FAILED
+            - cell "Triage →" [ref=e119]:
+              - link "Triage →" [ref=e120] [cursor=pointer]:
+                - /url: /reports/allure-example-20260430-161016/triage
+          - row "20260426-195958-04c33b 26.04.2026 1 1 50% 0.0s — — FAILED Triage →" [ref=e121]:
+            - cell "20260426-195958-04c33b" [ref=e122]:
+              - link "20260426-195958-04c33b" [ref=e123] [cursor=pointer]:
+                - /url: /reports/20260426-195958-04c33b
+            - cell "26.04.2026" [ref=e124]
+            - cell "1" [ref=e125]:
+              - generic [ref=e126]: "1"
+            - cell "1" [ref=e127]:
+              - generic [ref=e128]: "1"
+            - cell "50%" [ref=e129]: 50%
+            - cell "0.0s" [ref=e132]
+            - cell "—" [ref=e133]
+            - cell "—" [ref=e134]
+            - cell "FAILED" [ref=e135]:
+              - generic [ref=e136]: FAILED
+            - cell "Triage →" [ref=e137]:
+              - link "Triage →" [ref=e138] [cursor=pointer]:
+                - /url: /reports/20260426-195958-04c33b/triage
+          - row "20260426-test-001 26.04.2026 2 1 67% 8.2s — — FAILED Triage →" [ref=e139]:
+            - cell "20260426-test-001" [ref=e140]:
+              - link "20260426-test-001" [ref=e141] [cursor=pointer]:
+                - /url: /reports/20260426-test-001
+            - cell "26.04.2026" [ref=e142]
+            - cell "2" [ref=e143]:
+              - generic [ref=e144]: "2"
+            - cell "1" [ref=e145]:
+              - generic [ref=e146]: "1"
+            - cell "67%" [ref=e147]: 67%
+            - cell "8.2s" [ref=e150]
+            - cell "—" [ref=e151]
+            - cell "—" [ref=e152]
+            - cell "FAILED" [ref=e153]:
+              - generic [ref=e154]: FAILED
+            - cell "Triage →" [ref=e155]:
+              - link "Triage →" [ref=e156] [cursor=pointer]:
+                - /url: /reports/20260426-test-001/triage
+          - row "run-2026-04-26-001 26.04.2026 2 1 67% NaNs retried ⛓️ deps FAILED Triage →" [ref=e157]:
+            - cell "run-2026-04-26-001" [ref=e158]:
+              - link "run-2026-04-26-001" [ref=e159] [cursor=pointer]:
+                - /url: /reports/run-2026-04-26-001
+            - cell "26.04.2026" [ref=e160]
+            - cell "2" [ref=e161]:
+              - generic [ref=e162]: "2"
+            - cell "1" [ref=e163]:
+              - generic [ref=e164]: "1"
+            - cell "67%" [ref=e165]: 67%
+            - cell "NaNs" [ref=e168]
+            - cell "retried" [ref=e169]:
+              - generic [ref=e170]: retried
+            - cell "⛓️ deps" [ref=e171]:
+              - generic [ref=e172]: ⛓️ deps
+            - cell "FAILED" [ref=e173]:
+              - generic [ref=e174]: FAILED
+            - cell "Triage →" [ref=e175]:
+              - link "Triage →" [ref=e176] [cursor=pointer]:
+                - /url: /reports/run-2026-04-26-001/triage
+          - row "20260425-1500-auto-237 25.04.2026 9 3 69% 68.8s — — FAILED Triage →" [ref=e177]:
+            - cell "20260425-1500-auto-237" [ref=e178]:
+              - link "20260425-1500-auto-237" [ref=e179] [cursor=pointer]:
+                - /url: /reports/20260425-1500-auto-237
+            - cell "25.04.2026" [ref=e180]
+            - cell "9" [ref=e181]:
+              - generic [ref=e182]: "9"
+            - cell "3" [ref=e183]:
+              - generic [ref=e184]: "3"
+            - cell "69%" [ref=e185]: 69%
+            - cell "68.8s" [ref=e188]
+            - cell "—" [ref=e189]
+            - cell "—" [ref=e190]
+            - cell "FAILED" [ref=e191]:
+              - generic [ref=e192]: FAILED
+            - cell "Triage →" [ref=e193]:
+              - link "Triage →" [ref=e194] [cursor=pointer]:
+                - /url: /reports/20260425-1500-auto-237/triage
+          - row "20260425-1500-auto-946 25.04.2026 6 0 86% 26.1s — — PASSED Triage →" [ref=e195]:
+            - cell "20260425-1500-auto-946" [ref=e196]:
+              - link "20260425-1500-auto-946" [ref=e197] [cursor=pointer]:
+                - /url: /reports/20260425-1500-auto-946
+            - cell "25.04.2026" [ref=e198]
+            - cell "6" [ref=e199]:
+              - generic [ref=e200]: "6"
+            - cell "0" [ref=e201]:
+              - generic [ref=e202]: "0"
+            - cell "86%" [ref=e203]: 86%
+            - cell "26.1s" [ref=e206]
+            - cell "—" [ref=e207]
+            - cell "—" [ref=e208]
+            - cell "PASSED" [ref=e209]:
+              - generic [ref=e210]: PASSED
+            - cell "Triage →" [ref=e211]:
+              - link "Triage →" [ref=e212] [cursor=pointer]:
+                - /url: /reports/20260425-1500-auto-946/triage
+          - row "20260425-1500-retry-64 25.04.2026 3 2 60% 94.5s retried — FAILED Triage →" [ref=e213]:
+            - cell "20260425-1500-retry-64" [ref=e214]:
+              - link "20260425-1500-retry-64" [ref=e215] [cursor=pointer]:
+                - /url: /reports/20260425-1500-retry-643
+            - cell "25.04.2026" [ref=e216]
+            - cell "3" [ref=e217]:
+              - generic [ref=e218]: "3"
+            - cell "2" [ref=e219]:
+              - generic [ref=e220]: "2"
+            - cell "60%" [ref=e221]: 60%
+            - cell "94.5s" [ref=e224]
+            - cell "retried" [ref=e225]:
+              - generic [ref=e226]: retried
+            - cell "—" [ref=e227]
+            - cell "FAILED" [ref=e228]:
+              - generic [ref=e229]: FAILED
+            - cell "Triage →" [ref=e230]:
+              - link "Triage →" [ref=e231] [cursor=pointer]:
+                - /url: /reports/20260425-1500-retry-643/triage
+          - row "20260424-1300-auto-412 24.04.2026 8 0 80% 69.9s — — PASSED Triage →" [ref=e232]:
+            - cell "20260424-1300-auto-412" [ref=e233]:
+              - link "20260424-1300-auto-412" [ref=e234] [cursor=pointer]:
+                - /url: /reports/20260424-1300-auto-412
+            - cell "24.04.2026" [ref=e235]
+            - cell "8" [ref=e236]:
+              - generic [ref=e237]: "8"
+            - cell "0" [ref=e238]:
+              - generic [ref=e239]: "0"
+            - cell "80%" [ref=e240]: 80%
+            - cell "69.9s" [ref=e243]
+            - cell "—" [ref=e244]
+            - cell "—" [ref=e245]
+            - cell "PASSED" [ref=e246]:
+              - generic [ref=e247]: PASSED
+            - cell "Triage →" [ref=e248]:
+              - link "Triage →" [ref=e249] [cursor=pointer]:
+                - /url: /reports/20260424-1300-auto-412/triage
+          - row "20260424-1300-auto-973 24.04.2026 8 2 73% 105.9s — — FAILED Triage →" [ref=e250]:
+            - cell "20260424-1300-auto-973" [ref=e251]:
+              - link "20260424-1300-auto-973" [ref=e252] [cursor=pointer]:
+                - /url: /reports/20260424-1300-auto-973
+            - cell "24.04.2026" [ref=e253]
+            - cell "8" [ref=e254]:
+              - generic [ref=e255]: "8"
+            - cell "2" [ref=e256]:
+              - generic [ref=e257]: "2"
+            - cell "73%" [ref=e258]: 73%
+            - cell "105.9s" [ref=e261]
+            - cell "—" [ref=e262]
+            - cell "—" [ref=e263]
+            - cell "FAILED" [ref=e264]:
+              - generic [ref=e265]: FAILED
+            - cell "Triage →" [ref=e266]:
+              - link "Triage →" [ref=e267] [cursor=pointer]:
+                - /url: /reports/20260424-1300-auto-973/triage
+          - row "20260424-1300-retry-98 24.04.2026 4 2 67% 102.0s retried ⛓️ deps FAILED Triage →" [ref=e268]:
+            - cell "20260424-1300-retry-98" [ref=e269]:
+              - link "20260424-1300-retry-98" [ref=e270] [cursor=pointer]:
+                - /url: /reports/20260424-1300-retry-982
+            - cell "24.04.2026" [ref=e271]
+            - cell "4" [ref=e272]:
+              - generic [ref=e273]: "4"
+            - cell "2" [ref=e274]:
+              - generic [ref=e275]: "2"
+            - cell "67%" [ref=e276]: 67%
+            - cell "102.0s" [ref=e279]
+            - cell "retried" [ref=e280]:
+              - generic [ref=e281]: retried
+            - cell "⛓️ deps" [ref=e282]:
+              - generic [ref=e283]: ⛓️ deps
+            - cell "FAILED" [ref=e284]:
+              - generic [ref=e285]: FAILED
+            - cell "Triage →" [ref=e286]:
+              - link "Triage →" [ref=e287] [cursor=pointer]:
+                - /url: /reports/20260424-1300-retry-982/triage
+          - row "20260423-1100-auto-472 23.04.2026 9 0 90% 92.5s — — PASSED Triage →" [ref=e288]:
+            - cell "20260423-1100-auto-472" [ref=e289]:
+              - link "20260423-1100-auto-472" [ref=e290] [cursor=pointer]:
+                - /url: /reports/20260423-1100-auto-472
+            - cell "23.04.2026" [ref=e291]
+            - cell "9" [ref=e292]:
+              - generic [ref=e293]: "9"
+            - cell "0" [ref=e294]:
+              - generic [ref=e295]: "0"
+            - cell "90%" [ref=e296]: 90%
+            - cell "92.5s" [ref=e299]
+            - cell "—" [ref=e300]
+            - cell "—" [ref=e301]
+            - cell "PASSED" [ref=e302]:
+              - generic [ref=e303]: PASSED
+            - cell "Triage →" [ref=e304]:
+              - link "Triage →" [ref=e305] [cursor=pointer]:
+                - /url: /reports/20260423-1100-auto-472/triage
+          - row "20260423-1100-auto-720 23.04.2026 10 0 91% 17.1s — — PASSED Triage →" [ref=e306]:
+            - cell "20260423-1100-auto-720" [ref=e307]:
+              - link "20260423-1100-auto-720" [ref=e308] [cursor=pointer]:
+                - /url: /reports/20260423-1100-auto-720
+            - cell "23.04.2026" [ref=e309]
+            - cell "10" [ref=e310]:
+              - generic [ref=e311]: "10"
+            - cell "0" [ref=e312]:
+              - generic [ref=e313]: "0"
+            - cell "91%" [ref=e314]: 91%
+            - cell "17.1s" [ref=e317]
+            - cell "—" [ref=e318]
+            - cell "—" [ref=e319]
+            - cell "PASSED" [ref=e320]:
+              - generic [ref=e321]: PASSED
+            - cell "Triage →" [ref=e322]:
+              - link "Triage →" [ref=e323] [cursor=pointer]:
+                - /url: /reports/20260423-1100-auto-720/triage
+          - row "20260423-1100-retry-51 23.04.2026 3 1 75% 53.0s retried ⛓️ deps FAILED Triage →" [ref=e324]:
+            - cell "20260423-1100-retry-51" [ref=e325]:
+              - link "20260423-1100-retry-51" [ref=e326] [cursor=pointer]:
+                - /url: /reports/20260423-1100-retry-514
+            - cell "23.04.2026" [ref=e327]
+            - cell "3" [ref=e328]:
+              - generic [ref=e329]: "3"
+            - cell "1" [ref=e330]:
+              - generic [ref=e331]: "1"
+            - cell "75%" [ref=e332]: 75%
+            - cell "53.0s" [ref=e335]
+            - cell "retried" [ref=e336]:
+              - generic [ref=e337]: retried
+            - cell "⛓️ deps" [ref=e338]:
+              - generic [ref=e339]: ⛓️ deps
+            - cell "FAILED" [ref=e340]:
+              - generic [ref=e341]: FAILED
+            - cell "Triage →" [ref=e342]:
+              - link "Triage →" [ref=e343] [cursor=pointer]:
+                - /url: /reports/20260423-1100-retry-514/triage
+          - row "20260422-0900-auto-522 22.04.2026 10 3 71% 105.9s — — FAILED Triage →" [ref=e344]:
+            - cell "20260422-0900-auto-522" [ref=e345]:
+              - link "20260422-0900-auto-522" [ref=e346] [cursor=pointer]:
+                - /url: /reports/20260422-0900-auto-522
+            - cell "22.04.2026" [ref=e347]
+            - cell "10" [ref=e348]:
+              - generic [ref=e349]: "10"
+            - cell "3" [ref=e350]:
+              - generic [ref=e351]: "3"
+            - cell "71%" [ref=e352]: 71%
+            - cell "105.9s" [ref=e355]
+            - cell "—" [ref=e356]
+            - cell "—" [ref=e357]
+            - cell "FAILED" [ref=e358]:
+              - generic [ref=e359]: FAILED
+            - cell "Triage →" [ref=e360]:
+              - link "Triage →" [ref=e361] [cursor=pointer]:
+                - /url: /reports/20260422-0900-auto-522/triage
+          - row "20260422-0900-auto-692 22.04.2026 10 2 71% 16.2s — — FAILED Triage →" [ref=e362]:
+            - cell "20260422-0900-auto-692" [ref=e363]:
+              - link "20260422-0900-auto-692" [ref=e364] [cursor=pointer]:
+                - /url: /reports/20260422-0900-auto-692
+            - cell "22.04.2026" [ref=e365]
+            - cell "10" [ref=e366]:
+              - generic [ref=e367]: "10"
+            - cell "2" [ref=e368]:
+              - generic [ref=e369]: "2"
+            - cell "71%" [ref=e370]: 71%
+            - cell "16.2s" [ref=e373]
+            - cell "—" [ref=e374]
+            - cell "—" [ref=e375]
+            - cell "FAILED" [ref=e376]:
+              - generic [ref=e377]: FAILED
+            - cell "Triage →" [ref=e378]:
+              - link "Triage →" [ref=e379] [cursor=pointer]:
+                - /url: /reports/20260422-0900-auto-692/triage
+          - row "20260422-0900-retry-34 22.04.2026 4 2 67% 84.3s retried ⛓️ deps FAILED Triage →" [ref=e380]:
+            - cell "20260422-0900-retry-34" [ref=e381]:
+              - link "20260422-0900-retry-34" [ref=e382] [cursor=pointer]:
+                - /url: /reports/20260422-0900-retry-349
+            - cell "22.04.2026" [ref=e383]
+            - cell "4" [ref=e384]:
+              - generic [ref=e385]: "4"
+            - cell "2" [ref=e386]:
+              - generic [ref=e387]: "2"
+            - cell "67%" [ref=e388]: 67%
+            - cell "84.3s" [ref=e391]
+            - cell "retried" [ref=e392]:
+              - generic [ref=e393]: retried
+            - cell "⛓️ deps" [ref=e394]:
+              - generic [ref=e395]: ⛓️ deps
+            - cell "FAILED" [ref=e396]:
+              - generic [ref=e397]: FAILED
+            - cell "Triage →" [ref=e398]:
+              - link "Triage →" [ref=e399] [cursor=pointer]:
+                - /url: /reports/20260422-0900-retry-349/triage
+          - row "20260421-0700-auto-189 21.04.2026 6 2 75% 115.6s — — FAILED Triage →" [ref=e400]:
+            - cell "20260421-0700-auto-189" [ref=e401]:
+              - link "20260421-0700-auto-189" [ref=e402] [cursor=pointer]:
+                - /url: /reports/20260421-0700-auto-189
+            - cell "21.04.2026" [ref=e403]
+            - cell "6" [ref=e404]:
+              - generic [ref=e405]: "6"
+            - cell "2" [ref=e406]:
+              - generic [ref=e407]: "2"
+            - cell "75%" [ref=e408]: 75%
+            - cell "115.6s" [ref=e411]
+            - cell "—" [ref=e412]
+            - cell "—" [ref=e413]
+            - cell "FAILED" [ref=e414]:
+              - generic [ref=e415]: FAILED
+            - cell "Triage →" [ref=e416]:
+              - link "Triage →" [ref=e417] [cursor=pointer]:
+                - /url: /reports/20260421-0700-auto-189/triage
+          - row "20260421-0700-auto-301 21.04.2026 7 3 58% 32.1s — — FAILED Triage →" [ref=e418]:
+            - cell "20260421-0700-auto-301" [ref=e419]:
+              - link "20260421-0700-auto-301" [ref=e420] [cursor=pointer]:
+                - /url: /reports/20260421-0700-auto-301
+            - cell "21.04.2026" [ref=e421]
+            - cell "7" [ref=e422]:
+              - generic [ref=e423]: "7"
+            - cell "3" [ref=e424]:
+              - generic [ref=e425]: "3"
+            - cell "58%" [ref=e426]: 58%
+            - cell "32.1s" [ref=e429]
+            - cell "—" [ref=e430]
+            - cell "—" [ref=e431]
+            - cell "FAILED" [ref=e432]:
+              - generic [ref=e433]: FAILED
+            - cell "Triage →" [ref=e434]:
+              - link "Triage →" [ref=e435] [cursor=pointer]:
+                - /url: /reports/20260421-0700-auto-301/triage
+          - row "20260421-0700-retry-99 21.04.2026 4 2 67% 26.4s — ⛓️ deps FAILED Triage →" [ref=e436]:
+            - cell "20260421-0700-retry-99" [ref=e437]:
+              - link "20260421-0700-retry-99" [ref=e438] [cursor=pointer]:
+                - /url: /reports/20260421-0700-retry-991
+            - cell "21.04.2026" [ref=e439]
+            - cell "4" [ref=e440]:
+              - generic [ref=e441]: "4"
+            - cell "2" [ref=e442]:
+              - generic [ref=e443]: "2"
+            - cell "67%" [ref=e444]: 67%
+            - cell "26.4s" [ref=e447]
+            - cell "—" [ref=e448]
+            - cell "⛓️ deps" [ref=e449]:
+              - generic [ref=e450]: ⛓️ deps
+            - cell "FAILED" [ref=e451]:
+              - generic [ref=e452]: FAILED
+            - cell "Triage →" [ref=e453]:
+              - link "Triage →" [ref=e454] [cursor=pointer]:
+                - /url: /reports/20260421-0700-retry-991/triage
+          - row "20260420-0500-auto-243 20.04.2026 9 1 90% 49.8s — — FAILED Triage →" [ref=e455]:
+            - cell "20260420-0500-auto-243" [ref=e456]:
+              - link "20260420-0500-auto-243" [ref=e457] [cursor=pointer]:
+                - /url: /reports/20260420-0500-auto-243
+            - cell "20.04.2026" [ref=e458]
+            - cell "9" [ref=e459]:
+              - generic [ref=e460]: "9"
+            - cell "1" [ref=e461]:
+              - generic [ref=e462]: "1"
+            - cell "90%" [ref=e463]: 90%
+            - cell "49.8s" [ref=e466]
+            - cell "—" [ref=e467]
+            - cell "—" [ref=e468]
+            - cell "FAILED" [ref=e469]:
+              - generic [ref=e470]: FAILED
+            - cell "Triage →" [ref=e471]:
+              - link "Triage →" [ref=e472] [cursor=pointer]:
+                - /url: /reports/20260420-0500-auto-243/triage
+          - row "20260420-0500-auto-336 20.04.2026 8 0 100% 71.4s — — PASSED Triage →" [ref=e473]:
+            - cell "20260420-0500-auto-336" [ref=e474]:
+              - link "20260420-0500-auto-336" [ref=e475] [cursor=pointer]:
+                - /url: /reports/20260420-0500-auto-336
+            - cell "20.04.2026" [ref=e476]
+            - cell "8" [ref=e477]:
+              - generic [ref=e478]: "8"
+            - cell "0" [ref=e479]:
+              - generic [ref=e480]: "0"
+            - cell "100%" [ref=e481]: 100%
+            - cell "71.4s" [ref=e484]
+            - cell "—" [ref=e485]
+            - cell "—" [ref=e486]
+            - cell "PASSED" [ref=e487]:
+              - generic [ref=e488]: PASSED
+            - cell "Triage →" [ref=e489]:
+              - link "Triage →" [ref=e490] [cursor=pointer]:
+                - /url: /reports/20260420-0500-auto-336/triage
+          - row "20260419-0300-auto-140 19.04.2026 9 2 82% 66.4s — — FAILED Triage →" [ref=e491]:
+            - cell "20260419-0300-auto-140" [ref=e492]:
+              - link "20260419-0300-auto-140" [ref=e493] [cursor=pointer]:
+                - /url: /reports/20260419-0300-auto-140
+            - cell "19.04.2026" [ref=e494]
+            - cell "9" [ref=e495]:
+              - generic [ref=e496]: "9"
+            - cell "2" [ref=e497]:
+              - generic [ref=e498]: "2"
+            - cell "82%" [ref=e499]: 82%
+            - cell "66.4s" [ref=e502]
+            - cell "—" [ref=e503]
+            - cell "—" [ref=e504]
+            - cell "FAILED" [ref=e505]:
+              - generic [ref=e506]: FAILED
+            - cell "Triage →" [ref=e507]:
+              - link "Triage →" [ref=e508] [cursor=pointer]:
+                - /url: /reports/20260419-0300-auto-140/triage
+          - row "20260419-0300-auto-605 19.04.2026 8 1 80% 71.0s — — FAILED Triage →" [ref=e509]:
+            - cell "20260419-0300-auto-605" [ref=e510]:
+              - link "20260419-0300-auto-605" [ref=e511] [cursor=pointer]:
+                - /url: /reports/20260419-0300-auto-605
+            - cell "19.04.2026" [ref=e512]
+            - cell "8" [ref=e513]:
+              - generic [ref=e514]: "8"
+            - cell "1" [ref=e515]:
+              - generic [ref=e516]: "1"
+            - cell "80%" [ref=e517]: 80%
+            - cell "71.0s" [ref=e520]
+            - cell "—" [ref=e521]
+            - cell "—" [ref=e522]
+            - cell "FAILED" [ref=e523]:
+              - generic [ref=e524]: FAILED
+            - cell "Triage →" [ref=e525]:
+              - link "Triage →" [ref=e526] [cursor=pointer]:
+                - /url: /reports/20260419-0300-auto-605/triage
+  - contentinfo [ref=e26]: Test Raporlama Sistemi v2.0 · Allure + FastAPI

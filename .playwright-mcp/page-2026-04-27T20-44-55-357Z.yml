@@ -1,0 +1,94 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+      - img [ref=e7]
+      - text: Test Reports
+    - generic [ref=e10]: "Run: 20260426-195958-04c33b"
+  - banner [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "20260426-195958-04c33b" [level=1] [ref=e14]
+        - button "Rename run" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+      - generic [ref=e19]:
+        - generic [ref=e20]: 20260426-195958-04c33b
+        - generic [ref=e21]: 2026-04-26 19:59
+        - generic [ref=e22]: 0s
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: "1"
+          - generic [ref=e26]: Passed
+        - generic [ref=e27]:
+          - generic [ref=e28]: "1"
+          - generic [ref=e29]: Failed
+        - generic [ref=e30]:
+          - generic [ref=e31]: "0"
+          - generic [ref=e32]: Skipped
+        - generic [ref=e33]:
+          - generic [ref=e34]: "2"
+          - generic [ref=e35]: Total
+  - generic [ref=e37]:
+    - generic [ref=e38]:
+      - button "All" [ref=e39] [cursor=pointer]
+      - button "Passed" [ref=e40] [cursor=pointer]
+      - button "Failed" [ref=e41] [cursor=pointer]
+      - button "Skipped" [ref=e42] [cursor=pointer]
+    - generic [ref=e43]:
+      - img [ref=e44]
+      - textbox "Senaryo ara…" [ref=e47]
+    - generic [ref=e48]: 2 scenario
+  - main [ref=e49]:
+    - generic [ref=e50]:
+      - generic [ref=e51] [cursor=pointer]:
+        - img [ref=e52]
+        - generic [ref=e54]: "@DOORS-12345"
+        - generic [ref=e55]: "1"
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - generic [ref=e59]: ❌
+          - generic [ref=e60]: Hatalı giriş
+          - generic [ref=e61]: 0s
+          - generic [ref=e62]: 🚪 DOORS-12345
+        - generic [ref=e63]:
+          - generic [ref=e64]: "@DOORS-12345"
+          - generic [ref=e65]: "@sample-fail"
+        - generic [ref=e67]: New — not yet reported
+        - button "Create Jira Bug" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - text: Create Jira Bug
+    - generic [ref=e72]:
+      - generic [ref=e73] [cursor=pointer]:
+        - img [ref=e74]
+        - generic [ref=e76]: "@sample-fail"
+        - generic [ref=e77]: "1"
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e81]: ❌
+          - generic [ref=e82]: Hatalı giriş
+          - generic [ref=e83]: 0s
+          - generic [ref=e84]: 🚪 DOORS-12345
+        - generic [ref=e85]:
+          - generic [ref=e86]: "@DOORS-12345"
+          - generic [ref=e87]: "@sample-fail"
+        - generic [ref=e89]: New — not yet reported
+        - button "Create Jira Bug" [ref=e91] [cursor=pointer]:
+          - img [ref=e92]
+          - text: Create Jira Bug
+    - generic [ref=e94]:
+      - generic [ref=e95] [cursor=pointer]:
+        - img [ref=e96]
+        - generic [ref=e98]: "@DOORS-67890"
+        - generic [ref=e99]: "1"
+      - generic [ref=e101]:
+        - generic [ref=e102]:
+          - generic [ref=e103]: ✅
+          - generic [ref=e104]: Başarılı giriş
+          - generic [ref=e105]: 0s
+        - generic [ref=e107]: "@DOORS-67890"
+  - contentinfo [ref=e108]:
+    - text: Test Raporlama Sistemi v2.0 ·
+    - link "Dashboard'a Dön" [ref=e109] [cursor=pointer]:
+      - /url: /

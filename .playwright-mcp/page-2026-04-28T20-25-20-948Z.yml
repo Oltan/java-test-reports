@@ -1,0 +1,293 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5]
+      - img [ref=e7]
+      - text: Test Reports
+    - generic [ref=e10]: "Run: run-2026-04-26-001"
+  - banner [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "run-2026-04-26-001" [level=1] [ref=e14]
+        - button "Rename run" [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+      - generic [ref=e19]:
+        - generic [ref=e20]: run-2026-04-26-001
+        - generic [ref=e21]: 2026-04-26 10:30
+        - generic [ref=e22]: PT58.125S
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: "2"
+          - generic [ref=e26]: Passed
+        - generic [ref=e27]:
+          - generic [ref=e28]: "1"
+          - generic [ref=e29]: Failed
+        - generic [ref=e30]:
+          - generic [ref=e31]: "0"
+          - generic [ref=e32]: Skipped
+        - generic [ref=e33]:
+          - generic [ref=e34]: "3"
+          - generic [ref=e35]: Total
+  - generic [ref=e37]:
+    - generic [ref=e38]:
+      - button "All" [ref=e39] [cursor=pointer]
+      - button "Passed" [ref=e40] [cursor=pointer]
+      - button "Failed" [ref=e41] [cursor=pointer]
+      - button "Skipped" [ref=e42] [cursor=pointer]
+    - generic [ref=e43]:
+      - img [ref=e44]
+      - textbox "Senaryo ara…" [ref=e47]
+    - generic [ref=e48]: 3 scenario
+  - main [ref=e49]:
+    - generic [ref=e50]:
+      - generic [ref=e51] [cursor=pointer]:
+        - img [ref=e52]
+        - generic [ref=e54]: login
+        - generic [ref=e55]: "1"
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - generic [ref=e59]: ✅
+          - generic [ref=e60]: User Login Success
+          - generic [ref=e61]: PT15.234S
+          - generic [ref=e62]: 🚪 ABS-12345
+        - generic [ref=e63]:
+          - generic [ref=e64]: login
+          - generic [ref=e65]: smoke
+          - generic [ref=e66]: critical
+        - list [ref=e67]:
+          - listitem [ref=e68]:
+            - generic [ref=e69]: ✓
+            - generic [ref=e70]: Navigate to login page
+          - listitem [ref=e71]:
+            - generic [ref=e72]: ✓
+            - generic [ref=e73]: Enter credentials
+          - listitem [ref=e74]:
+            - generic [ref=e75]: ✓
+            - generic [ref=e76]: Click login button
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - img [ref=e80]
+            - text: login-success.png
+          - link:
+            - /url: /reports/screenshots/login-success.png
+          - text: Görsel yüklenemedi
+    - generic [ref=e84]:
+      - generic [ref=e85] [cursor=pointer]:
+        - img [ref=e86]
+        - generic [ref=e88]: smoke
+        - generic [ref=e89]: "2"
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - generic [ref=e92]:
+            - generic [ref=e93]: ✅
+            - generic [ref=e94]: User Login Success
+            - generic [ref=e95]: PT15.234S
+            - generic [ref=e96]: 🚪 ABS-12345
+          - generic [ref=e97]:
+            - generic [ref=e98]: login
+            - generic [ref=e99]: smoke
+            - generic [ref=e100]: critical
+          - list [ref=e101]:
+            - listitem [ref=e102]:
+              - generic [ref=e103]: ✓
+              - generic [ref=e104]: Navigate to login page
+            - listitem [ref=e105]:
+              - generic [ref=e106]: ✓
+              - generic [ref=e107]: Enter credentials
+            - listitem [ref=e108]:
+              - generic [ref=e109]: ✓
+              - generic [ref=e110]: Click login button
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - img [ref=e114]
+              - text: login-success.png
+            - link:
+              - /url: /reports/screenshots/login-success.png
+            - text: Görsel yüklenemedi
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - generic [ref=e120]: ✅
+            - generic [ref=e121]: User Profile Update
+            - generic [ref=e122]: PT8.500S
+          - generic [ref=e123]:
+            - generic [ref=e124]: profile
+            - generic [ref=e125]: smoke
+          - list [ref=e126]:
+            - listitem [ref=e127]:
+              - generic [ref=e128]: ✓
+              - generic [ref=e129]: Navigate to profile page
+            - listitem [ref=e130]:
+              - generic [ref=e131]: ✓
+              - generic [ref=e132]: Update display name
+            - listitem [ref=e133]:
+              - generic [ref=e134]: ✓
+              - generic [ref=e135]: Save changes
+          - generic [ref=e137] [cursor=pointer]: Retry History (2 attempts)
+          - generic [ref=e138]:
+            - generic [ref=e139]: "Dependencies:"
+            - generic [ref=e140]: scenario-001
+            - generic [ref=e141]: scenario-002
+    - generic [ref=e142]:
+      - generic [ref=e143] [cursor=pointer]:
+        - img [ref=e144]
+        - generic [ref=e146]: critical
+        - generic [ref=e147]: "1"
+      - generic [ref=e149]:
+        - generic [ref=e150]:
+          - generic [ref=e151]: ✅
+          - generic [ref=e152]: User Login Success
+          - generic [ref=e153]: PT15.234S
+          - generic [ref=e154]: 🚪 ABS-12345
+        - generic [ref=e155]:
+          - generic [ref=e156]: login
+          - generic [ref=e157]: smoke
+          - generic [ref=e158]: critical
+        - list [ref=e159]:
+          - listitem [ref=e160]:
+            - generic [ref=e161]: ✓
+            - generic [ref=e162]: Navigate to login page
+          - listitem [ref=e163]:
+            - generic [ref=e164]: ✓
+            - generic [ref=e165]: Enter credentials
+          - listitem [ref=e166]:
+            - generic [ref=e167]: ✓
+            - generic [ref=e168]: Click login button
+        - generic [ref=e170]:
+          - generic [ref=e171]:
+            - img [ref=e172]
+            - text: login-success.png
+          - link:
+            - /url: /reports/screenshots/login-success.png
+          - text: Görsel yüklenemedi
+    - generic [ref=e176]:
+      - generic [ref=e177] [cursor=pointer]:
+        - img [ref=e178]
+        - generic [ref=e180]: checkout
+        - generic [ref=e181]: "1"
+      - generic [ref=e183]:
+        - generic [ref=e184]:
+          - generic [ref=e185]: ❌
+          - generic [ref=e186]: Order Submission
+          - generic [ref=e187]: PT42.891S
+          - generic [ref=e188]: 🚪 ABS-12346
+        - generic [ref=e189]:
+          - generic [ref=e190]: checkout
+          - generic [ref=e191]: regression
+        - list [ref=e192]:
+          - listitem [ref=e193]:
+            - generic [ref=e194]: ✓
+            - generic [ref=e195]: Navigate to checkout
+          - listitem [ref=e196]:
+            - generic [ref=e197]: ✓
+            - generic [ref=e198]: Fill shipping details
+          - listitem [ref=e199]:
+            - generic [ref=e200]: ✗
+            - generic [ref=e201]: Submit order
+        - generic [ref=e202]:
+          - generic [ref=e203]:
+            - generic [ref=e204]: Error
+            - button "Kopyala" [ref=e205] [cursor=pointer]
+          - generic [ref=e206]: "Payment processing failed: card declined"
+        - generic [ref=e208] [cursor=pointer]: Retry History (3 attempts)
+        - generic [ref=e209]:
+          - generic [ref=e210]: "Dependencies:"
+          - generic [ref=e211]: scenario-001
+        - generic [ref=e212]:
+          - generic [ref=e213]:
+            - generic [ref=e214]:
+              - img [ref=e215]
+              - text: order-failure.png
+            - link:
+              - /url: /reports/screenshots/order-failure.png
+            - text: Görsel yüklenemedi
+          - generic [ref=e219]:
+            - img [ref=e220]
+            - link "test-output.log" [ref=e223] [cursor=pointer]:
+              - /url: /reports/logs/test-output.log
+        - generic [ref=e225]: ⏳ Yükleniyor…
+        - button "Create Jira Bug" [ref=e227] [cursor=pointer]:
+          - img [ref=e228]
+          - text: Create Jira Bug
+    - generic [ref=e230]:
+      - generic [ref=e231] [cursor=pointer]:
+        - img [ref=e232]
+        - generic [ref=e234]: regression
+        - generic [ref=e235]: "1"
+      - generic [ref=e237]:
+        - generic [ref=e238]:
+          - generic [ref=e239]: ❌
+          - generic [ref=e240]: Order Submission
+          - generic [ref=e241]: PT42.891S
+          - generic [ref=e242]: 🚪 ABS-12346
+        - generic [ref=e243]:
+          - generic [ref=e244]: checkout
+          - generic [ref=e245]: regression
+        - list [ref=e246]:
+          - listitem [ref=e247]:
+            - generic [ref=e248]: ✓
+            - generic [ref=e249]: Navigate to checkout
+          - listitem [ref=e250]:
+            - generic [ref=e251]: ✓
+            - generic [ref=e252]: Fill shipping details
+          - listitem [ref=e253]:
+            - generic [ref=e254]: ✗
+            - generic [ref=e255]: Submit order
+        - generic [ref=e256]:
+          - generic [ref=e257]:
+            - generic [ref=e258]: Error
+            - button "Kopyala" [ref=e259] [cursor=pointer]
+          - generic [ref=e260]: "Payment processing failed: card declined"
+        - generic [ref=e262] [cursor=pointer]: Retry History (3 attempts)
+        - generic [ref=e263]:
+          - generic [ref=e264]: "Dependencies:"
+          - generic [ref=e265]: scenario-001
+        - generic [ref=e266]:
+          - generic [ref=e267]:
+            - generic [ref=e268]:
+              - img [ref=e269]
+              - text: order-failure.png
+            - link:
+              - /url: /reports/screenshots/order-failure.png
+            - text: Görsel yüklenemedi
+          - generic [ref=e273]:
+            - img [ref=e274]
+            - link "test-output.log" [ref=e277] [cursor=pointer]:
+              - /url: /reports/logs/test-output.log
+        - generic [ref=e279]: ⏳ Yükleniyor…
+        - button "Create Jira Bug" [ref=e281] [cursor=pointer]:
+          - img [ref=e282]
+          - text: Create Jira Bug
+    - generic [ref=e284]:
+      - generic [ref=e285] [cursor=pointer]:
+        - img [ref=e286]
+        - generic [ref=e288]: profile
+        - generic [ref=e289]: "1"
+      - generic [ref=e291]:
+        - generic [ref=e292]:
+          - generic [ref=e293]: ✅
+          - generic [ref=e294]: User Profile Update
+          - generic [ref=e295]: PT8.500S
+        - generic [ref=e296]:
+          - generic [ref=e297]: profile
+          - generic [ref=e298]: smoke
+        - list [ref=e299]:
+          - listitem [ref=e300]:
+            - generic [ref=e301]: ✓
+            - generic [ref=e302]: Navigate to profile page
+          - listitem [ref=e303]:
+            - generic [ref=e304]: ✓
+            - generic [ref=e305]: Update display name
+          - listitem [ref=e306]:
+            - generic [ref=e307]: ✓
+            - generic [ref=e308]: Save changes
+        - generic [ref=e310] [cursor=pointer]: Retry History (2 attempts)
+        - generic [ref=e311]:
+          - generic [ref=e312]: "Dependencies:"
+          - generic [ref=e313]: scenario-001
+          - generic [ref=e314]: scenario-002
+  - contentinfo [ref=e315]:
+    - text: Test Raporlama Sistemi v2.0 ·
+    - link "Dashboard'a Dön" [ref=e316] [cursor=pointer]:
+      - /url: /
