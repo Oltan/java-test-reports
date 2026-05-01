@@ -365,7 +365,6 @@ async def dashboard_metrics(
 ):
     conn = get_connection(read_only=True)
     try:
-        init_schema(conn)
         query = (
             "SELECT COUNT(*) as runs, "
             "COALESCE(SUM(passed),0) as passed, "
