@@ -46,3 +46,13 @@ bug-tracker.json
 
 # Runtime state
 run-aliases.json
+
+# Database (binary runtime data)
+*.duckdb
+*.duckdb.wal
+
+# Test tooling artifacts
+.playwright-mcp/
+.sisyphus/
+*.png
+

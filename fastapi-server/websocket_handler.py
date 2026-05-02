@@ -18,17 +18,21 @@ class ConnectionManager:
 
     def __init__(self) -> None:
         self.active_connections: dict[str, list[WebSocket]] = {}
+        self.last_messages: dict[str, dict] = {}
 
     async def connect(self, run_id: str, ws: WebSocket) -> None:
         await ws.accept()
         if run_id not in self.active_connections:
             self.active_connections[run_id] = []
         self.active_connections[run_id].append(ws)
+        if run_id in self.last_messages:
+            await ws.send_json(self.last_messages[run_id])
         logger.info("WebSocket connected for run_id=%s (%d connections)", run_id, len(self.active_connections[run_id]))
 
     def disconnect(self, run_id: str, ws: WebSocket) -> None:
         if run_id in self.active_connections:
-            self.active_connections[run_id].remove(ws)
+            if ws in self.active_connections[run_id]:
+                self.active_connections[run_id].remove(ws)
             logger.info(
                 "WebSocket disconnected for run_id=%s (%d remaining)", run_id, len(self.active_connections[run_id])
             )
@@ -36,16 +40,18 @@ class ConnectionManager:
                 del self.active_connections[run_id]
 
     async def broadcast(self, run_id: str, message: dict) -> None:
+        self.last_messages[run_id] = message
         if run_id not in self.active_connections:
             return
         stale: list[WebSocket] = []
-        for ws in self.active_connections[run_id]:
+        for ws in list(self.active_connections[run_id]):
             try:
                 await ws.send_json(message)
             except Exception:
                 stale.append(ws)
         for ws in stale:
-            self.active_connections[run_id].remove(ws)
+            if ws in self.active_connections.get(run_id, []):
+                self.active_connections[run_id].remove(ws)
         if not self.active_connections[run_id]:
             del self.active_connections[run_id]
 

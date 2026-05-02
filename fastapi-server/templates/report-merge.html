@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapor — Test Reports</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Test Reports
+  </div>
+  <div class="nav-links">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/reports/merge" class="nav-link active">Raporlar</a>
+    <a href="/admin" class="nav-link">Admin</a>
+  </div>
+  <div class="nav-right">
+    <button class="theme-toggle" id="theme-toggle" title="Tema değiştir">
+      <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+  </div>
+</nav>
+
+<div class="rpt-header">
+  <div class="rpt-header-inner">
+    <div class="rpt-header-left">
+      <div class="rpt-project-name">Test Reports</div>
+      <div class="rpt-header-meta">
+        <span class="rpt-meta-item" id="rpt-datetime"></span>
+        <span class="rpt-env-badge" id="rpt-env-badge">Staging</span>
+      </div>
+    </div>
+    <div class="rpt-header-right">
+      <button class="btn btn-ghost btn-sm" id="select-all-btn">Tümünü Seç</button>
+      <button class="btn btn-ghost btn-sm" id="deselect-all-btn">Tümünü Kaldır</button>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="rpt-run-selector">
+    <div class="rpt-selector-label">Çalıştırma Seçimi</div>
+    <div id="run-checkboxes" class="run-checkbox-group">
+      <div class="rpt-loading">Yükleniyor…</div>
+    </div>
+    <div class="rpt-selector-footer">
+      <span id="selected-count" class="rpt-selected-count">0 seçili</span>
+    </div>
+  </div>
+
+  <div class="rpt-stats-bar" id="rpt-stats-bar" style="display:none;">
+    <div class="rpt-stat-item rpt-stat--pass">
+      <span class="rpt-stat-dot"></span>
+      <span class="rpt-stat-num" id="stat-passed">0</span>
+      <span class="rpt-stat-label">Passed</span>
+    </div>
+    <div class="rpt-stat-item rpt-stat--fail">
+      <span class="rpt-stat-dot"></span>
+      <span class="rpt-stat-num" id="stat-failed">0</span>
+      <span class="rpt-stat-label">Failed</span>
+    </div>
+    <div class="rpt-stat-item rpt-stat--skip">
+      <span class="rpt-stat-dot"></span>
+      <span class="rpt-stat-num" id="stat-skipped">0</span>
+      <span class="rpt-stat-label">Skipped</span>
+    </div>
+    <div class="rpt-stat-item rpt-stat--total">
+      <span class="rpt-stat-dot"></span>
+      <span class="rpt-stat-num" id="stat-total">0</span>
+      <span class="rpt-stat-label">Total</span>
+    </div>
+  </div>
+
+  <div class="rpt-chart-section" id="rpt-chart-section" style="display:none;">
+    <div class="rpt-chart-card">
+      <div class="rpt-chart-title">Sonuç Dağılımı</div>
+      <div class="rpt-chart-body">
+        <canvas id="reportPieChart"></canvas>
+      </div>
+    </div>
+    <div class="rpt-chart-card">
+      <div class="rpt-chart-title">Çalıştırma Bazlı Sonuçlar</div>
+      <div class="rpt-chart-body">
+        <canvas id="reportBarChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="scenario-cards" class="rpt-scenarios">
+    <div class="rpt-empty">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <h2>Çalıştırma seçin</h2>
+      <p>Yukarıdaki listeden en az bir çalıştırma seçerek rapor detaylarını görüntüleyin.</p>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  Test Raporlama Sistemi v3.0 · Rapor Birleştirme
+</footer>
+
+<script type="module" src="/static/vendor.js"></script>
+<script type="module" src="/static/report-merge.js"></script>
+</body>
+</html>

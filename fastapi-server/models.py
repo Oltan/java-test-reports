@@ -42,13 +42,15 @@ class RunManifest(BaseModel):
     failed: int
     skipped: int
     duration: str
+    version: Optional[str] = None
+    environment: Optional[str] = None
     scenarios: List[ScenarioResult]
 
 
 class TestRunOptions(BaseModel):
     tags: str = Field(
         default="@smoke",
-        pattern=r"^@[\w,]+$",
+        pattern=r"^@[\w,\-]+$",
         description="Cucumber tag filter",
     )
     retry_count: int = Field(default=0, ge=0, le=10)

@@ -10,6 +10,126 @@
 </head>
 <body>
 
+<!-- ── Scenario card macro ── -->
+{% macro scard(scenario) %}
+<div class="scard scard--{{ scenario.status }}"
+     data-scenario-id="{{ scenario.id }}"
+     data-status="{{ scenario.status }}"
+     {% if scenario.doorsAbsNumber %}data-doors-number="{{ scenario.doorsAbsNumber }}"{% endif %}>
+
+  <div class="scard-header">
+    <span class="scard-status-icon">
+      {% if scenario.status == 'passed' %}✅
+      {% elif scenario.status == 'failed' %}❌
+      {% else %}⏭{% endif %}
+    </span>
+    <span class="scard-name">{{ scenario.name }}</span>
+    <span class="scard-duration">{{ scenario.duration }}</span>
+    {% if scenario.doorsAbsNumber %}
+    <span class="badge badge-dep">🚪 {{ scenario.doorsAbsNumber }}</span>
+    {% endif %}
+  </div>
+
+  <div class="scard-tags">
+    {% for t in scenario.tags %}
+    <span class="badge badge-dep">{{ t }}</span>
+    {% endfor %}
+  </div>
+
+  {% if scenario.steps %}
+  <ol class="steps-list">
+    {% for step in scenario.steps %}
+    <li class="step-row {% if step.status == 'failed' %}step--fail{% else %}step--pass{% endif %}">
+      <span class="step-icon">{% if step.status == 'failed' %}✗{% else %}✓{% endif %}</span>
+      <span class="step-name">{{ step.name }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+
+  {% for step in scenario.steps %}
+    {% if step.errorMessage %}
+    <div class="error-box">
+      <div class="error-box-header">
+        <span class="error-box-label">Error</span>
+        <button class="btn-copy" data-copy-error="{{ step.errorMessage | e }}">Kopyala</button>
+      </div>
+      <pre class="error-text">{{ step.errorMessage }}</pre>
+    </div>
+    {% endif %}
+  {% endfor %}
+
+  {% if scenario.attempts|length > 1 %}
+  <div class="retry-section">
+    <div class="retry-toggle" data-retry-toggle>Retry History ({{ scenario.attempts|length }} attempts)</div>
+    <ol class="retry-list" style="display:none">
+      {% for attempt in scenario.attempts %}
+      <li class="retry-item">
+        <span class="badge {% if attempt.status == 'passed' %}badge-pass{% elif attempt.status == 'failed' %}badge-fail{% else %}badge-dep{% endif %}">{{ attempt.status }}</span>
+        <span class="retry-ts">{{ attempt.timestamp }}</span>
+        {% if attempt.errorMessage %}<span class="retry-err">{{ attempt.errorMessage[:80] }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+
+  {% if scenario.dependencies %}
+  <div class="deps-section">
+    <span class="deps-label">Dependencies:</span>
+    {% for dep in scenario.dependencies %}
+    <span class="badge badge-dep">{{ dep }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if scenario.attachments %}
+  <div class="attachments">
+    {% for att in scenario.attachments %}
+      {% if att.type == 'image/png' %}
+      <div class="attachment-media">
+        <div class="attachment-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          {{ att.name }}
+        </div>
+        <a href="/reports/{{ att.path }}" target="_blank" rel="noopener">
+          <img src="/reports/{{ att.path }}" alt="{{ att.name }}" class="attachment-img" loading="lazy" onerror="this.parentElement.parentElement.classList.add('attachment-missing')">
+        </a>
+      </div>
+      {% elif att.type == 'video/mp4' %}
+      <div class="attachment-media">
+        <div class="attachment-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          {{ att.name }}
+        </div>
+        <video src="/reports/{{ att.path }}" class="attachment-video" controls preload="metadata">Tarayıcınız video oynatmayı desteklemiyor.</video>
+      </div>
+      {% else %}
+      <div class="attachment-item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <a href="/reports/{{ att.path }}" target="_blank" rel="noopener">{{ att.name }}</a>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if scenario.status == 'failed' and scenario.doorsAbsNumber %}
+  <div class="bug-section" data-bug-status>
+    <span class="bug-pill bug-pill--loading">⏳ Yükleniyor…</span>
+  </div>
+  <div class="fcard-actions">
+    <button class="btn btn-primary" data-create-jira>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Create Jira Bug
+    </button>
+    <span class="jira-key-display" data-jira-key style="display:none"></span>
+  </div>
+  {% endif %}
+
+</div>
+{% endmacro %}
+
 <!-- ── Nav ── -->
 <nav class="nav">
   <div class="nav-brand">
@@ -38,6 +158,7 @@
       <span class="badge badge-dep">{{ run_id }}</span>
       <span class="run-meta-item">{{ manifest.timestamp.strftime('%Y-%m-%d %H:%M') if manifest.timestamp is not string else manifest.timestamp }}</span>
       <span class="run-meta-item">{{ manifest.duration }}</span>
+      {% if manifest.version %}<span class="badge badge-retry">{{ manifest.version }}</span>{% endif %}
       {% if jira_base_url %}
       <a class="run-meta-item" href="{{ jira_base_url }}" target="_blank" rel="noopener">Jira ↗</a>
       {% endif %}
@@ -83,13 +204,17 @@
 <!-- ── Scenario groups ── -->
 <main class="run-detail-main">
 
-  {% set ns = namespace(tags=[]) %}
+  {% set ns = namespace(tags=[], has_untagged=false) %}
   {% for s in scenarios %}
-    {% for t in s.tags %}
-      {% if t not in ns.tags %}
-        {% set ns.tags = ns.tags + [t] %}
-      {% endif %}
-    {% endfor %}
+    {% if s.tags %}
+      {% for t in s.tags %}
+        {% if t not in ns.tags %}
+          {% set ns.tags = ns.tags + [t] %}
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      {% set ns.has_untagged = true %}
+    {% endif %}
   {% endfor %}
 
   {% for tag in ns.tags %}
@@ -100,141 +225,33 @@
       <span class="tag-group-count">{{ scenarios|selectattr('tags', 'contains', tag)|list|length }}</span>
     </div>
     <div class="tag-group-body">
-
-    {% for scenario in scenarios %}
-      {% if tag in scenario.tags %}
-      <div class="scard scard--{{ scenario.status }}"
-           data-scenario-id="{{ scenario.id }}"
-           data-status="{{ scenario.status }}"
-           {% if scenario.doorsAbsNumber %}data-doors-number="{{ scenario.doorsAbsNumber }}"{% endif %}>
-
-        <!-- Header -->
-        <div class="scard-header">
-          <span class="scard-status-icon">
-            {% if scenario.status == 'passed' %}✅
-            {% elif scenario.status == 'failed' %}❌
-            {% else %}⏭{% endif %}
-          </span>
-          <span class="scard-name">{{ scenario.name }}</span>
-          <span class="scard-duration">{{ scenario.duration }}</span>
-          {% if scenario.doorsAbsNumber %}
-          <span class="badge badge-dep">🚪 {{ scenario.doorsAbsNumber }}</span>
-          {% endif %}
-        </div>
-
-        <!-- Tags -->
-        <div class="scard-tags">
-          {% for t in scenario.tags %}
-          <span class="badge badge-dep">{{ t }}</span>
-          {% endfor %}
-        </div>
-
-        <!-- Steps -->
-        {% if scenario.steps %}
-        <ol class="steps-list">
-          {% for step in scenario.steps %}
-          <li class="step-row {% if step.status == 'failed' %}step--fail{% else %}step--pass{% endif %}">
-            <span class="step-icon">{% if step.status == 'failed' %}✗{% else %}✓{% endif %}</span>
-            <span class="step-name">{{ step.name }}</span>
-          </li>
-          {% endfor %}
-        </ol>
+      {% for scenario in scenarios %}
+        {% if tag in scenario.tags %}
+          {{ scard(scenario) }}
         {% endif %}
-
-        <!-- Error -->
-        {% for step in scenario.steps %}
-          {% if step.errorMessage %}
-          <div class="error-box">
-            <div class="error-box-header">
-              <span class="error-box-label">Error</span>
-              <button class="btn-copy" data-copy-error="{{ step.errorMessage | e }}">Kopyala</button>
-            </div>
-            <pre class="error-text">{{ step.errorMessage }}</pre>
-          </div>
-          {% endif %}
-        {% endfor %}
-
-        <!-- Retry history -->
-        {% if scenario.attempts|length > 1 %}
-        <div class="retry-section">
-          <div class="retry-toggle" data-retry-toggle>Retry History ({{ scenario.attempts|length }} attempts)</div>
-          <ol class="retry-list" style="display:none">
-            {% for attempt in scenario.attempts %}
-            <li class="retry-item">
-              <span class="badge {% if attempt.status == 'passed' %}badge-pass{% elif attempt.status == 'failed' %}badge-fail{% else %}badge-dep{% endif %}">{{ attempt.status }}</span>
-              <span class="retry-ts">{{ attempt.timestamp }}</span>
-              {% if attempt.errorMessage %}<span class="retry-err">{{ attempt.errorMessage[:80] }}</span>{% endif %}
-            </li>
-            {% endfor %}
-          </ol>
-        </div>
-        {% endif %}
-
-        <!-- Dependencies -->
-        {% if scenario.dependencies %}
-        <div class="deps-section">
-          <span class="deps-label">Dependencies:</span>
-          {% for dep in scenario.dependencies %}
-          <span class="badge badge-dep">{{ dep }}</span>
-          {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Attachments -->
-        {% if scenario.attachments %}
-        <div class="attachments">
-          {% for att in scenario.attachments %}
-            {% if att.type == 'image/png' %}
-            <div class="attachment-media">
-              <div class="attachment-label">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                {{ att.name }}
-              </div>
-              <a href="/reports/{{ att.path }}" target="_blank" rel="noopener">
-                <img src="/reports/{{ att.path }}" alt="{{ att.name }}" class="attachment-img" loading="lazy" onerror="this.parentElement.parentElement.classList.add('attachment-missing')">
-              </a>
-            </div>
-            {% elif att.type == 'video/mp4' %}
-            <div class="attachment-media">
-              <div class="attachment-label">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                {{ att.name }}
-              </div>
-              <video src="/reports/{{ att.path }}" class="attachment-video" controls preload="metadata">Tarayıcınız video oynatmayı desteklemiyor.</video>
-            </div>
-            {% else %}
-            <div class="attachment-item">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              <a href="/reports/{{ att.path }}" target="_blank" rel="noopener">{{ att.name }}</a>
-            </div>
-            {% endif %}
-          {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- Jira Bug (failed only) -->
-        {% if scenario.status == 'failed' and scenario.doorsAbsNumber %}
-        <div class="bug-section" data-bug-status>
-          <span class="bug-pill bug-pill--loading">⏳ Yükleniyor…</span>
-        </div>
-        <div class="fcard-actions">
-          <button class="btn btn-primary" data-create-jira>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-            Create Jira Bug
-          </button>
-          <span class="jira-key-display" data-jira-key style="display:none"></span>
-        </div>
-        {% endif %}
-
-      </div>
-      {% endif %}
-    {% endfor %}
-
+      {% endfor %}
     </div>
   </div>
   {% endfor %}
 
-  {% if not ns.tags %}
+  {% if ns.has_untagged %}
+  <div class="tag-group">
+    <div class="tag-group-header" data-tag="__untagged__">
+      <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      <span class="tag-group-name">Senaryolar</span>
+      <span class="tag-group-count">{{ scenarios|selectattr('tags', 'equalto', [])|list|length }}</span>
+    </div>
+    <div class="tag-group-body">
+      {% for scenario in scenarios %}
+        {% if not scenario.tags %}
+          {{ scard(scenario) }}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not ns.tags and not ns.has_untagged %}
   <div class="empty-state">
     <div class="empty-icon">📋</div>
     <h2>Senaryo bulunamadı</h2>

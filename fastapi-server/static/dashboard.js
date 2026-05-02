@@ -80,7 +80,7 @@ function renderPieChart(metrics) {
       labels: ["Passed", "Failed", "Skipped"],
       datasets: [{
         data: [metrics.passed, metrics.failed, metrics.skipped],
-        backgroundColor: ["#22c55e", "#ef4444", "#64748b"],
+        backgroundColor: ["#34d399", "#f87171", "#94a3b8"],
         borderColor: getComputedStyle(document.documentElement).getPropertyValue("--surface").trim(),
         borderWidth: 3,
         hoverOffset: 10,
@@ -93,7 +93,7 @@ function renderPieChart(metrics) {
       plugins: {
         legend: {
           position: "bottom",
-          labels: { color: "#94a3b8", padding: 20, font: { size: 13 } },
+          labels: { color: "#8b95a8", padding: 20, font: { size: 13, family: "'DM Sans', sans-serif" } },
         },
         tooltip: {
           callbacks: {
@@ -117,9 +117,9 @@ function renderBarChart(versionBreakdown) {
     data: {
       labels,
       datasets: [
-        { label: "Passed", data: passed, backgroundColor: "#22c55e", borderRadius: 4 },
-        { label: "Failed", data: failed, backgroundColor: "#ef4444", borderRadius: 4 },
-        { label: "Skipped", data: skipped, backgroundColor: "#64748b", borderRadius: 4 },
+        { label: "Passed", data: passed, backgroundColor: "#34d399", borderRadius: 4 },
+        { label: "Failed", data: failed, backgroundColor: "#f87171", borderRadius: 4 },
+        { label: "Skipped", data: skipped, backgroundColor: "#94a3b8", borderRadius: 4 },
       ],
     },
     options: {
@@ -129,19 +129,19 @@ function renderBarChart(versionBreakdown) {
       plugins: {
         legend: {
           position: "bottom",
-          labels: { color: "#94a3b8", padding: 16, font: { size: 12 } },
+          labels: { color: "#8b95a8", padding: 16, font: { size: 12, family: "'DM Sans', sans-serif" } },
         },
       },
       scales: {
         x: {
           stacked: true,
           grid: { color: "rgba(148,163,184,.1)" },
-          ticks: { color: "#94a3b8" },
+          ticks: { color: "#8b95a8" },
         },
         y: {
           stacked: true,
           grid: { display: false },
-          ticks: { color: "#94a3b8" },
+          ticks: { color: "#8b95a8" },
         },
       },
     },
@@ -224,18 +224,24 @@ async function loadVersions() {
   try {
     const data = await apiFetch("/api/versions");
     const select = $("version-select");
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">Tümü</option>';
     data.versions.forEach(v => {
       const opt = document.createElement("option");
       opt.value = v;
       opt.textContent = v;
       select.appendChild(opt);
     });
+    if (currentVal && data.versions.includes(currentVal)) {
+      select.value = currentVal;
+    }
   } catch { /* versions endpoint may fail if no data */ }
 }
 
 function getFilterParams() {
-  const version = $("version-select").value;
-  const dateRange = $("date-range").value;
+  const version = $("version-select")?.value || "";
+  const dateRange = $("date-range")?.value || "";
   const params = new URLSearchParams();
   if (version) params.set("version", version);
   if (dateRange) {
@@ -250,13 +256,17 @@ async function handleGenerate() {
   const params = getFilterParams();
   const query = params ? `?${params}` : "";
   try {
-    const metrics = await apiFetch(`/api/dashboard/metrics${query}`);
+    const [metrics, runs] = await Promise.all([
+      apiFetch(`/api/dashboard/metrics${query}`),
+      apiFetch(`/api/v1/runs${query}`),
+    ]);
     destroyCharts();
     renderMetrics(metrics);
     if (metrics.version_breakdown?.length > 0) {
       renderBarChart(metrics.version_breakdown);
     }
     renderPieChart(metrics);
+    renderTable(runs);
   } catch (err) {
     console.error("Failed to generate report:", err);
   }

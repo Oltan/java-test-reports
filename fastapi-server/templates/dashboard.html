@@ -10,11 +10,15 @@
 </head>
 <body>
 
-<!-- ── Nav ── -->
 <nav class="nav">
   <div class="nav-brand">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
     Test Reports
+  </div>
+  <div class="nav-links" id="nav-links">
+    <a href="/dashboard" class="nav-link active">Dashboard</a>
+    <a href="/reports/merge" class="nav-link">Raporlar</a>
+    <a href="/admin" class="nav-link">Admin</a>
   </div>
   <div class="nav-right" id="nav-right">
     <button class="theme-toggle" id="theme-toggle" title="Tema değiştir">
@@ -26,7 +30,6 @@
   </div>
 </nav>
 
-<!-- ── Login ── -->
 <div id="login-section" class="login-wrap">
   <div class="login-card">
     <div class="login-icon">
@@ -48,10 +51,8 @@
   </div>
 </div>
 
-<!-- ── Dashboard ── -->
 <div id="dashboard-content" class="page" style="display:none">
 
-  <!-- Filter bar -->
   <div class="filter-bar">
     <div class="filter-inner">
       <div class="filter-group">
@@ -73,7 +74,6 @@
     </div>
   </div>
 
-  <!-- Metric cards -->
   <div class="metrics">
     <div class="metric-card">
       <div class="metric-icon metric-icon--green">
@@ -113,7 +113,6 @@
     </div>
   </div>
 
-  <!-- Charts -->
   <div class="charts-row">
     <div class="chart-card chart-card--sm">
       <div class="chart-title">Dağılım</div>
@@ -129,7 +128,6 @@
     </div>
   </div>
 
-  <!-- Live progress bar -->
   <div class="progress-section" id="progress-section" style="display:none">
     <div class="progress-header">
       <span class="progress-label" id="progress-label">Test çalışıyor…</span>
@@ -140,7 +138,6 @@
     </div>
   </div>
 
-  <!-- Run table -->
   <div class="table-card">
     <div class="table-header">
       <h3 class="table-title">Son Çalıştırmalar</h3>
@@ -173,7 +170,7 @@
 </div>
 
 <footer class="footer">
-  Test Raporlama Sistemi v2.0 · Allure + FastAPI
+  Test Raporlama Sistemi v3.0 · Allure + FastAPI
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

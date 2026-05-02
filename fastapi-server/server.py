@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import threading
+import asyncio
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
 from pathlib import Path
@@ -47,7 +48,8 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 _aliases_lock = threading.Lock()
 
-running_tests: dict[str, subprocess.Popen] = {}
+running_tests: dict[str, object] = {}
+test_tasks: set[asyncio.Task] = set()
 tests_lock = threading.Lock()
 
 def _load_aliases() -> dict:
@@ -184,6 +186,15 @@ def _test_command(options: TestRunOptions) -> list[str]:
     return cmd
 
 
+def _test_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["DISPLAY"] = env.get("DISPLAY", ":0")
+    maven_parent = Path(_maven_executable()).parent
+    if str(maven_parent) != ".":
+        env["PATH"] = f"{maven_parent}{os.pathsep}{env.get('PATH', '')}"
+    return env
+
+
 def _wait_for_test_run(run_id: str, proc: subprocess.Popen) -> None:
     try:
         proc.wait()
@@ -194,7 +205,7 @@ def _wait_for_test_run(run_id: str, proc: subprocess.Popen) -> None:
 
 def _launch_test_run(run_id: str, options: TestRunOptions) -> subprocess.Popen:
     try:
-        proc = subprocess.Popen(_test_command(options), cwd=str(PROJECT_ROOT))
+        proc = subprocess.Popen(_test_command(options), cwd=str(PROJECT_ROOT), env=_test_env())
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to start test run: {exc}") from exc
     with tests_lock:
@@ -209,9 +220,9 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
     run_ids = []
     for _ in range(options.parallel):
         run_id = f"test-{uuid4().hex[:8]}"
-        proc = _launch_test_run(run_id, options)
-        thread = threading.Thread(target=_wait_for_test_run, args=(run_id, proc), daemon=True)
-        thread.start()
+        task = asyncio.create_task(execute_test_run(run_id, options))
+        test_tasks.add(task)
+        task.add_done_callback(test_tasks.discard)
         run_ids.append(run_id)
     return {"runs": run_ids, "status": "started", "count": len(run_ids)}
 
@@ -228,16 +239,239 @@ async def cancel_test(run_id: str):
     with tests_lock:
         proc = running_tests.pop(run_id, None)
     if proc:
-        if proc.poll() is None:
-            proc.kill()
+        poll = getattr(proc, "poll", None)
+        returncode = poll() if callable(poll) else getattr(proc, "returncode", None)
+        kill = getattr(proc, "kill", None)
+        if returncode is None and callable(kill):
+            kill()
         return {"status": "cancelled", "run_id": run_id}
     return {"status": "not_found", "run_id": run_id}
 
 
-def execute_test_run(run_id: str, options: TestRunOptions) -> None:
-    """Run Maven test and track progress."""
-    proc = _launch_test_run(run_id, options)
-    _wait_for_test_run(run_id, proc)
+async def execute_test_run(run_id: str, options: TestRunOptions):
+    """Run Maven tests, stream progress to WebSocket, and persist Allure results."""
+    cmd = _test_command(options)
+    started_at = datetime.now()
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=str(PROJECT_ROOT),
+        env=_test_env(),
+    )
+    with tests_lock:
+        running_tests[run_id] = proc  # type: ignore[assignment]
+
+    stats = {
+        "run_id": run_id,
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "running": 0,
+        "scenarios": [],
+        "output": [],
+    }
+
+    def update_last_running(status: str, count: int = 1) -> None:
+        updated = 0
+        for scenario in reversed(stats["scenarios"]):
+            if scenario.get("status") == "running":
+                scenario["status"] = status
+                updated += 1
+                if updated == count:
+                    break
+
+    async def publish() -> None:
+        completed = stats["passed"] + stats["failed"] + stats["skipped"]
+        expected = max(stats["total"], completed + stats["running"], 1)
+        pct = round((completed / expected) * 100)
+        await ws_manager.broadcast(run_id, {**stats, "pct": min(pct, 100), "type": "progress"})
+
+    async def consume_stream(stream: asyncio.StreamReader | None) -> None:
+        if stream is None:
+            return
+        async for line in stream:
+            decoded = line.decode(errors="replace").strip()
+            if not decoded:
+                continue
+            stats["output"].append(decoded)
+
+            if "Scenario:" in decoded or "Scenario Outline:" in decoded:
+                marker = "Scenario Outline:" if "Scenario Outline:" in decoded else "Scenario:"
+                name = decoded.split(marker, 1)[-1].strip().split("#", 1)[0].strip()
+                stats["total"] += 1
+                stats["running"] += 1
+                stats["scenarios"].append({"name": name, "status": "running"})
+            elif "PASSED" in decoded and "Scenario" not in decoded:
+                pass_count = max(decoded.count("PASSED"), 1)
+                stats["passed"] += pass_count
+                stats["running"] = max(0, stats["running"] - pass_count)
+                update_last_running("passed", pass_count)
+            elif "FAILED" in decoded:
+                fail_count = max(decoded.count("FAILED"), 1)
+                stats["failed"] += fail_count
+                stats["running"] = max(0, stats["running"] - fail_count)
+                update_last_running("failed", fail_count)
+            elif "SKIPPED" in decoded:
+                skip_count = max(decoded.count("SKIPPED"), 1)
+                stats["skipped"] += skip_count
+                stats["running"] = max(0, stats["running"] - skip_count)
+                update_last_running("skipped", skip_count)
+
+            await publish()
+
+    try:
+        await ws_manager.broadcast(run_id, {**stats, "pct": 0, "type": "progress"})
+        await asyncio.gather(consume_stream(proc.stdout), consume_stream(proc.stderr))
+        await proc.wait()
+        saved = _save_results_to_duckdb(run_id, options, started_at)
+        if saved:
+            stats.update({"total": saved["total"], "passed": saved["passed"], "failed": saved["failed"], "skipped": saved["skipped"], "running": 0})
+    finally:
+        with tests_lock:
+            running_tests.pop(run_id, None)
+
+    completed = stats["passed"] + stats["failed"] + stats["skipped"]
+    await ws_manager.broadcast(
+        run_id,
+        {
+            **stats,
+            "finished": True,
+            "type": "complete",
+            "exit_code": proc.returncode,
+            "pct": 100 if completed or proc.returncode == 0 else 0,
+        },
+    )
+
+
+def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: datetime | None = None) -> dict:
+    """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
+    import hashlib
+
+    allure_dir = PROJECT_ROOT / "test-core" / "target" / "allure-results"
+    status_map = {
+        "passed": "PASSED",
+        "failed": "FAILED",
+        "broken": "BROKEN",
+        "skipped": "SKIPPED",
+        "unknown": "UNKNOWN",
+    }
+    scenarios = []
+    if allure_dir.exists():
+        for result_file in sorted(allure_dir.glob("*-result.json")):
+            try:
+                data = json.loads(result_file.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            raw_status = str(data.get("status", "unknown")).lower()
+            status = status_map.get(raw_status, "UNKNOWN")
+            name = data.get("name") or "unknown"
+            full_name = data.get("fullName") or ""
+            feature_file = full_name.split(":", 1)[0].split(".", 1)[0] if full_name else ""
+            time_data = data.get("time") or {}
+            duration = (time_data.get("duration") or 0) / 1000
+            error = ((data.get("statusDetails") or {}).get("message") or "")[:500]
+            identity_key = data.get("historyId") or f"{feature_file}:{name}"
+            scenario_uid = hashlib.sha256(str(identity_key).encode()).hexdigest()[:32]
+            scenarios.append((scenario_uid, str(identity_key), name, status, duration, error, feature_file))
+
+    passed = sum(1 for _, _, _, status, _, _, _ in scenarios if status == "PASSED")
+    failed = sum(1 for _, _, _, status, _, _, _ in scenarios if status in {"FAILED", "BROKEN"})
+    skipped = sum(1 for _, _, _, status, _, _, _ in scenarios if status == "SKIPPED")
+    finished_at = datetime.now()
+
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        conn.execute("DELETE FROM scenario_results WHERE run_id = ?", [run_id])
+        run_values = [options.version, options.environment, started_at or finished_at, finished_at, len(scenarios), passed, failed, skipped, options.visibility, run_id]
+        if conn.execute("SELECT 1 FROM runs WHERE id = ?", [run_id]).fetchone():
+            conn.execute(
+                """
+                UPDATE runs
+                SET version = ?, environment = ?, started_at = ?, finished_at = ?, total_scenarios = ?, passed = ?, failed = ?, skipped = ?, visibility = ?
+                WHERE id = ?
+                """,
+                run_values,
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO runs
+                (version, environment, started_at, finished_at, total_scenarios, passed, failed, skipped, visibility, id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                run_values,
+            )
+        for scenario_uid, identity_key, name, status, duration, error, feature_file in scenarios:
+            if conn.execute("SELECT 1 FROM scenario_definitions WHERE scenario_uid = ?", [scenario_uid]).fetchone():
+                conn.execute(
+                    """
+                    UPDATE scenario_definitions
+                    SET identity_source = 'allure', identity_key = ?, current_name = ?, current_feature_file = ?, last_seen_run_id = ?, last_seen_at = ?, active = true
+                    WHERE scenario_uid = ?
+                    """,
+                    [identity_key, name, feature_file, run_id, finished_at, scenario_uid],
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO scenario_definitions
+                    (scenario_uid, identity_source, identity_key, current_name, current_feature_file, doors_number, first_seen_run_id, last_seen_run_id, first_seen_at, last_seen_at)
+                    VALUES (?, 'allure', ?, ?, ?, NULL, ?, ?, ?, ?)
+                    """,
+                    [scenario_uid, identity_key, name, feature_file, run_id, run_id, started_at or finished_at, finished_at],
+                )
+            conn.execute(
+                """
+                INSERT INTO scenario_results
+                (run_id, scenario_uid, name_at_run, status, duration_seconds, error_message, feature_file_at_run)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [run_id, scenario_uid, name, status, duration, error, feature_file],
+            )
+        # Also write manifest JSON for dashboard compatibility
+        _write_manifest_json(run_id, options, scenarios, passed, failed, skipped, started_at or finished_at)
+    finally:
+        conn.close()
+
+    return {"total": len(scenarios), "passed": passed, "failed": failed, "skipped": skipped}
+
+
+def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, passed: int, failed: int, skipped: int, ts: datetime) -> None:
+    manifest_dir = PROJECT_ROOT / "manifests"
+    manifest_dir.mkdir(exist_ok=True)
+    manifest_path = manifest_dir / f"{run_id}.json"
+    total = len(scenarios)
+    manifest = {
+        "runId": run_id,
+        "timestamp": ts.isoformat(),
+        "totalScenarios": total,
+        "passed": passed,
+        "failed": failed,
+        "skipped": skipped,
+        "duration": "0.0s",
+        "version": options.version or "",
+        "environment": options.environment or "",
+        "scenarios": [
+            {
+                "id": f"{run_id}-{i}",
+                "name": name,
+                "status": status.lower(),
+                "duration": f"{duration:.1f}s",
+                "doorsAbsNumber": None,
+                "tags": [],
+                "steps": [],
+                "attachments": [],
+                "attempts": [],
+                "dependencies": [],
+                "errorMessage": error or "",
+            }
+            for i, (_, _, name, status, duration, error, feature_file) in enumerate(scenarios)
+        ],
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, default=str))
 
 
 @app.get("/api/pipeline/status/{run_id}")
@@ -274,8 +508,22 @@ def login(req: LoginRequest):
 
 
 @app.get("/api/v1/runs", response_model=List[RunManifest])
-def list_runs():
+def list_runs(version: Optional[str] = None):
     manifests = load_manifests()
+    # Enrich manifests that lack a version with DuckDB data
+    needs_version = [m for m in manifests if not m.version]
+    if needs_version:
+        conn = get_connection(read_only=True)
+        db_versions = {r[0]: r[1] for r in conn.execute(
+            "SELECT id, version FROM runs WHERE id = ANY(?)",
+            [[m.runId for m in needs_version]],
+        ).fetchall()}
+        conn.close()
+        for m in needs_version:
+            if m.runId in db_versions and db_versions[m.runId]:
+                m.version = db_versions[m.runId]
+    if version:
+        manifests = [m for m in manifests if m.version == version]
     manifests.sort(key=lambda m: str(m.timestamp), reverse=True)
     return manifests
 
@@ -342,6 +590,150 @@ def rename_run(run_id: str, req: RenameRequest, _: TokenData = Depends(verify_to
     aliases[run_id] = req.displayName
     _save_aliases(aliases)
     return {"runId": run_id, "displayName": req.displayName}
+
+
+@app.get("/api/reports/merge-data")
+async def reports_merge_data(run_ids: str = ""):
+    """Return merged scenario data for selected run IDs (comma-separated)."""
+    if not run_ids:
+        return {"runs": [], "scenarios": [], "summary": {"total": 0, "passed": 0, "failed": 0, "skipped": 0}}
+    ids = [r.strip() for r in run_ids.split(",") if r.strip()]
+    manifests = load_manifests()
+    selected = [m for m in manifests if m.runId in ids]
+    all_scenarios = []
+    for m in selected:
+        for s in m.scenarios:
+            all_scenarios.append({
+                "runId": m.runId,
+                "id": s.id,
+                "name": s.name,
+                "status": s.status,
+                "duration": s.duration,
+                "tags": s.tags,
+                "steps": [{"name": st.name, "status": st.status, "errorMessage": st.errorMessage} for st in s.steps],
+                "errorMessage": s.steps[0].errorMessage if s.steps and s.status == "failed" and any(st.errorMessage for st in s.steps) else None,
+            })
+    summary = {
+        "total": len(all_scenarios),
+        "passed": sum(1 for s in all_scenarios if s["status"] == "passed"),
+        "failed": sum(1 for s in all_scenarios if s["status"] == "failed"),
+        "skipped": sum(1 for s in all_scenarios if s["status"] == "skipped"),
+    }
+    return {"runs": [{"runId": m.runId, "timestamp": str(m.timestamp), "totalScenarios": m.totalScenarios, "passed": m.passed, "failed": m.failed, "skipped": m.skipped} for m in selected], "scenarios": all_scenarios, "summary": summary}
+
+
+def sync_runs() -> dict:
+    """Backfill both data stores:
+    - Manifest files without a DuckDB row → insert into DuckDB
+    - DuckDB runs without a manifest file → create manifest JSON
+    Safe to call repeatedly (skips already-synced entries).
+    """
+    import hashlib
+
+    manifests = load_manifests()
+    manifest_by_id = {m.runId: m for m in manifests}
+
+    _status_down = {"PASSED": "passed", "FAILED": "failed", "SKIPPED": "skipped",
+                    "BROKEN": "failed", "UNKNOWN": "skipped"}
+
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        db_runs = {r[0]: {"version": r[1], "environment": r[2], "started_at": r[3],
+                          "finished_at": r[4], "total": r[5], "passed": r[6],
+                          "failed": r[7], "skipped": r[8]}
+                   for r in conn.execute(
+                       "SELECT id, version, environment, started_at, finished_at, "
+                       "total_scenarios, passed, failed, skipped FROM runs"
+                   ).fetchall()}
+
+        inserted_to_db = 0
+        created_manifests = 0
+
+        # 1. Manifests → DuckDB
+        for run_id, m in manifest_by_id.items():
+            if run_id not in db_runs:
+                ts = m.timestamp or datetime.now()
+                conn.execute(
+                    """INSERT INTO runs (id, version, environment, started_at, finished_at,
+                       total_scenarios, passed, failed, skipped, visibility)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'internal')""",
+                    [run_id, m.version or None, m.environment or None,
+                     ts, ts, m.totalScenarios, m.passed, m.failed, m.skipped],
+                )
+                for i, s in enumerate(m.scenarios):
+                    uid = hashlib.sha256(f"{run_id}:{s.name}:{i}".encode()).hexdigest()[:32]
+                    if not conn.execute(
+                        "SELECT 1 FROM scenario_definitions WHERE scenario_uid = ?", [uid]
+                    ).fetchone():
+                        conn.execute(
+                            """INSERT INTO scenario_definitions
+                               (scenario_uid, identity_source, identity_key, current_name,
+                                first_seen_run_id, last_seen_run_id, first_seen_at, last_seen_at)
+                               VALUES (?, 'manifest', ?, ?, ?, ?, ?, ?)""",
+                            [uid, f"{run_id}:{s.name}", s.name, run_id, run_id, ts, ts],
+                        )
+                    conn.execute(
+                        """INSERT INTO scenario_results
+                           (run_id, scenario_uid, name_at_run, status, duration_seconds,
+                            error_message, feature_file_at_run)
+                           VALUES (?, ?, ?, ?, ?, ?, '')""",
+                        [run_id, uid, s.name, s.status.upper(), 0.0, None],
+                    )
+                inserted_to_db += 1
+
+        # 2. DuckDB → manifests (create new + refresh existing ones with empty scenario tags)
+        for run_id, run_data in db_runs.items():
+            existing = manifest_by_id.get(run_id)
+            needs_tag_refresh = existing and existing.scenarios and not any(
+                s.tags for s in existing.scenarios
+            )
+            if run_id not in manifest_by_id or needs_tag_refresh:
+                scenario_rows = conn.execute(
+                    "SELECT name_at_run, status, duration_seconds, error_message, "
+                    "COALESCE(feature_file_at_run, '') "
+                    "FROM scenario_results WHERE run_id = ? ORDER BY id",
+                    [run_id],
+                ).fetchall()
+                ts = run_data["started_at"] or (existing.timestamp if existing else datetime.now())
+                ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+                total = run_data["total"] or len(scenario_rows)
+                scenarios = [
+                    {"id": f"{run_id}-{i}", "name": row[0],
+                     "status": _status_down.get(row[1], "skipped"),
+                     "duration": f"{(row[2] or 0):.1f}s",
+                     "doorsAbsNumber": None,
+                     "tags": [row[4]] if row[4] else [],
+                     "steps": [], "attachments": [], "attempts": [], "dependencies": [],
+                     "errorMessage": row[3] or ""}
+                    for i, row in enumerate(scenario_rows)
+                ]
+                manifest_data = {
+                    "runId": run_id,
+                    "timestamp": ts_str,
+                    "totalScenarios": total,
+                    "passed": run_data["passed"] or 0,
+                    "failed": run_data["failed"] or 0,
+                    "skipped": run_data["skipped"] or 0,
+                    "duration": existing.duration if existing else "0.0s",
+                    "version": run_data["version"] or (existing.version if existing else "") or "",
+                    "environment": run_data["environment"] or (existing.environment if existing else "") or "",
+                    "scenarios": scenarios,
+                }
+                manifest_path = MANIFESTS_DIR / f"{run_id}.json"
+                manifest_path.write_text(json.dumps(manifest_data, indent=2, default=str))
+                if run_id not in manifest_by_id:
+                    created_manifests += 1
+    finally:
+        conn.close()
+
+    return {"inserted_to_db": inserted_to_db, "created_manifests": created_manifests}
+
+
+@app.post("/api/admin/sync-runs", dependencies=[Depends(verify_token)])
+def admin_sync_runs():
+    """Backfill manifests ↔ DuckDB so version filters work across all historical runs."""
+    return sync_runs()
 
 
 @app.get("/api/versions")
@@ -450,8 +842,20 @@ async def dashboard_metrics(
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request, _: TokenData = Depends(verify_token)):
+async def dashboard_page(request: Request):
     template = jinja_env.get_template("dashboard.html")
+    return HTMLResponse(content=template.render())
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    template = jinja_env.get_template("admin.html")
+    return HTMLResponse(content=template.render())
+
+
+@app.get("/reports/merge", response_class=HTMLResponse)
+async def report_merge_page(request: Request):
+    template = jinja_env.get_template("report-merge.html")
     return HTMLResponse(content=template.render())
 
 
