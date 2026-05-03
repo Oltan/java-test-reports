@@ -1,3 +1,4 @@
+import argparse
 import hashlib
 import json
 import os
@@ -411,6 +412,54 @@ def import_manifest(conn, path, aliases, bug_lookup):
     return "imported", imported_rows
 
 
+def backfill_jobs(dry_run=False):
+    """For each existing run without a job, create a default job and worker_run record.
+
+    Idempotent: safe to run multiple times — uses INSERT ... ON CONFLICT DO NOTHING.
+    """
+    conn = get_connection()
+    init_schema(conn)
+
+    rows = conn.execute("""
+        SELECT r.id, r.version, r.environment, r.started_at, r.finished_at
+        FROM runs r
+        WHERE NOT EXISTS (
+            SELECT 1 FROM worker_runs wr WHERE wr.run_id = r.id
+        )
+        ORDER BY r.started_at ASC
+    """).fetchall()
+
+    if not rows:
+        print("No runs need job backfill.")
+        return 0
+
+    created = 0
+    for run_id, version, environment, started_at, finished_at in rows:
+        job_id = f"job-backfill-{run_id}"
+        if dry_run:
+            print(f"[DRY RUN] Would create job {job_id} for run {run_id}")
+            continue
+
+        conn.execute("""
+            INSERT INTO jobs (
+                job_id, version, environment, status, started_at, ended_at
+            ) VALUES (?, ?, ?, 'completed', ?, ?)
+            ON CONFLICT(job_id) DO NOTHING
+        """, [job_id, version, environment, started_at, finished_at])
+
+        conn.execute("""
+            INSERT INTO worker_runs (
+                worker_id, job_id, run_id, status, started_at, ended_at
+            ) VALUES (?, ?, ?, 'completed', ?, ?)
+            ON CONFLICT(worker_id) DO NOTHING
+        """, [f"wr-backfill-{run_id}", job_id, run_id, started_at, finished_at])
+        created += 1
+
+    conn.close()
+    print(f"Backfill complete: created {created} job(s).")
+    return created
+
+
 def migrate():
     conn = get_connection()
     init_schema(conn)
@@ -439,12 +488,28 @@ def migrate():
 
 
 if __name__ == "__main__":
-    result = migrate()
-    print(
-        "Migration complete: "
-        f"runs={result['runs']} "
-        f"scenario_results={result['scenario_results']} "
-        f"bug_mappings={result['bug_mapping_rows']} "
-        f"imported={result['imported']} "
-        f"skipped={result['skipped']}"
+    parser = argparse.ArgumentParser(description="Migrate JSON manifests to DuckDB")
+    parser.add_argument(
+        "--backfill-jobs",
+        action="store_true",
+        help="Backfill job/worker_run records for existing runs without them",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be created without modifying data (use with --backfill-jobs)",
+    )
+    args = parser.parse_args()
+
+    if args.backfill_jobs:
+        backfill_jobs(dry_run=args.dry_run)
+    else:
+        result = migrate()
+        print(
+            "Migration complete: "
+            f"runs={result['runs']} "
+            f"scenario_results={result['scenario_results']} "
+            f"bug_mappings={result['bug_mapping_rows']} "
+            f"imported={result['imported']} "
+            f"skipped={result['skipped']}"
+        )

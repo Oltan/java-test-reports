@@ -1,3 +1,4 @@
+import re
 from unittest.mock import Mock, patch
 
 import pytest
@@ -5,16 +6,16 @@ import pytest
 from jira_client import JiraClient
 
 
-def test_dry_run_returns_static_results(monkeypatch):
-    monkeypatch.setenv("JIRA_DRY_RUN", "true")
+def test_dry_run_returns_deterministic_results(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
 
     client = JiraClient()
 
     assert client.is_configured()
-    assert client.create_issue("summary", "h2. wiki") == {
-        "key": "DRY-RUN-001",
-        "status": "Dry Run",
-    }
+    result = client.create_issue("summary", "h2. wiki")
+    assert re.fullmatch(r"DRY-[0-9a-f]{8}", result["key"])
+    assert result["status"] == "Dry Run"
+    assert result["url"].endswith(f"/browse/{result['key']}")
     assert client.search_by_doors_number("DR-1") == []
     assert client.get_issue_status("DRY-RUN-001") == "Open"
     assert client.add_comment("DRY-RUN-001", "comment") is True

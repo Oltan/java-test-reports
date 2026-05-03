@@ -5,6 +5,15 @@ from email.mime.multipart import MIMEMultipart
 
 from jinja2 import Environment, FileSystemLoader
 
+DRY_RUN_ENV = "DRY_RUN"
+DRY_RUN_TRUE_VALUES = {"1", "true", "yes", "on"}
+EMAIL_DRY_RUN_RESULT_ENV = "EMAIL_DRY_RUN_RESULT"
+DRY_RUN_OUTBOX: list[dict] = []
+
+
+def is_dry_run_enabled() -> bool:
+    return os.getenv(DRY_RUN_ENV, "false").lower() in DRY_RUN_TRUE_VALUES
+
 
 def send_email(to: str, subject: str, template_name: str, context: dict):
     """
@@ -31,6 +40,20 @@ def send_email(to: str, subject: str, template_name: str, context: dict):
     msg["From"] = os.getenv("SMTP_USER", "noreply@example.com")
     msg["To"] = to
     msg.attach(MIMEText(html, "html"))
+
+    if is_dry_run_enabled():
+        if os.getenv(EMAIL_DRY_RUN_RESULT_ENV, "success").lower() == "failure":
+            raise RuntimeError("Email dry-run failure requested")
+        DRY_RUN_OUTBOX.append(
+            {
+                "to": to,
+                "subject": subject,
+                "template": template_name,
+                "context": dict(context),
+                "body": html,
+            }
+        )
+        return True
 
     smtp_host = os.getenv("SMTP_HOST", "localhost")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))

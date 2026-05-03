@@ -1,9 +1,24 @@
 from unittest.mock import AsyncMock, patch
 
+import os
+os.environ.setdefault("JWT_SECRET", "test-secret")
+os.environ.setdefault("ADMIN_USERNAME", "admin")
+os.environ.setdefault("ADMIN_PASSWORD", "admin123")
 
-def test_pipeline_run_endpoint(client):
+from server import app, create_token
+from fastapi.testclient import TestClient
+
+client = TestClient(app)
+
+
+def _auth_headers():
+    token = create_token("admin")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_pipeline_run_endpoint():
     with patch("server.execute_pipeline") as execute_pipeline:
-        resp = client.post("/api/pipeline/run?run_id=test-001")
+        resp = client.post("/api/pipeline/run?run_id=test-001", headers=_auth_headers())
 
     assert resp.status_code == 200
     data = resp.json()
@@ -13,8 +28,8 @@ def test_pipeline_run_endpoint(client):
     execute_pipeline.assert_called_once_with("test-001")
 
 
-def test_pipeline_status_endpoint(client):
-    resp = client.get("/api/pipeline/status/test-001")
+def test_pipeline_status_endpoint():
+    resp = client.get("/api/pipeline/status/test-001", headers=_auth_headers())
 
     assert resp.status_code == 200
     data = resp.json()
@@ -22,12 +37,13 @@ def test_pipeline_status_endpoint(client):
     assert "stages" in data
 
 
-def test_tfs_trigger_endpoint_uses_mock_client(client):
+def test_tfs_trigger_endpoint_uses_mock_client():
     with patch("tfs_client.tfs.trigger_pipeline", new_callable=AsyncMock) as trigger_pipeline:
         trigger_pipeline.return_value = {"id": 67890}
         resp = client.post(
             "/api/tfs/trigger",
             json={"pipeline_id": 7, "variables": {"CUCUMBER_TAGS": "@smoke"}},
+            headers=_auth_headers(),
         )
 
     assert resp.status_code == 200

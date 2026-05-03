@@ -7,6 +7,140 @@
   <meta name="jira-base-url" content="{{ jira_base_url }}">
   <title>Triage — {{ run_id }}</title>
   <link rel="stylesheet" href="/static/dashboard.css">
+  <style>
+    .triage-auth-wrap {
+      display: flex; justify-content: center; align-items: center;
+      min-height: calc(100vh - 56px); padding: var(--sp-6);
+      background: radial-gradient(ellipse at 50% 0%, var(--heat-accent-muted) 0%, transparent 60%);
+    }
+    .triage-auth-card {
+      background: var(--surface); border-radius: var(--radius-lg); padding: var(--sp-10) var(--sp-8);
+      box-shadow: var(--shadow-lg); width: 100%; max-width: 400px;
+      border: 1px solid var(--border);
+    }
+    .triage-auth-card h2 { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: var(--sp-6); letter-spacing: -.02em; }
+    .triage-auth-icon { text-align: center; margin-bottom: var(--sp-4); color: var(--accent); }
+    .triage-auth-error { color: var(--danger); font-size: 13px; min-height: 20px; margin-bottom: var(--sp-2); text-align: center; }
+
+    .triage-loading {
+      text-align: center; padding: var(--sp-16) var(--sp-6); color: var(--text-muted);
+    }
+    .triage-loading h2 { font-size: 20px; color: var(--text); margin-bottom: var(--sp-2); }
+
+    .fcard[data-decision="accepted_pass"] { border-left: 4px solid var(--success); }
+    .fcard[data-decision="accepted_skip"] { border-left: 4px solid var(--skip); }
+    .fcard[data-decision="jira_created"],
+    .fcard[data-decision="jira_linked"] { border-left: 4px solid var(--warning); }
+
+    .fcard-meta-row {
+      display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3);
+      align-items: center;
+    }
+    .fcard-meta-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      letter-spacing: .3px;
+    }
+    .fcard-meta-tag--doors {
+      background: rgba(139,92,246,.12); color: #a78bfa;
+    }
+    .fcard-meta-tag--flaky {
+      background: var(--warning-bg); color: var(--warning);
+      animation: pulse-flaky 2s ease-in-out infinite;
+    }
+    .fcard-meta-tag--retry {
+      background: var(--skip-bg); color: var(--text-secondary);
+    }
+    @keyframes pulse-flaky {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .7; }
+    }
+
+    .triage-actions {
+      display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-start;
+      margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border);
+    }
+    .triage-actions-group {
+      display: flex; gap: var(--sp-2); align-items: center;
+    }
+    .triage-actions-divider {
+      width: 1px; height: 28px; background: var(--border); margin: 0 var(--sp-1);
+    }
+
+    .override-section {
+      margin-top: var(--sp-3); padding: var(--sp-4);
+      background: var(--bg); border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .override-section[hidden] { display: none; }
+    .override-label {
+      font-size: 12px; font-weight: 700; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: var(--sp-2);
+      display: block;
+    }
+    .override-reason {
+      width: 100%; min-height: 60px; background: var(--surface);
+      border: 1px solid var(--border); color: var(--text);
+      padding: var(--sp-3); border-radius: var(--radius-sm);
+      font-family: var(--font-body); font-size: 14px; resize: vertical;
+      outline: none; transition: border-color var(--duration), box-shadow var(--duration);
+    }
+    .override-reason:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-muted); }
+    .override-reason::placeholder { color: var(--text-muted); opacity: .5; }
+    .override-reason--error { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-bg); }
+    .override-error {
+      color: var(--danger); font-size: 12px; margin-top: var(--sp-1);
+      min-height: 18px;
+    }
+    .override-actions {
+      display: flex; gap: var(--sp-2); margin-top: var(--sp-3);
+    }
+
+    .link-jira-section {
+      margin-top: var(--sp-3); padding: var(--sp-4);
+      background: var(--bg); border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .link-jira-section[hidden] { display: none; }
+    .link-jira-row {
+      display: flex; gap: var(--sp-2); align-items: center;
+    }
+    .link-jira-input {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: var(--sp-2) var(--sp-3);
+      border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 14px;
+      outline: none; transition: border-color var(--duration), box-shadow var(--duration);
+    }
+    .link-jira-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-muted); }
+    .link-jira-input::placeholder { color: var(--text-muted); opacity: .5; }
+
+    .decision-badge {
+      display: inline-flex; align-items: center; gap: var(--sp-2);
+      padding: var(--sp-2) var(--sp-4); border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600;
+    }
+    .decision-badge--pass { background: var(--success-bg); color: var(--success); }
+    .decision-badge--skip { background: var(--skip-bg); color: var(--skip); }
+    .decision-badge--jira { background: var(--warning-bg); color: var(--warning); }
+
+    .decision-info {
+      margin-top: var(--sp-2); font-size: 12px; color: var(--text-muted);
+    }
+    .decision-info strong { color: var(--text-secondary); }
+
+    .filter-search-wrap {
+      display: flex; align-items: center; gap: var(--sp-2); background: var(--bg);
+      border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3);
+      transition: border-color var(--duration);
+    }
+    .filter-search-wrap:focus-within { border-color: var(--accent); }
+    .filter-search-wrap svg { color: var(--text-muted); flex-shrink: 0; }
+    .filter-search {
+      background: none; border: none; color: var(--text); font-size: 14px;
+      font-family: var(--font-body); outline: none; width: 220px;
+    }
+    .filter-search::placeholder { color: var(--text-muted); opacity: .6; }
+  </style>
 </head>
 <body>
 
@@ -24,154 +158,62 @@
   </div>
 </nav>
 
+<!-- ── Auth Gate ── -->
+<div id="triage-auth" class="triage-auth-wrap">
+  <div class="triage-auth-card">
+    <div class="triage-auth-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h2>Triage Erişimi</h2>
+    <form id="triage-login-form">
+      <div class="field">
+        <label for="triage-username">Kullanıcı Adı</label>
+        <input id="triage-username" name="username" type="text" placeholder="admin" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="triage-password">Şifre</label>
+        <input id="triage-password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <div class="triage-auth-error" id="triage-auth-error"></div>
+      <button class="btn btn-primary btn-block" type="submit">Giriş Yap</button>
+    </form>
+  </div>
+</div>
+
 <!-- ── Header ── -->
-<header class="triage-header">
+<header class="triage-header" id="triage-header" style="display:none">
   <div class="triage-header-inner">
     <div>
       <h1 class="triage-title">Failure Analysis</h1>
-      <p class="triage-sub">{{ manifest.totalScenarios }} senaryo &middot; {{ manifest.timestamp }}</p>
+      <p class="triage-sub" id="triage-sub"></p>
     </div>
-    <div class="triage-stats">
-      <div class="tstat tstat--pass">
-        <span class="tstat-num">{{ manifest.passed }}</span>
-        <span class="tstat-label">Passed</span>
-      </div>
-      <div class="tstat tstat--fail">
-        <span class="tstat-num">{{ manifest.failed }}</span>
-        <span class="tstat-label">Failed</span>
-      </div>
-      <div class="tstat tstat--skip">
-        <span class="tstat-num">{{ manifest.skipped }}</span>
-        <span class="tstat-label">Skipped</span>
-      </div>
-    </div>
+    <div class="triage-stats" id="triage-stats"></div>
   </div>
 </header>
 
 <!-- ── Filter bar ── -->
-<div class="filter-bar">
+<div class="filter-bar" id="triage-filter" style="display:none">
   <div class="filter-inner">
     <div class="filter-search-wrap">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input id="filter-input" class="filter-search" type="text" placeholder="Senaryo ara…">
     </div>
     <span class="filter-count">
-      <span id="visible-count">{{ failures|length }}</span> failure{% if failures|length != 1 %}s{% endif %}
+      <span id="visible-count">0</span> failure(s)
     </span>
   </div>
 </div>
 
+<!-- ── Loading ── -->
+<div id="triage-loading" class="triage-loading" style="display:none">
+  <h2>Yükleniyor…</h2>
+  <p>Triaj verileri alınıyor</p>
+</div>
+
 <!-- ── Failure cards ── -->
-<main class="triage-main">
+<main class="triage-main" id="triage-main" style="display:none"></main>
 
-  {% if failures %}
-    {% for scenario in failures %}
-    <div class="fcard" data-testid="failure-card"
-         data-scenario-id="{{ scenario.id }}"
-         {% if scenario.doorsAbsNumber %}data-doors-number="{{ scenario.doorsAbsNumber }}"{% endif %}>
-
-      <!-- Card header -->
-      <div class="fcard-header">
-        <div class="fcard-title-group">
-          <div class="fcard-title card-title" data-testid="scenario-name">{{ scenario.name }}</div>
-          <div class="fcard-id">{{ scenario.id }} &middot; {{ scenario.duration }}</div>
-        </div>
-        <span class="badge badge-fail" data-testid="failure-badge">FAILED</span>
-      </div>
-
-      <!-- Bug status (dynamic) -->
-      <div data-bug-status class="bug-status-row" data-testid="bug-status">
-        <span class="bug-pill bug-pill--loading">⏳ Yükleniyor…</span>
-      </div>
-
-      <!-- Steps -->
-      {% if scenario.steps %}
-      <ol class="steps-list">
-        {% for step in scenario.steps %}
-        <li class="step {% if step.status == 'failed' %}step--fail{% else %}step--pass{% endif %}">
-          <span class="step-icon">{% if step.status == 'failed' %}✗{% else %}✓{% endif %}</span>
-          <span class="step-name">{{ step.name }}</span>
-        </li>
-        {% endfor %}
-      </ol>
-      {% endif %}
-
-      <!-- Error messages -->
-      {% for step in scenario.steps %}
-        {% if step.errorMessage %}
-        <div class="error-box">
-          <div class="error-box-header">
-            <span class="error-box-label">Error</span>
-            <button class="btn-copy" data-copy-error="{{ step.errorMessage | e }}" data-testid="copy-error">Kopyala</button>
-          </div>
-          <pre class="error-text">{{ step.errorMessage }}</pre>
-        </div>
-        {% endif %}
-      {% endfor %}
-
-      <!-- Attachments -->
-      {% if scenario.attachments %}
-      <div class="attachments">
-        {% for att in scenario.attachments %}
-          {% if att.type == 'image/png' %}
-          <div class="attachment-media">
-            <div class="attachment-label">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              {{ att.name }}
-            </div>
-            <a href="/reports/{{ att.path }}" target="_blank" rel="noopener">
-              <img src="/reports/{{ att.path }}"
-                   alt="{{ att.name }}"
-                   class="attachment-img"
-                   loading="lazy"
-                   onerror="this.parentElement.parentElement.classList.add('attachment-missing')">
-            </a>
-          </div>
-          {% elif att.type == 'video/mp4' %}
-          <div class="attachment-media">
-            <div class="attachment-label">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-              {{ att.name }}
-            </div>
-            <video src="/reports/{{ att.path }}"
-                   class="attachment-video"
-                   controls
-                   preload="metadata">
-              Tarayıcınız video oynatmayı desteklemiyor.
-            </video>
-          </div>
-          {% else %}
-          <div class="attachment-item">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <a href="/reports/{{ att.path }}" target="_blank" rel="noopener">{{ att.name }}</a>
-          </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      <!-- Actions -->
-      <div class="fcard-actions" data-testid="card-actions">
-        <button class="btn btn-primary" data-create-jira data-testid="create-jira-button">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          Create Jira Bug
-        </button>
-        <span class="jira-key-display" data-jira-key data-testid="jira-key-display" style="display:none"></span>
-      </div>
-
-    </div>
-    {% endfor %}
-
-  {% else %}
-    <div class="empty-state">
-      <div class="empty-icon">🎉</div>
-      <h2>Tüm senaryolar geçti</h2>
-      <p>Bu çalıştırmada hiçbir başarısızlık yok.</p>
-    </div>
-  {% endif %}
-</main>
-
-<footer class="footer">
+<footer class="footer" id="triage-footer" style="display:none">
   Test Raporlama Sistemi v2.0 · <a href="/">Dashboard'a Dön</a>
 </footer>
 

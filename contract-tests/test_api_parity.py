@@ -4,7 +4,6 @@ import json
 
 SERVERS = [
     ("FastAPI", "http://localhost:8000"),
-    ("Javalin", "http://localhost:8080"),
 ]
 
 

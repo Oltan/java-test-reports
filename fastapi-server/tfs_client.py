@@ -4,8 +4,10 @@ from typing import Any, NoReturn, Optional
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel
+import jwt
 
 
 class TFSClient:
@@ -58,6 +60,18 @@ class TriggerRequest(BaseModel):
 router = APIRouter(prefix="/api/tfs")
 tfs = TFSClient()
 
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+JWT_ALGORITHM = "HS256"
+security = HTTPBearer()
+
+
+def verify_token(credentials: HTTPBearer = Depends(security)) -> dict:
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
 
 def _raise_tfs_error(exc: httpx.HTTPStatusError) -> NoReturn:
     raise HTTPException(
@@ -66,7 +80,7 @@ def _raise_tfs_error(exc: httpx.HTTPStatusError) -> NoReturn:
     )
 
 
-@router.post("/trigger")
+@router.post("/trigger", dependencies=[Depends(verify_token)])
 async def trigger(request: TriggerRequest):
     try:
         result = await tfs.trigger_pipeline(request.pipeline_id, request.variables)
@@ -80,12 +94,12 @@ async def trigger(request: TriggerRequest):
     return {"run_id": result.get("id"), "status": "queued"}
 
 
-@router.post("/webhook")
+@router.post("/webhook", dependencies=[Depends(verify_token)])
 async def webhook(payload: dict[str, Any]):
     return {"received": True}
 
 
-@router.get("/status/{pipeline_id}/{run_id}")
+@router.get("/status/{pipeline_id}/{run_id}", dependencies=[Depends(verify_token)])
 async def get_status(pipeline_id: int, run_id: int):
     try:
         return await tfs.get_run_status(pipeline_id, run_id)

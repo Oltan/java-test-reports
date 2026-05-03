@@ -44,12 +44,28 @@ async function handleLogin(e) {
 
 function handleLogout() {
   clearToken();
+  hideNavLinks();
   location.reload();
+}
+
+function showNavLinks() {
+  const navLinks = $("nav-links");
+  const logoutBtn = $("logout-btn");
+  if (navLinks) navLinks.style.display = "";
+  if (logoutBtn) logoutBtn.style.display = "";
+}
+
+function hideNavLinks() {
+  const navLinks = $("nav-links");
+  const logoutBtn = $("logout-btn");
+  if (navLinks) navLinks.style.display = "none";
+  if (logoutBtn) logoutBtn.style.display = "none";
 }
 
 function showDashboard() {
   $("login-section").style.display = "none";
   $("dashboard-content").style.display = "block";
+  showNavLinks();
   loadDashboard();
 }
 
@@ -155,6 +171,22 @@ function renderMetrics(metrics) {
   animateValue($("metric-flaky"), metrics.flaky_count);
 }
 
+function updateHeatMap(metrics) {
+  const passRate = metrics.total_runs > 0 ? metrics.success_rate : 100;
+  const warmth = 100 - passRate;
+  const hue = 160 - (warmth * 1.6);
+  const root = document.documentElement;
+  root.style.setProperty('--warmth', warmth);
+  root.style.setProperty('--heat-hue', hue);
+  root.style.setProperty('--heat-glow', `0 0 40px hsla(${hue}, 80%, 50%, ${0.15 + warmth * 0.003})`);
+  root.style.setProperty('--heat-accent', `hsl(${hue}, 70%, 50%)`);
+  root.style.setProperty('--heat-accent-muted', `hsla(${hue}, 70%, 50%, 0.12)`);
+  root.style.setProperty('--accent', `hsl(${hue}, 70%, 50%)`);
+  root.style.setProperty('--accent-hover', `hsl(${hue}, 80%, 60%)`);
+  root.style.setProperty('--accent-muted', `hsla(${hue}, 70%, 50%, 0.12)`);
+  root.style.setProperty('--accent-glow', `hsla(${hue}, 70%, 50%, 0.25)`);
+}
+
 function renderTable(runs) {
   const tbody = $("run-tbody");
   if (!runs || runs.length === 0) {
@@ -168,8 +200,15 @@ function renderTable(runs) {
     const hasRetries = run.scenarios?.some(s => s.attempts?.length > 1);
     const hasDeps = run.scenarios?.some(s => s.dependencies?.length > 0);
     const isPass = run.failed === 0;
+    const allTags = [...new Set((run.scenarios || []).flatMap(s => s.tags || []))];
+    const tagBadges = allTags.slice(0, 4).map(t => `<span class="run-tag">${t}</span>`).join("");
+    const moreTag = allTags.length > 4 ? `<span class="run-tag run-tag-more">+${allTags.length - 4}</span>` : "";
+    const verBadge = run.version ? `<span class="run-ver">${run.version}</span>` : "";
     return `<tr>
-      <td><a class="run-link" href="/reports/${run.runId}">${run.runId.slice(0, 22)}</a></td>
+      <td>
+        <a class="run-link" href="/reports/${run.runId}">${run.runId.slice(0, 22)}</a>
+        <div class="run-meta">${verBadge}${tagBadges}${moreTag}</div>
+      </td>
       <td class="td-muted">${date}</td>
       <td><span class="badge badge-pass">${run.passed}</span></td>
       <td><span class="badge badge-fail">${run.failed}</span></td>
@@ -204,6 +243,7 @@ async function loadDashboard() {
 
     destroyCharts();
     renderMetrics(metrics);
+    updateHeatMap(metrics);
 
     if (metrics.version_breakdown?.length > 0) {
       renderBarChart(metrics.version_breakdown);
@@ -262,6 +302,7 @@ async function handleGenerate() {
     ]);
     destroyCharts();
     renderMetrics(metrics);
+    updateHeatMap(metrics);
     if (metrics.version_breakdown?.length > 0) {
       renderBarChart(metrics.version_breakdown);
     }
@@ -332,17 +373,26 @@ function initTableSearch() {
   });
 }
 
-(function init() {
+(async function init() {
   $("login-form")?.addEventListener("submit", handleLogin);
   $("logout-btn")?.addEventListener("click", handleLogout);
   $("generate-btn")?.addEventListener("click", handleGenerate);
   initThemeToggle();
   initTableSearch();
 
-  if (getToken()) {
-    showDashboard();
-    loadVersions();
-    initDatePicker();
-    initWebSocket();
+  const token = getToken();
+  if (token) {
+    try {
+      await apiFetch("/api/v1/runs", { method: "GET" });
+      showDashboard();
+      loadVersions();
+      initDatePicker();
+      initWebSocket();
+    } catch (err) {
+      clearToken();
+      hideNavLinks();
+    }
+  } else {
+    hideNavLinks();
   }
 })();

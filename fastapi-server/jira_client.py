@@ -1,4 +1,5 @@
 import os
+import hashlib
 import time
 from typing import Any, Callable, Optional, TypeVar
 
@@ -6,6 +7,14 @@ from atlassian import Jira  # type: ignore[reportMissingImports]
 
 
 T = TypeVar("T")
+
+DRY_RUN_ENV = "DRY_RUN"
+DRY_RUN_TRUE_VALUES = {"1", "true", "yes", "on"}
+DRY_RUN_JIRA_RESULT_ENV = "JIRA_DRY_RUN_RESULT"
+
+
+def is_dry_run_enabled() -> bool:
+    return os.getenv(DRY_RUN_ENV, "false").lower() in DRY_RUN_TRUE_VALUES
 
 
 class JiraClient:
@@ -23,18 +32,21 @@ class JiraClient:
         self.project_key = project or os.getenv("JIRA_PROJECT_KEY") or os.getenv("JIRA_PROJECT", "")
         self.issue_type = issue_type or os.getenv("JIRA_ISSUE_TYPE", "Bug")
         self.dry_run = (
-            os.getenv("JIRA_DRY_RUN", "false").lower() == "true"
+            is_dry_run_enabled() or os.getenv("JIRA_DRY_RUN", "false").lower() in DRY_RUN_TRUE_VALUES
             if dry_run is None
             else dry_run
         )
         self.retry_count = retry_count if retry_count is not None else int(os.getenv("JIRA_RETRY_COUNT", "3"))
         self.jira = Jira(url=self.url, token=self.pat) if not self.dry_run and self.url and self.pat else None
+        self._dry_run_issues: dict[str, dict[str, str]] = {}
 
     def is_configured(self) -> bool:
         return self.dry_run or bool(self.url and self.pat and self.project_key)
 
     def issue_url(self, key: str | dict[str, Any]) -> str:
         issue_key = key.get("key", "") if isinstance(key, dict) else key
+        if self.dry_run:
+            return f"https://dry-run.local/browse/{issue_key}"
         return f"{self.url}/browse/{issue_key}"
 
     def create_issue(
@@ -45,7 +57,11 @@ class JiraClient:
     ) -> dict[str, str]:
         """Create Jira bug with wiki-renderer description."""
         if self.dry_run:
-            return {"key": "DRY-RUN-001", "status": "Dry Run"}
+            if os.getenv(DRY_RUN_JIRA_RESULT_ENV, "success").lower() == "failure":
+                raise RuntimeError("Jira dry-run failure requested")
+            issue = self._dry_run_issue(summary, description, doors_number)
+            self._dry_run_issues[issue["key"]] = issue
+            return issue
         self._require_configuration()
 
         fields: dict[str, Any] = {
@@ -67,7 +83,13 @@ class JiraClient:
     def search_by_doors_number(self, doors_number: str) -> list[dict[str, str]]:
         """Find existing Jira issues by DOORS number (custom field)."""
         if self.dry_run:
-            return []
+            if os.getenv(DRY_RUN_JIRA_RESULT_ENV, "success").lower() == "failure":
+                raise RuntimeError("Jira dry-run failure requested")
+            return [
+                {"key": issue["key"], "status": issue["status"]}
+                for issue in self._dry_run_issues.values()
+                if issue.get("doors_number") == doors_number
+            ]
         self._require_configuration()
 
         jql = f'project = {self.project_key} AND "DOORS Number" ~ "{doors_number}"'
@@ -89,6 +111,8 @@ class JiraClient:
 
     def add_comment(self, issue_key: str, comment: str) -> bool:
         if self.dry_run:
+            if os.getenv(DRY_RUN_JIRA_RESULT_ENV, "success").lower() == "failure":
+                raise RuntimeError("Jira dry-run failure requested")
             return True
         self._require_configuration()
 
@@ -98,6 +122,8 @@ class JiraClient:
 
     def attach_screenshot(self, issue_key: str, filepath: str) -> bool:
         if self.dry_run:
+            if os.getenv(DRY_RUN_JIRA_RESULT_ENV, "success").lower() == "failure":
+                raise RuntimeError("Jira dry-run failure requested")
             return True
         self._require_configuration()
 
@@ -127,3 +153,19 @@ class JiraClient:
                     break
                 time.sleep(0.5 * (2**attempt))
         raise last_error  # type: ignore[misc]
+
+    def _dry_run_issue(
+        self,
+        summary: str,
+        description: str,
+        doors_number: Optional[str],
+    ) -> dict[str, str]:
+        source = "\n".join([summary, description, doors_number or ""])
+        scenario_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
+        key = f"DRY-{scenario_hash[:8]}"
+        return {
+            "key": key,
+            "status": "Dry Run",
+            "url": self.issue_url(key),
+            "doors_number": doors_number or "",
+        }

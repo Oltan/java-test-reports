@@ -1,95 +1,40 @@
 {
-  "active_plan": "/home/ol_ta/projects/java_reports/.sisyphus/plans/reporting-system-v2.md",
-  "started_at": "2026-05-01T11:19:37.780Z",
+  "active_plan": "/home/ol_ta/projects/java_reports/.sisyphus/plans/secure-report-workflow.md",
+  "started_at": "2026-05-03T10:04:51.173Z",
   "session_ids": [
-    "ses_22011c631ffeSoaGyTNHkuyZdS",
-    "ses_21cba8bacffeFE0diRyuwRBflC",
-    "ses_21c971075ffeqqTmptK1yPClsT",
-    "ses_21c96ea8affee1vxVJZ4biCyOx",
-    "ses_21c96bd35ffea08zYtom3j14Iz",
-    "ses_21c969924ffeZv0ct3iip3jpV3"
+    "ses_2133b4d2dffeP3jWFGUHfvULCA"
   ],
   "session_origins": {
-    "ses_22011c631ffeSoaGyTNHkuyZdS": "direct",
-    "ses_21cba8bacffeFE0diRyuwRBflC": "appended",
-    "ses_21c971075ffeqqTmptK1yPClsT": "appended",
-    "ses_21c96ea8affee1vxVJZ4biCyOx": "appended",
-    "ses_21c96bd35ffea08zYtom3j14Iz": "appended",
-    "ses_21c969924ffeZv0ct3iip3jpV3": "appended"
+    "ses_2133b4d2dffeP3jWFGUHfvULCA": "direct"
   },
-  "plan_name": "reporting-system-v2",
+  "plan_name": "secure-report-workflow",
   "agent": "atlas",
   "task_sessions": {
-    "todo:1": {
-      "task_key": "todo:1",
-      "task_label": "1",
-      "task_title": "**Java Modüllerini Kaldır**",
-      "session_id": "ses_21cba430dffeKXiI0UKlpIfP7u",
-      "agent": "Sisyphus-Junior",
-      "updated_at": "2026-05-01T11:24:33.583Z"
-    },
-    "todo:4": {
-      "task_key": "todo:4",
-      "task_label": "4",
-      "task_title": "**DuckDB Schema + Migration Script**",
-      "session_id": "ses_21cb48ba0ffeFG6uR69dca7BCh",
-      "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-05-01T11:32:48.809Z"
-    },
-    "todo:6": {
-      "task_key": "todo:6",
-      "task_label": "6",
-      "task_title": "**FastAPI Pipeline Orchestrator**",
-      "session_id": "ses_21cadcdb5ffeAKfVJCSFxjcn7v",
-      "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-05-01T11:37:42.864Z"
-    },
-    "todo:8": {
-      "task_key": "todo:8",
-      "task_label": "8",
-      "task_title": "**Jira Python Client**",
-      "session_id": "ses_21ca8ea8affe3Q6isCZwvJpmnv",
-      "agent": "Sisyphus-Junior",
-      "category": "unspecified-high",
-      "updated_at": "2026-05-01T11:44:33.434Z"
-    },
-    "todo:10": {
-      "task_key": "todo:10",
-      "task_label": "10",
-      "task_title": "**WebSocket Canlı Test Takibi**",
-      "session_id": "ses_21ca464f6ffe1J4crmVfHfqMTo",
-      "agent": "Sisyphus-Junior",
-      "category": "visual-engineering",
-      "updated_at": "2026-05-01T11:46:16.185Z"
-    },
-    "todo:11": {
-      "task_key": "todo:11",
-      "task_label": "11",
-      "task_title": "**Chart.js Dashboard + Sürüm/Tarih Raporu**",
-      "session_id": "ses_21ca26c66ffecNCwlBKX9i7nvl",
-      "agent": "Sisyphus-Junior",
-      "category": "visual-engineering",
-      "updated_at": "2026-05-01T11:55:39.206Z"
-    },
-    "todo:14": {
-      "task_key": "todo:14",
-      "task_label": "14",
-      "task_title": "**TFS Pipeline YAML**",
-      "session_id": "ses_21c9a8e70ffeSSiNzLN9voMJdA",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-05-01T11:56:41.537Z"
-    },
     "final-wave:f1": {
       "task_key": "final-wave:f1",
       "task_label": "F1",
       "task_title": "**Plan Compliance Audit** — `oracle`",
-      "session_id": "ses_21c8d3296ffetJ13D6XovxABTo",
+      "session_id": "ses_2118050b7ffeeGzr8bUDTWzS5M",
       "agent": "Sisyphus-Junior",
       "category": "quick",
-      "updated_at": "2026-05-01T12:18:43.875Z"
+      "updated_at": "2026-05-03T15:56:41.497Z"
+    },
+    "final-wave:f3": {
+      "task_key": "final-wave:f3",
+      "task_label": "F3",
+      "task_title": "**Real Manual QA** — `unspecified-high` + `playwright`",
+      "session_id": "ses_211705fe9ffecbnlTseeWG5Mal",
+      "agent": "oracle",
+      "updated_at": "2026-05-03T16:05:50.615Z"
+    },
+    "final-wave:f4": {
+      "task_key": "final-wave:f4",
+      "task_label": "F4",
+      "task_title": "**Scope Fidelity Check** — `deep`",
+      "session_id": "ses_21163b9a2ffeSfG8q1AXMCAybA",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-03T16:41:52.991Z"
     }
   }
 }

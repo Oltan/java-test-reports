@@ -45,15 +45,33 @@ async function handleLogin(e) {
 
 function handleLogout() {
   clearToken();
+  hideNavLinks();
   location.reload();
+}
+
+function showNavLinks() {
+  const navLinks = $("nav-links");
+  const logoutBtn = $("logout-btn");
+  if (navLinks) navLinks.style.display = "";
+  if (logoutBtn) logoutBtn.style.display = "";
+}
+
+function hideNavLinks() {
+  const navLinks = $("nav-links");
+  const logoutBtn = $("logout-btn");
+  if (navLinks) navLinks.style.display = "none";
+  if (logoutBtn) logoutBtn.style.display = "none";
 }
 
 function showAdmin() {
   $("auth-gate").style.display = "none";
   $("admin-content").style.display = "block";
+  showNavLinks();
   loadRunningTests();
+  loadJobHistory();
   loadVersions();
   setInterval(loadRunningTests, 5000);
+  setInterval(loadJobHistory, 15000);
 }
 
 function connectTestRunWebSocket(runId) {
@@ -87,7 +105,10 @@ function connectTestRunWebSocket(runId) {
     } else if (raw.type === "complete" || d.type === "complete") {
       if ($("live-pct")) $("live-pct").textContent = "100% - Tamamlandı!";
       if (output && d.output) output.textContent = d.output.slice(-50).join("\n");
-      setTimeout(() => location.reload(), 2000);
+      setTimeout(() => {
+        loadRunningTests();
+        loadJobHistory();
+      }, 1500);
     }
   };
   ws.onerror = () => {
@@ -114,10 +135,13 @@ async function startTestRun() {
       method: "POST",
       body: JSON.stringify(body),
     });
-    msg.textContent = `${data.runs?.length || 0} test başlatıldı`;
+    const workerCount = data.workers?.length || data.runs?.length || 1;
+    const modeLabel = data.mode === "serialized_safe" ? "seri-güvenli" : data.mode || "paralel";
+    msg.textContent = `İş başlatıldı — ${data.job_id} · ${workerCount} worker · ${modeLabel}`;
     msg.className = "admin-status-msg admin-status--success";
-    connectTestRunWebSocket(data.runs?.[0]);
-    setTimeout(() => loadRunningTests(), 2000);
+    const firstRunId = data.workers?.[0]?.run_id || data.runs?.[0];
+    connectTestRunWebSocket(firstRunId);
+    setTimeout(() => { loadRunningTests(); loadJobHistory(); }, 2000);
   } catch (e) {
     msg.textContent = `Hata: ${e.message}`;
     msg.className = "admin-status-msg admin-status--error";
@@ -142,22 +166,121 @@ async function triggerPipeline() {
   }
 }
 
+function renderWorkerStatusBadge(status) {
+  const map = {
+    running: { label: "çalışıyor", cls: "worker-badge--running" },
+    completed: { label: "tamamlandı", cls: "worker-badge--completed" },
+    cancelled: { label: "iptal", cls: "worker-badge--cancelled" },
+    failed: { label: "başarısız", cls: "worker-badge--failed" },
+  };
+  const info = map[status] || { label: status, cls: "worker-badge--unknown" };
+  return `<span class="worker-badge ${info.cls}">${info.label}</span>`;
+}
+
+function renderJobCard(job, showCancel = false) {
+  const tags = job.tags || "";
+  const retry = job.retry_count ?? 0;
+  const parallel = job.parallel ?? 1;
+  const env = job.environment || "";
+  const version = job.version || "";
+  const status = job.status || "unknown";
+  const startedAt = job.started_at ? new Date(job.started_at).toLocaleString("tr-TR") : "";
+
+  const statusMap = {
+    running: { label: "Çalışıyor", cls: "job-status--running" },
+    completed: { label: "Tamamlandı", cls: "job-status--completed" },
+    cancelled: { label: "İptal Edildi", cls: "job-status--cancelled" },
+  };
+  const statusInfo = statusMap[status] || { label: status, cls: "job-status--unknown" };
+
+  let workersHtml = "";
+  if (job.workers && job.workers.length > 0) {
+    workersHtml = `<div class="job-workers">
+      ${job.workers.map(w => `
+        <div class="job-worker-row">
+          <span class="worker-shard">Shard ${w.shard}</span>
+          <span class="worker-run-id">${w.run_id}</span>
+          ${renderWorkerStatusBadge(w.status)}
+        </div>
+      `).join("")}
+    </div>`;
+  }
+
+  const cancelBtn = showCancel && status === "running"
+    ? `<button class="cancel-btn" onclick="window.cancelJob('${job.job_id}')">İptal</button>`
+    : "";
+
+  const flakyInfo = status === "completed" && job.flaky_count !== undefined
+    ? `<div class="job-summary-stats">
+        ${job.flaky_count > 0 ? `<span class="stat-flaky">⚡ Flaky: ${job.flaky_count}</span>` : ""}
+        ${job.retry_total > 0 ? `<span class="stat-retry">🔄 Retry: ${job.retry_total}</span>` : ""}
+        ${job.flaky_count === 0 && job.retry_total === 0 ? `<span class="stat-stable">✓ Stabil</span>` : ""}
+      </div>`
+    : "";
+
+  return `
+    <div class="job-card ${status === "running" ? "job-card--active" : ""}">
+      <div class="job-card-header">
+        <div class="job-card-meta">
+          <span class="job-id">${job.job_id}</span>
+          <span class="job-status-badge ${statusInfo.cls}">${statusInfo.label}</span>
+        </div>
+        ${cancelBtn}
+      </div>
+      <div class="job-card-details">
+        ${tags ? `<span class="job-tag">${tags}</span>` : ""}
+        ${retry > 0 ? `<span class="job-detail">🔄 Retry: ${retry}</span>` : ""}
+        <span class="job-detail">⚡ Paralel: ${parallel}</span>
+        ${env ? `<span class="job-detail">🌐 ${env}</span>` : ""}
+        ${version ? `<span class="job-detail">📦 ${version}</span>` : ""}
+        ${startedAt ? `<span class="job-detail job-detail--time">${startedAt}</span>` : ""}
+      </div>
+      ${workersHtml}
+      ${flakyInfo}
+    </div>
+  `;
+}
+
 async function loadRunningTests() {
-  const list = $("running-tests-list");
+  const container = $("running-tests-list");
   try {
     const data = await apiFetch("/api/tests/running");
-    if (!data.running || data.running.length === 0) {
-      list.innerHTML = '<li class="running-tests-empty">Aktif test yok</li>';
+    if (!data.jobs || data.jobs.length === 0) {
+      container.innerHTML = '<div class="running-tests-empty">Aktif test yok</div>';
       return;
     }
-    list.innerHTML = data.running.map(id => `
-      <li>
-        <span class="running-test-id">${id}</span>
-        <button class="cancel-btn" onclick="window.cancelTest('${id}')">İptal</button>
-      </li>
-    `).join("");
+    container.innerHTML = data.jobs.map(job => renderJobCard(job, true)).join("");
   } catch {
-    list.innerHTML = '<li class="running-tests-empty">Yüklenemedi</li>';
+    container.innerHTML = '<div class="running-tests-empty">Yüklenemedi</div>';
+  }
+}
+
+async function loadJobHistory() {
+  const container = $("job-history-list");
+  try {
+    const data = await apiFetch("/api/tests/jobs");
+    if (!data.jobs || data.jobs.length === 0) {
+      container.innerHTML = '<div class="running-tests-empty">Henüz iş yok</div>';
+      return;
+    }
+    const completedJobs = data.jobs.filter(j => j.status !== "running");
+    if (completedJobs.length === 0) {
+      container.innerHTML = '<div class="running-tests-empty">Tamamlanmış iş yok</div>';
+      return;
+    }
+    container.innerHTML = completedJobs.map(job => renderJobCard(job, false)).join("");
+  } catch {
+    container.innerHTML = '<div class="running-tests-empty">Yüklenemedi</div>';
+  }
+}
+
+async function cancelJob(jobId) {
+  try {
+    await apiFetch(`/api/tests/job/${jobId}/cancel`, { method: "POST" });
+    loadRunningTests();
+    loadJobHistory();
+  } catch (e) {
+    console.error("Cancel failed:", e);
   }
 }
 
@@ -165,6 +288,7 @@ async function cancelTest(runId) {
   try {
     await apiFetch(`/api/tests/${runId}/cancel`, { method: "POST" });
     loadRunningTests();
+    loadJobHistory();
   } catch (e) {
     console.error("Cancel failed:", e);
   }
@@ -202,15 +326,25 @@ function initThemeToggle() {
 }
 
 window.cancelTest = cancelTest;
+window.cancelJob = cancelJob;
 
-(function init() {
+(async function init() {
   $("login-form")?.addEventListener("submit", handleLogin);
   $("logout-btn")?.addEventListener("click", handleLogout);
   $("start-test-btn")?.addEventListener("click", startTestRun);
   $("pipeline-btn")?.addEventListener("click", triggerPipeline);
   initThemeToggle();
 
-  if (getToken()) {
-    showAdmin();
+  const token = getToken();
+  if (token) {
+    try {
+      await apiFetch("/api/v1/runs", { method: "GET" });
+      showAdmin();
+    } catch (err) {
+      clearToken();
+      hideNavLinks();
+    }
+  } else {
+    hideNavLinks();
   }
 })();

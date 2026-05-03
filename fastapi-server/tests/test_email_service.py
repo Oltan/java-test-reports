@@ -1,11 +1,26 @@
+import os
+os.environ.setdefault("JWT_SECRET", "test-secret")
+os.environ.setdefault("ADMIN_USERNAME", "admin")
+os.environ.setdefault("ADMIN_PASSWORD", "admin123")
+
 from unittest.mock import patch
+from fastapi.testclient import TestClient
+from server import app, create_token
+
+client = TestClient(app)
 
 
-def test_email_send_endpoint_uses_mock_service(client):
+def _auth_headers():
+    token = create_token("admin")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_email_send_endpoint_uses_mock_service():
     with patch("server.send_email", return_value=True) as send_email:
         resp = client.post(
             "/api/email/send",
             params={"to": "qa@example.com", "run_id": "run-001"},
+            headers=_auth_headers(),
         )
 
     assert resp.status_code == 200
@@ -18,11 +33,12 @@ def test_email_send_endpoint_uses_mock_service(client):
     assert context["dashboard_url"].endswith("/reports/run-001")
 
 
-def test_email_send_endpoint_reports_mock_failure(client):
+def test_email_send_endpoint_reports_mock_failure():
     with patch("server.send_email", side_effect=RuntimeError("SMTP offline")):
         resp = client.post(
             "/api/email/send",
             params={"to": "qa@example.com", "run_id": "run-002"},
+            headers=_auth_headers(),
         )
 
     assert resp.status_code == 200

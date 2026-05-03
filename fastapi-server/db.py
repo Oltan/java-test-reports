@@ -11,8 +11,33 @@ def get_connection(read_only=False):
     return conn
 
 
+class NonClosingConnectionWrapper:
+    """Wraps a DuckDB connection so close() is a no-op.
+
+    Server-side code calls conn.close() after each request.
+    When a test fixture supplies the connection, close() would
+    invalidate the fixture's connection object, causing subsequent
+    tests to fail with 'Connection already closed!'.
+    """
+
+    def __init__(self, conn):
+        object.__setattr__(self, "_conn", conn)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_conn"), name)
+
+    def close(self):
+        pass  # no-op to prevent server closing test fixture connection
+
+    def __enter__(self):
+        return object.__getattribute__(self, "_conn").__enter__()
+
+    def __exit__(self, *args):
+        pass  # no-op so fixture connection stays open
+
+
 def init_schema(conn):
-    """Create all 6 tables + indexes if they don't exist."""
+    """Create reporting and workflow tables + indexes if they don't exist."""
     conn.execute("""
     CREATE TABLE IF NOT EXISTS runs (
       id TEXT PRIMARY KEY,
@@ -108,6 +133,79 @@ def init_schema(conn):
     );
     """)
 
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS jobs (
+      job_id TEXT PRIMARY KEY,
+      requester TEXT,
+      tags TEXT,
+      retry_count INTEGER,
+      parallel INTEGER,
+      environment TEXT,
+      version TEXT,
+      status TEXT,
+      started_at TIMESTAMP,
+      ended_at TIMESTAMP
+    );
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS worker_runs (
+      worker_id TEXT PRIMARY KEY,
+      job_id TEXT REFERENCES jobs(job_id),
+      run_id TEXT REFERENCES runs(id),
+      shard INTEGER,
+      status TEXT,
+      output_dir TEXT,
+      started_at TIMESTAMP,
+      ended_at TIMESTAMP
+    );
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS triage_decisions (
+      scenario_uid TEXT PRIMARY KEY,
+      run_id TEXT REFERENCES runs(id),
+      decision TEXT CHECK (decision IN ('needs_jira', 'jira_linked', 'jira_created', 'accepted_pass', 'accepted_skip')),
+      actor TEXT,
+      reason TEXT,
+      timestamp TIMESTAMP
+    );
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS jira_mappings (
+      scenario_uid TEXT,
+      doors_id TEXT,
+      jira_key TEXT,
+      created_at TIMESTAMP,
+      UNIQUE(scenario_uid, jira_key)
+    );
+    """)
+
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS override_audit_id_seq START 1;")
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS override_audit (
+      id INTEGER PRIMARY KEY DEFAULT nextval('override_audit_id_seq'),
+      scenario_uid TEXT,
+      previous_status TEXT,
+      new_decision TEXT,
+      reason TEXT,
+      actor TEXT,
+      timestamp TIMESTAMP
+    );
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS public_snapshots (
+      share_id TEXT PRIMARY KEY,
+      job_id TEXT REFERENCES jobs(job_id),
+      created_by TEXT,
+      created_at TIMESTAMP,
+      snapshot_data TEXT,
+      status TEXT
+    );
+    """)
+
     conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_version ON runs(version);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_version_started_at ON runs(version, started_at);")
@@ -117,6 +215,18 @@ def init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_results_doors_number ON scenario_results(doors_number_at_run);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_results_scenario_run ON scenario_results(scenario_uid, run_id);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bug_mappings_jira_key ON bug_mappings(jira_key);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_started_at ON jobs(started_at);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_worker_runs_job_id ON worker_runs(job_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_worker_runs_run_id ON worker_runs(run_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_triage_decisions_run_id ON triage_decisions(run_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_triage_decisions_decision ON triage_decisions(decision);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jira_mappings_doors_id ON jira_mappings(doors_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jira_mappings_jira_key ON jira_mappings(jira_key);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_override_audit_scenario_uid ON override_audit(scenario_uid);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_override_audit_timestamp ON override_audit(timestamp);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_public_snapshots_job_id ON public_snapshots(job_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_public_snapshots_status ON public_snapshots(status);")
 
 
 def fetch_all_dicts(conn, query, params=None):

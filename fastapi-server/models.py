@@ -47,6 +47,49 @@ class RunManifest(BaseModel):
     scenarios: List[ScenarioResult]
 
 
+class PublicScenario(BaseModel):
+    name: str
+    status: str
+
+
+class PublicReportSnapshot(BaseModel):
+    run_summary: dict
+    scenario_list: List[PublicScenario]
+    generated_timestamp: str
+    total_passed: int
+    total_failed: int
+    total_skipped: int
+
+    @classmethod
+    def from_internal(cls, internal_report: dict) -> "PublicReportSnapshot":
+        from datetime import datetime
+        scenarios_internal = internal_report.get("scenarios", [])
+        scenario_list = [
+            {"name": s.get("name", ""), "status": s.get("status", "")}
+            for s in scenarios_internal
+        ]
+        ts_val = internal_report.get("generated_timestamp")
+        if isinstance(ts_val, datetime):
+            ts_str = ts_val.strftime("%Y-%m-%dT%H:%M:%SZ")
+        elif isinstance(ts_val, str):
+            ts_str = ts_val
+        else:
+            ts_str = ""
+        return cls(
+            run_summary={
+                "total_scenarios": internal_report.get("totalScenarios", 0),
+                "passed": internal_report.get("passed", 0),
+                "failed": internal_report.get("failed", 0),
+                "skipped": internal_report.get("skipped", 0),
+            },
+            scenario_list=[PublicScenario(**s) for s in scenario_list],
+            generated_timestamp=ts_str,
+            total_passed=internal_report.get("passed", 0),
+            total_failed=internal_report.get("failed", 0),
+            total_skipped=internal_report.get("skipped", 0),
+        )
+
+
 class TestRunOptions(BaseModel):
     tags: str = Field(
         default="@smoke",
