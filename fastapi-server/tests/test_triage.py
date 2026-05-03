@@ -15,7 +15,7 @@ from server import app, create_token
 TEST_MANIFESTS_DIR = Path(__file__).parent.parent / "manifests"
 server.MANIFESTS_DIR = TEST_MANIFESTS_DIR
 
-client = TestClient(app)
+client = TestClient(app, follow_redirects=False)
 
 RUN_ID = "test-001"
 FAILED_SCENARIO_ID = "sc-fail-001"
@@ -36,7 +36,7 @@ def test_triage_page_returns_html_with_auth():
 
 def test_triage_page_requires_auth():
     response = client.get(f"/reports/{RUN_ID}/triage")
-    assert response.status_code in (401, 403)
+    assert response.status_code in (302, 401, 403)
 
 
 def test_create_jira_bug_returns_jira_key():

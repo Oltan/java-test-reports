@@ -38,7 +38,7 @@ def _token() -> str:
 
 @pytest.fixture
 def test_client():
-    with TestClient(app) as c:
+    with TestClient(app, follow_redirects=False) as c:
         yield c
 
 
@@ -203,12 +203,13 @@ def test_anonymous_denied_workflow(test_client):
         method_fn = getattr(test_client, method.lower())
 
         resp = method_fn(route)
-        assert resp.status_code == 401, (
-            f"{method} {route} returned {resp.status_code} instead of 401"
+        # HTML pages redirect to login (302); API endpoints return 401
+        assert resp.status_code in (302, 401), (
+            f"{method} {route} returned {resp.status_code} instead of 401/302"
         )
 
         resp = method_fn(route, headers=_auth("invalid-token"))
-        assert resp.status_code == 401, (
+        assert resp.status_code in (302, 401), (
             f"{method} {route} with invalid token returned {resp.status_code}"
         )
 
@@ -461,8 +462,8 @@ def test_doors_email_auth(patched_client, in_mem_db):
 
 def test_legacy_route_denied(test_client):
     resp = test_client.get("/reports/run-2026-04-26-001")
-    assert resp.status_code == 401
+    assert resp.status_code in (302, 401)
 
     token = _token()
     resp = test_client.get("/reports/run-2026-04-26-001", headers=_auth(token))
-    assert resp.status_code != 401
+    assert resp.status_code not in (302, 401)

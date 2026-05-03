@@ -14,9 +14,9 @@ from uuid import uuid4
 import httpx
 import jwt
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
@@ -140,6 +140,29 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         )
+
+
+def verify_token_page(request: Request) -> TokenData:
+    """Auth dependency for HTML pages: checks cookie first, then Authorization header.
+    Redirects to login page on failure instead of returning 401 JSON."""
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_302_FOUND,
+            headers={"Location": "/"},
+        )
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        username: Optional[str] = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/"})
+        return TokenData(username=username)
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/"})
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -329,58 +352,58 @@ async def list_all_jobs():
             ORDER BY j.started_at DESC
             """
         ).fetchall()
-    if not rows:
-        return {"jobs": [], "count": 0}
-    jobs_map = {}
-    for row in rows:
-        job_id = row[0]
-        if job_id not in jobs_map:
-            jobs_map[job_id] = {
-                "job_id": job_id,
-                "tags": row[1],
-                "retry_count": row[2],
-                "parallel": row[3],
-                "environment": row[4],
-                "version": row[5],
-                "status": row[6],
-                "started_at": row[7].isoformat() if row[7] else None,
-                "ended_at": row[8].isoformat() if row[8] else None,
-                "workers": [],
-            }
-        jobs_map[job_id]["workers"].append({
-            "worker_id": row[9],
-            "run_id": row[10],
-            "shard": row[11],
-            "status": row[12],
-            "output_dir": row[13],
-        })
-    jobs = list(jobs_map.values())
-    for job in jobs:
-        run_ids = [w["run_id"] for w in job["workers"]]
-        flaky_count = 0
-        retry_total = 0
-        if run_ids:
-            placeholders = ",".join(["?"] * len(run_ids))
-            flaky_row = conn.execute(
-                f"SELECT COUNT(*) FROM scenario_results WHERE run_id IN ({placeholders}) AND retry_attempt > 1",
-                run_ids,
-            ).fetchone()
-            retry_total = flaky_row[0] if flaky_row else 0
-            flaky_row2 = conn.execute(
-                f"""
-                SELECT COUNT(DISTINCT sr.scenario_uid) FROM scenario_results sr
-                WHERE sr.run_id IN ({placeholders})
-                AND sr.scenario_uid IN (
-                    SELECT DISTINCT sr2.scenario_uid FROM scenario_results sr2
-                    WHERE sr2.run_id IN ({placeholders}) AND sr2.retry_attempt > 1 AND sr2.status IN ('PASSED',)
-                )
-                AND sr.status IN ('FAILED','BROKEN')
-                """,
-                run_ids + run_ids,
-            ).fetchone()
-            flaky_count = flaky_row2[0] if flaky_row2 else 0
-        job["flaky_count"] = flaky_count
-        job["retry_total"] = retry_total
+        if not rows:
+            return {"jobs": [], "count": 0}
+        jobs_map = {}
+        for row in rows:
+            job_id = row[0]
+            if job_id not in jobs_map:
+                jobs_map[job_id] = {
+                    "job_id": job_id,
+                    "tags": row[1],
+                    "retry_count": row[2],
+                    "parallel": row[3],
+                    "environment": row[4],
+                    "version": row[5],
+                    "status": row[6],
+                    "started_at": row[7].isoformat() if row[7] else None,
+                    "ended_at": row[8].isoformat() if row[8] else None,
+                    "workers": [],
+                }
+            jobs_map[job_id]["workers"].append({
+                "worker_id": row[9],
+                "run_id": row[10],
+                "shard": row[11],
+                "status": row[12],
+                "output_dir": row[13],
+            })
+        jobs = list(jobs_map.values())
+        for job in jobs:
+            run_ids = [w["run_id"] for w in job["workers"]]
+            flaky_count = 0
+            retry_total = 0
+            if run_ids:
+                placeholders = ",".join(["?"] * len(run_ids))
+                flaky_row = conn.execute(
+                    f"SELECT COUNT(*) FROM scenario_results WHERE run_id IN ({placeholders}) AND retry_attempt > 1",
+                    run_ids,
+                ).fetchone()
+                retry_total = flaky_row[0] if flaky_row else 0
+                flaky_row2 = conn.execute(
+                    f"""
+                    SELECT COUNT(DISTINCT sr.scenario_uid) FROM scenario_results sr
+                    WHERE sr.run_id IN ({placeholders})
+                    AND sr.scenario_uid IN (
+                        SELECT DISTINCT sr2.scenario_uid FROM scenario_results sr2
+                        WHERE sr2.run_id IN ({placeholders}) AND sr2.retry_attempt > 1 AND sr2.status IN ('PASSED',)
+                    )
+                    AND sr.status IN ('FAILED','BROKEN')
+                    """,
+                    run_ids + run_ids,
+                ).fetchone()
+                flaky_count = flaky_row2[0] if flaky_row2 else 0
+            job["flaky_count"] = flaky_count
+            job["retry_total"] = retry_total
     return {"jobs": jobs, "count": len(jobs)}
 
 
@@ -854,13 +877,20 @@ async def pipeline_status(run_id: str):
 
 
 @app.post("/api/v1/auth/login", response_model=LoginResponse)
-def login(req: LoginRequest):
+def login(req: LoginRequest, response: Response):
     if req.username != ADMIN_USERNAME or req.password != ADMIN_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
     token = create_token(req.username)
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=False,
+        max_age=JWT_EXPIRATION_HOURS * 3600,
+        samesite="lax",
+    )
     return LoginResponse(token=token)
 
 
@@ -957,12 +987,35 @@ async def reports_merge_data(run_ids: str = ""):
     ids = [r.strip() for r in run_ids.split(",") if r.strip()]
     manifests = load_manifests()
     selected = [m for m in manifests if m.runId in ids]
+
+    # Build a positional map {(run_id, index): scenario_uid} from the DB so the
+    # frontend can pass the right uid to /api/reports/generate-share.
+    uid_map: dict[tuple[str, int], str] = {}
+    try:
+        conn = get_connection(read_only=False)
+        init_schema(conn)
+        placeholders = ",".join(["?"] * len(ids))
+        uid_rows = conn.execute(
+            f"""
+            SELECT run_id, scenario_uid,
+                   ROW_NUMBER() OVER (PARTITION BY run_id ORDER BY rowid) - 1 AS pos
+            FROM scenario_results
+            WHERE run_id IN ({placeholders})
+            """,
+            ids,
+        ).fetchall()
+        conn.close()
+        uid_map = {(r[0], int(r[2])): r[1] for r in uid_rows}
+    except Exception:
+        pass
+
     all_scenarios = []
     for m in selected:
-        for s in m.scenarios:
+        for i, s in enumerate(m.scenarios):
             all_scenarios.append({
                 "runId": m.runId,
                 "id": s.id,
+                "scenario_uid": uid_map.get((m.runId, i)),
                 "name": s.name,
                 "status": s.status,
                 "duration": s.duration,
@@ -995,35 +1048,55 @@ async def generate_public_share(req: GenerateShareRequest):
     try:
         init_schema(conn)
 
-        blockers = []
-        for scenario_id in req.scenario_ids:
-            row = conn.execute("""
-                SELECT td.decision, sr.status
-                FROM triage_decisions td
-                JOIN scenario_results sr ON td.scenario_uid = sr.scenario_uid
-                WHERE td.scenario_uid = ?
-                LIMIT 1
-            """, [scenario_id]).fetchone()
+        # IDs arrive as "run_id:scenario_uid:status" (3-part), "run_id:scenario_uid" (2-part),
+        # or plain scenario_uid. Run IDs and scenario_uids never contain ":", so splitting
+        # into at most 3 parts on ":" is safe.
+        def _parse_id(raw: str):
+            parts = raw.split(":", 2)
+            if len(parts) == 3:
+                return parts[0], parts[1], parts[2]   # run_id, scenario_uid, manifest_status
+            if len(parts) == 2:
+                return parts[0], parts[1], None
+            return None, raw, None
 
-            if not row:
+        parsed = [_parse_id(sid) for sid in req.scenario_ids]
+        scenario_uids = [uid for _, uid, _ in parsed]
+
+        blockers = []
+        for run_id, scenario_uid, manifest_status in parsed:
+            # Trust the manifest status when it was encoded in the compound ID.
+            if manifest_status and manifest_status.upper() not in {"FAILED", "BROKEN"}:
+                continue  # passed / skipped — no triage needed
+
+            # No manifest status: query DB to determine status.
+            if run_id:
+                status_row = conn.execute(
+                    "SELECT status FROM scenario_results WHERE run_id = ? AND scenario_uid = ? LIMIT 1",
+                    [run_id, scenario_uid],
+                ).fetchone()
+            else:
                 status_row = conn.execute(
                     "SELECT status FROM scenario_results WHERE scenario_uid = ? LIMIT 1",
-                    [scenario_id]
+                    [scenario_uid],
                 ).fetchone()
-                if status_row and status_row[0] in {"FAILED", "BROKEN"}:
-                    blockers.append({
-                        "scenario_id": scenario_id,
-                        "reason": "No triage decision — must be linked to Jira or accepted via override",
-                    })
-                continue
 
-            decision, status = row[0], row[1]
-            if status in {"FAILED", "BROKEN"} and decision not in {
-                "jira_linked", "jira_created", "accepted_pass", "accepted_skip"
-            }:
+            if not status_row or status_row[0] not in {"FAILED", "BROKEN"}:
+                continue  # passed / skipped — no triage needed
+
+            # Failed instance: check for triage decision
+            triage_row = conn.execute(
+                "SELECT decision FROM triage_decisions WHERE scenario_uid = ? LIMIT 1",
+                [scenario_uid],
+            ).fetchone()
+            if not triage_row:
                 blockers.append({
-                    "scenario_id": scenario_id,
-                    "reason": f"Triage decision is '{decision}' — must be Jira-linked or overridden",
+                    "scenario_id": scenario_uid,
+                    "reason": "No triage decision — must be linked to Jira or accepted via override",
+                })
+            elif triage_row[0] not in {"jira_linked", "jira_created", "accepted_pass", "accepted_skip"}:
+                blockers.append({
+                    "scenario_id": scenario_uid,
+                    "reason": f"Triage decision is '{triage_row[0]}' — must be Jira-linked or overridden",
                 })
 
         if blockers:
@@ -1035,17 +1108,33 @@ async def generate_public_share(req: GenerateShareRequest):
                 },
             )
 
-        rows = conn.execute("""
-            SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
-                   sr.error_message, sd.current_name, sd.doors_number
-            FROM scenario_results sr
-            LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
-            WHERE sr.scenario_uid = ANY(?)
-        """, [req.scenario_ids]).fetchall()
+        # Build snapshot rows, scoped to run when possible.
+        scenario_rows = []
+        for run_id, scenario_uid, _ in parsed:
+            if run_id:
+                row = conn.execute("""
+                    SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
+                           sr.error_message, sd.current_name, sd.doors_number
+                    FROM scenario_results sr
+                    LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
+                    WHERE sr.run_id = ? AND sr.scenario_uid = ?
+                    LIMIT 1
+                """, [run_id, scenario_uid]).fetchone()
+            else:
+                row = conn.execute("""
+                    SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
+                           sr.error_message, sd.current_name, sd.doors_number
+                    FROM scenario_results sr
+                    LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
+                    WHERE sr.scenario_uid = ?
+                    LIMIT 1
+                """, [scenario_uid]).fetchone()
+            if row:
+                scenario_rows.append(row)
 
         scenarios_internal = []
         passed = failed = skipped = 0
-        for row in rows:
+        for row in scenario_rows:
             status = row[2] or "UNKNOWN"
             if status == "PASSED":
                 passed += 1
@@ -1061,7 +1150,7 @@ async def generate_public_share(req: GenerateShareRequest):
             })
 
         internal_report = {
-            "totalScenarios": len(rows),
+            "totalScenarios": len(scenario_rows),
             "passed": passed,
             "failed": failed,
             "skipped": skipped,
@@ -1378,14 +1467,14 @@ async def admin_page(request: Request):
     return HTMLResponse(content=template.render())
 
 
-@app.get("/reports/merge", response_class=HTMLResponse, dependencies=[Depends(verify_token)])
-async def report_merge_page(request: Request):
+@app.get("/reports/merge", response_class=HTMLResponse)
+async def report_merge_page(request: Request, _: TokenData = Depends(verify_token_page)):
     template = jinja_env.get_template("report-merge.html")
     return HTMLResponse(content=template.render())
 
 
-@app.get("/reports/{run_id}", response_class=HTMLResponse, dependencies=[Depends(verify_token)])
-def run_detail(run_id: str, request: Request):
+@app.get("/reports/{run_id}", response_class=HTMLResponse)
+def run_detail(run_id: str, request: Request, _: TokenData = Depends(verify_token_page)):
     # Check public visibility first (no auth required)
     conn = get_connection(read_only=False)
     try:
@@ -1433,8 +1522,8 @@ def run_detail(run_id: str, request: Request):
     return HTMLResponse(content=html)
 
 
-@app.get("/reports/{run_id}/scenario/{scenario_id}", dependencies=[Depends(verify_token)])
-def scenario_detail(run_id: str, scenario_id: str):
+@app.get("/reports/{run_id}/scenario/{scenario_id}")
+def scenario_detail(run_id: str, scenario_id: str, _: TokenData = Depends(verify_token_page)):
     manifest_path = MANIFESTS_DIR / f"{run_id}.json"
     if not manifest_path.exists():
         raise HTTPException(status_code=404, detail="Run not found")
@@ -1446,8 +1535,8 @@ def scenario_detail(run_id: str, scenario_id: str):
     return HTMLResponse(content=template.render(run_id=run_id, scenario=scenario, manifest=manifest))
 
 
-@app.get("/reports/{run_id}/triage", dependencies=[Depends(verify_token)])
-def triage_page(run_id: str, request: Request):
+@app.get("/reports/{run_id}/triage")
+def triage_page(run_id: str, request: Request, _: TokenData = Depends(verify_token_page)):
     manifests = load_manifests()
     manifest = None
     for m in manifests:
@@ -1471,8 +1560,8 @@ def triage_page(run_id: str, request: Request):
     return HTMLResponse(content=html)
 
 
-@app.get("/reports/{artifact_path:path}", dependencies=[Depends(verify_token)])
-def protected_report_artifact(artifact_path: str, _: TokenData = Depends(verify_token)):
+@app.get("/reports/{artifact_path:path}")
+def protected_report_artifact(artifact_path: str, _: TokenData = Depends(verify_token_page)):
     """Serve report attachments only to authenticated engineer sessions.
 
     Raw report artifacts can contain screenshots, videos, logs, and filesystem-derived

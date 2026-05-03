@@ -44,6 +44,7 @@ async function handleLogin(e) {
 
 function handleLogout() {
   clearToken();
+  document.cookie = "access_token=; Max-Age=0; path=/";
   hideNavLinks();
   location.reload();
 }
@@ -342,7 +343,9 @@ function initDatePicker() {
 
 function initWebSocket() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${location.host}/ws/test-status/live`);
+  const token = getToken();
+  if (!token) return;
+  const ws = new WebSocket(`${protocol}//${location.host}/ws/test-status/live?token=${encodeURIComponent(token)}`);
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);

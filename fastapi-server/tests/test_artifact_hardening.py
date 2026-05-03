@@ -29,9 +29,9 @@ def test_anonymous_raw_report_artifact_path_is_denied(tmp_path, monkeypatch):
     (artifacts / "screenshot.png").write_bytes(b"not-a-real-image")
     monkeypatch.setattr(server, "MANIFESTS_DIR", tmp_path)
 
-    response = TestClient(app).get("/reports/some-run-id/screenshot.png")
+    response = TestClient(app, follow_redirects=False).get("/reports/some-run-id/screenshot.png")
 
-    assert response.status_code in {401, 403, 404}
+    assert response.status_code in {302, 401, 403, 404}
 
 
 def test_public_report_template_has_no_raw_report_artifact_links():

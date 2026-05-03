@@ -49,6 +49,8 @@ let allJobs = [];
 let selectedJobIds = new Set();
 let allScenarios = [];
 let selectedScenarioUids = new Set();
+// Maps manifest id → scenario_uid (DB hash); used when calling generate-share
+let scenarioUidMap = new Map();
 let triageCache = {};
 let currentFilter = "all";
 let charts = [];
@@ -170,8 +172,12 @@ async function loadScenariosForJobs() {
     const data = await apiFetch(`/api/reports/merge-data?run_ids=${encodeURIComponent(ids)}`);
     allScenarios = data.scenarios || [];
     selectedScenarioUids.clear();
+    scenarioUidMap.clear();
 
     for (const s of allScenarios) {
+      // Encode as "runId:scenario_uid:status" so generate-share can check the exact instance
+      const compound = s.scenario_uid ? `${s.runId}:${s.scenario_uid}:${s.status}` : s.id;
+      scenarioUidMap.set(s.id, compound);
       if (s.status === "passed") {
         selectedScenarioUids.add(s.id);
       }
@@ -495,7 +501,7 @@ async function generateShare() {
   const shareResult = $("share-result");
   const shareUrl = $("share-url");
 
-  const selectedIds = Array.from(selectedScenarioUids);
+  const selectedIds = Array.from(selectedScenarioUids).map(id => scenarioUidMap.get(id) || id);
   if (selectedIds.length === 0) return;
 
   btn.disabled = true;
