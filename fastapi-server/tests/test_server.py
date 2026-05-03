@@ -51,7 +51,8 @@ def test_login_wrong_password():
 
 def test_runs_without_token():
     response = client.get("/api/v1/runs")
-    assert response.status_code == 401
+    # Dashboard read endpoints are public (no auth required)
+    assert response.status_code == 200
 
 
 # ── Test 4: GET /runs with valid token → 200 + JSON list ──

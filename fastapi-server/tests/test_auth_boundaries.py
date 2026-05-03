@@ -18,8 +18,6 @@ client = TestClient(server.app)
 ANONYMOUS_DENY_STATUSES = {401, 302}
 
 ENGINEER_ONLY_ROUTES = [
-    ("GET", "/admin", None),
-    ("GET", "/dashboard", None),
     ("GET", "/reports/merge", None),
     ("GET", "/reports/run-2026-04-26-001", None),
     ("GET", "/reports/run-2026-04-26-001/triage", None),

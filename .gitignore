@@ -56,3 +56,4 @@ run-aliases.json
 .sisyphus/
 *.png
 
+.github/

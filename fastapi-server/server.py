@@ -864,7 +864,7 @@ def login(req: LoginRequest):
     return LoginResponse(token=token)
 
 
-@app.get("/api/v1/runs", response_model=List[RunManifest], dependencies=[Depends(verify_token)])
+@app.get("/api/v1/runs", response_model=List[RunManifest])
 def list_runs(version: Optional[str] = None):
     manifests = load_manifests()
     # Enrich manifests that lack a version with DuckDB data
@@ -885,7 +885,7 @@ def list_runs(version: Optional[str] = None):
     return manifests
 
 
-@app.get("/api/v1/runs/{run_id}", response_model=RunManifest, dependencies=[Depends(verify_token)])
+@app.get("/api/v1/runs/{run_id}", response_model=RunManifest)
 def get_run(run_id: str):
     manifests = load_manifests()
     for m in manifests:
@@ -897,7 +897,7 @@ def get_run(run_id: str):
     )
 
 
-@app.get("/api/v1/runs/{run_id}/failures", response_model=List[ScenarioResult], dependencies=[Depends(verify_token)])
+@app.get("/api/v1/runs/{run_id}/failures", response_model=List[ScenarioResult])
 def get_run_failures(run_id: str):
     manifests = load_manifests()
     for m in manifests:
@@ -909,7 +909,7 @@ def get_run_failures(run_id: str):
     )
 
 
-@app.get("/api/v1/runs/{run_id}/bug-status", response_model=List, dependencies=[Depends(verify_token)])
+@app.get("/api/v1/runs/{run_id}/bug-status", response_model=List)
 def get_bug_statuses(run_id: str):
     manifest_path = MANIFESTS_DIR / f"{run_id}.json"
     if not manifest_path.exists():
@@ -1261,7 +1261,7 @@ def admin_sync_runs():
     return sync_runs()
 
 
-@app.get("/api/versions", dependencies=[Depends(verify_token)])
+@app.get("/api/versions")
 async def get_versions():
     conn = get_connection(read_only=False)
     try:
@@ -1274,7 +1274,7 @@ async def get_versions():
         conn.close()
 
 
-@app.get("/api/dashboard/metrics", dependencies=[Depends(verify_token)])
+@app.get("/api/dashboard/metrics")
 async def dashboard_metrics(
     version: Optional[str] = None,
     start: Optional[str] = None,

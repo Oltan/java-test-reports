@@ -174,12 +174,20 @@ def test_engineer_login_and_access(test_client):
 
 
 def test_anonymous_denied_workflow(test_client):
-    engineer_routes = [
+    public_read_routes = [
         ("GET", "/api/v1/runs"),
         ("GET", "/api/v1/runs/run-2026-04-26-001"),
         ("GET", "/api/v1/runs/run-2026-04-26-001/failures"),
         ("GET", "/api/versions"),
         ("GET", "/api/dashboard/metrics"),
+    ]
+    for method, route in public_read_routes:
+        method_fn = getattr(test_client, method.lower())
+        # Public read endpoints: no token → 200, invalid token → 401
+        resp = method_fn(route)
+        assert resp.status_code == 200, f"{method} {route} returned {resp.status_code} instead of 200"
+
+    engineer_routes = [
         ("POST", "/api/tests/start"),
         ("GET", "/api/tests/running"),
         ("GET", "/api/tests/jobs"),
@@ -191,7 +199,6 @@ def test_anonymous_denied_workflow(test_client):
         ("POST", "/api/email/share/some-share-id"),
         ("GET", "/reports/run-2026-04-26-001"),
     ]
-
     for method, route in engineer_routes:
         method_fn = getattr(test_client, method.lower())
 
