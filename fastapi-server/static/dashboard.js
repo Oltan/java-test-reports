@@ -63,11 +63,11 @@ function hideNavLinks() {
   if (logoutBtn) logoutBtn.style.display = "none";
 }
 
-function showDashboard() {
+async function showDashboard() {
   $("login-section").style.display = "none";
   $("dashboard-content").style.display = "block";
   showNavLinks();
-  loadDashboard();
+  await loadDashboard();
 }
 
 function animateValue(el, target, suffix = "") {
@@ -239,14 +239,16 @@ async function loadDashboard() {
 
   try {
     runs = await apiFetch("/api/v1/runs");
+    console.log("[dashboard] runs loaded:", runs.length);
   } catch (err) {
-    console.error("Failed to load runs:", err);
+    console.error("[dashboard] Failed to load runs:", err);
   }
 
   try {
     metrics = await apiFetch("/api/dashboard/metrics");
+    console.log("[dashboard] metrics loaded:", metrics);
   } catch (err) {
-    console.error("Failed to load metrics:", err);
+    console.error("[dashboard] Failed to load metrics:", err);
   }
 
   destroyCharts();
@@ -412,7 +414,7 @@ function initTableSearch() {
   if (token) {
     try {
       await apiFetch("/api/v1/runs", { method: "GET" });
-      showDashboard();
+      await showDashboard();
       loadVersions();
       initDatePicker();
       initWebSocket();
