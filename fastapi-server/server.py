@@ -1239,68 +1239,86 @@ async def get_public_snapshot(share_id: str):
 
 @app.get("/public/reports", response_class=HTMLResponse)
 async def list_public_reports():
-    """List all active public reports (anonymous access)."""
     conn = get_connection(read_only=True)
     try:
         rows = conn.execute(
-            "SELECT share_id, created_at, snapshot_data FROM public_snapshots WHERE status = 'active' ORDER BY created_at DESC"
+            "SELECT share_id, created_at, snapshot_data FROM public_snapshots WHERE status = 'active' ORDER BY created_at ASC"
         ).fetchall()
 
         reports = []
+        trend_labels = []
+        trend_passed = []
+        trend_failed = []
+        trend_skipped = []
+        total_passed = 0
+        total_failed = 0
+        total_skipped = 0
+        total_scenarios = 0
+        total_duration = 0.0
+
         for row in rows:
             try:
                 snapshot = json.loads(row[2])
                 summary = snapshot.get("run_summary", {})
+                passed = summary.get("passed", 0) or 0
+                failed = summary.get("failed", 0) or 0
+                skipped = summary.get("skipped", 0) or 0
+                scenarios = summary.get("total_scenarios", 0) or 0
+                total_passed += passed
+                total_failed += failed
+                total_skipped += skipped
+                total_scenarios += scenarios
+                total_duration += float(snapshot.get("avg_duration", 0) or 0)
+
+                dt = row[1]
+                if hasattr(dt, "strftime"):
+                    label = dt.strftime("%m-%d")
+                else:
+                    label = str(dt)[:10]
+
+                trend_labels.append(label)
+                trend_passed.append(passed)
+                trend_failed.append(failed)
+                trend_skipped.append(skipped)
+
+                success_rate = round((passed / scenarios * 100), 1) if scenarios > 0 else 0
                 reports.append({
                     "share_id": row[0],
-                    "created_at": row[1],
-                    "total_scenarios": summary.get("total_scenarios", 0),
-                    "passed": summary.get("passed", 0),
-                    "failed": summary.get("failed", 0),
-                    "skipped": summary.get("skipped", 0),
+                    "created_at": str(row[1])[:16] if row[1] else "",
+                    "total_scenarios": scenarios,
+                    "passed": passed,
+                    "failed": failed,
+                    "skipped": skipped,
+                    "success_rate": success_rate,
                 })
             except Exception:
                 continue
 
-        html = """<!DOCTYPE html>
-<html lang=\"tr\" data-theme=\"dark\">
-<head>
-<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-<title>Public Reports</title>
-<style>
-:root{--bg:#0f172a;--surface:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--pass:#34d399;--fail:#f87171;--skip:#94a3b8}
-body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:2rem}
-.container{max-width:900px;margin:0 auto}
-h1{margin:0 0 1.5rem;font-size:1.5rem}
-table{width:100%;border-collapse:collapse;font-size:.9rem}
-th{text-align:left;padding:.75rem;border-bottom:1px solid #334155;color:var(--muted);font-weight:500}
-td{padding:.75rem;border-bottom:1px solid #1e293b;vertical-align:middle}
-tr:hover td{background:#1e293b}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
-.badge{display:inline-block;padding:.15rem .5rem;border-radius:.25rem;font-size:.75rem;font-weight:600}
-.badge-pass{background:rgba(52,211,153,.15);color:var(--pass)}
-.badge-fail{background:rgba(248,113,113,.15);color:var(--fail)}
-.badge-skip{background:rgba(148,163,184,.15);color:var(--skip)}
-.empty{text-align:center;color:var(--muted);padding:3rem}
-</style>
-</head>
-<body>
-<div class=\"container\">
-<h1>📊 Public Reports</h1>
-"""
-        if not reports:
-            html += '<div class=\"empty\">Henüz public rapor oluşturulmamış.</div>'
-        else:
-            html += '<table><thead><tr><th>Share ID</th><th>Oluşturulma</th><th>Toplam</th><th>Geçen</th><th>Kalan</th><th>Atlanan</th></tr></thead><tbody>'
-            for r in reports:
-                html += f'<tr><td><a href=\"/public/reports/{r["share_id"]}\">{r["share_id"][:8]}…</a></td>'
-                html += f'<td>{r["created_at"]}</td>'
-                html += f'<td>{r["total_scenarios"]}</td>'
-                html += f'<td><span class=\"badge badge-pass\">{r["passed"]}</span></td>'
-                html += f'<td><span class=\"badge badge-fail\">{r["failed"]}</span></td>'
-                html += f'<td><span class=\"badge badge-skip\">{r["skipped"]}</span></td></tr>'
-            html += '</tbody></table>'
-        html += '</div></body></html>'
+        reports.reverse()
+        trend_labels.reverse()
+        trend_passed.reverse()
+        trend_failed.reverse()
+        trend_skipped.reverse()
+
+        total_all = total_passed + total_failed + total_skipped
+        success_rate = round((total_passed / total_all * 100), 1) if total_all > 0 else 0
+        avg_duration = round((total_duration / len(rows)), 1) if rows else 0
+
+        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
+        tpl = env.get_template("public_reports.html")
+        html = tpl.render(
+            reports=reports,
+            success_rate=success_rate,
+            total_scenarios=total_scenarios,
+            avg_duration=avg_duration,
+            total_passed=total_passed,
+            total_failed=total_failed,
+            total_skipped=total_skipped,
+            trend_labels=trend_labels,
+            trend_passed=trend_passed,
+            trend_failed=trend_failed,
+            trend_skipped=trend_skipped,
+        )
         return HTMLResponse(content=html)
     finally:
         conn.close()
