@@ -17,7 +17,6 @@ java_reports/
 ├── allure-integration/        # Allure hooks (screenshot + video)
 ├── report-model/              # Jackson DTO + parser/writer/bug-tracker
 ├── fastapi-server/            # Python FastAPI web sunucu (Maven değil)
-├── contract-tests/            # FastAPI ↔ Javalin API parity testleri
 ├── scripts/                   # start-server.bat, start-servers.sh
 ├── manifests/                 # run-manifest.json dosyaları
 ├── .sisyphus/                 # Planlar, evidence, notepads
@@ -41,7 +40,7 @@ java_reports/
 
 ## CONVENTIONS
 
-- **Java package**: `com.testreports.<module>` (test-core, jira, email, doors, model, allure, javalin, orchestrator, extent)
+- **Java package**: `com.testreports.<module>` (test-core, model, allure)
 - **Python**: FastAPI `server.py` ana entry, modüller `models.py`, `bug_tracker.py`, `jira_client.py`
 
 ## ANTI-PATTERNS (THIS PROJECT)
@@ -56,7 +55,6 @@ java_reports/
 
 ## UNIQUE STYLES
 
-- **Çift Jira client**: Java tarafı (jira-service) + Python tarafı (jira_client.py) — Python web UI'dan çağrı için
 - **Raporlama hibrit**: Hem Allure hem ExtentReports aynı projede (test-core cucumber.properties iki plugin de yüklü) — extent kaldırıldı
 
 ## COMMANDS

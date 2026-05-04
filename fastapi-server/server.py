@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from models import RunManifest, ScenarioResult, TestRunOptions
 from bug_tracker import BugTracker
-from db import get_connection, init_schema
+from db import get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation, get_scenario_history, get_scenario_matrix
 from jira_client import JiraClient
 from pipeline import execute_pipeline
 from doors_service import run_doors_dxl, is_doors_available  # type: ignore[reportMissingImports]
@@ -810,6 +810,17 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
                 """,
                 [run_id, s["uid"], s["name"], s["status"], s["duration"], s["error"], s["feature_file"], s["doors_id"], s["total_attempts"]],
             )
+            if s.get("doors_id"):
+                upsert_scenario_history(
+                    conn,
+                    doors_number=s["doors_id"],
+                    scenario_uid=s["uid"],
+                    name=s["name"],
+                    run_id=run_id,
+                    status=s["status"],
+                    version=options.version,
+                    timestamp=started_at or finished_at,
+                )
         # Write manifest JSON with full metadata
         _write_manifest_json(run_id, options, all_scenarios, passed, failed, skipped, started_at or finished_at)
     finally:
@@ -977,6 +988,39 @@ def rename_run(run_id: str, req: RenameRequest, _: TokenData = Depends(verify_to
     aliases[run_id] = req.displayName
     _save_aliases(aliases)
     return {"runId": run_id, "displayName": req.displayName}
+
+
+@app.get("/api/scenario-history", dependencies=[Depends(verify_token)])
+def list_scenario_history():
+    conn = get_connection(read_only=True)
+    try:
+        init_schema(conn)
+        return get_scenario_history(conn)
+    finally:
+        conn.close()
+
+
+@app.get("/api/scenario-history/{doors_number}", dependencies=[Depends(verify_token)])
+def get_scenario_history_item(doors_number: str):
+    conn = get_connection(read_only=True)
+    try:
+        init_schema(conn)
+        result = get_scenario_history(conn, doors_number)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"DOORS number '{doors_number}' not found")
+        return result
+    finally:
+        conn.close()
+
+
+@app.get("/api/scenario-matrix", dependencies=[Depends(verify_token)])
+def list_scenario_matrix(limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)):
+    conn = get_connection(read_only=True)
+    try:
+        init_schema(conn)
+        return get_scenario_matrix(conn, limit, offset)
+    finally:
+        conn.close()
 
 
 @app.get("/api/reports/merge-data", dependencies=[Depends(verify_token)])
@@ -1931,12 +1975,16 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
             VALUES (?, ?, ?, current_timestamp)
         """, [scenario_id, doors_number, key])
 
+        now = datetime.now()
         conn.execute("""
             INSERT INTO triage_decisions (scenario_uid, run_id, decision, actor, timestamp)
             VALUES (?, ?, 'jira_created', 'engineer', ?)
             ON CONFLICT (scenario_uid) DO UPDATE SET
                 decision = 'jira_created', actor = 'engineer', timestamp = ?
         """, [scenario_id, run_id, now, now])
+
+        if doors_number:
+            update_scenario_history_explanation(conn, doors_number, run_id, key)
 
         return JiraResponse(jiraKey=key, jiraUrl=jira_client.issue_url(key))
     finally:
@@ -2022,6 +2070,9 @@ def link_jira_issue(run_id: str, scenario_id: str, req: LinkJiraRequest, _: Toke
             ON CONFLICT (scenario_uid) DO UPDATE SET
                 decision = 'jira_linked', actor = 'engineer', timestamp = ?
         """, [scenario_id, run_id, datetime.now(), datetime.now()])
+
+        if doors_number:
+            update_scenario_history_explanation(conn, doors_number, run_id, jira_key)
 
         return JiraResponse(jiraKey=jira_key, jiraUrl=jira_client.issue_url(jira_key))
     finally:

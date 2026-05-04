@@ -227,37 +227,45 @@ function renderTable(runs) {
 }
 
 function showEmpty() {
-  $("dashboard-content").innerHTML = `
-    <div class="empty-state">
-      <div class="empty-icon">📊</div>
-      <h2>Henüz test çalıştırılmadı</h2>
-      <p>İlk test koşusu tamamlandığında burada görüntülenecek.</p>
-    </div>`;
+  const tbody = $("run-tbody");
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Henüz test çalıştırılmadı</td></tr>';
+  }
 }
 
 async function loadDashboard() {
-  try {
-    const [runs, metrics] = await Promise.all([
-      apiFetch("/api/v1/runs"),
-      apiFetch("/api/dashboard/metrics"),
-    ]);
+  let runs = [];
+  let metrics = null;
 
-    destroyCharts();
+  try {
+    runs = await apiFetch("/api/v1/runs");
+  } catch (err) {
+    console.error("Failed to load runs:", err);
+  }
+
+  try {
+    metrics = await apiFetch("/api/dashboard/metrics");
+  } catch (err) {
+    console.error("Failed to load metrics:", err);
+  }
+
+  destroyCharts();
+
+  if (metrics) {
     renderMetrics(metrics);
     updateHeatMap(metrics);
-
     if (metrics.version_breakdown?.length > 0) {
       renderBarChart(metrics.version_breakdown);
     }
+  }
 
-    if (runs && runs.length > 0) {
+  if (runs && runs.length > 0) {
+    if (metrics) {
       renderPieChart(metrics);
-      renderTable(runs);
-    } else {
-      showEmpty();
     }
-  } catch (err) {
-    console.error("Failed to load dashboard:", err);
+    renderTable(runs);
+  } else {
+    showEmpty();
   }
 }
 
@@ -296,21 +304,38 @@ function getFilterParams() {
 async function handleGenerate() {
   const params = getFilterParams();
   const query = params ? `?${params}` : "";
+  let runs = [];
+  let metrics = null;
+
   try {
-    const [metrics, runs] = await Promise.all([
-      apiFetch(`/api/dashboard/metrics${query}`),
-      apiFetch(`/api/v1/runs${query}`),
-    ]);
-    destroyCharts();
+    runs = await apiFetch(`/api/v1/runs${query}`);
+  } catch (err) {
+    console.error("Failed to load runs:", err);
+  }
+
+  try {
+    metrics = await apiFetch(`/api/dashboard/metrics${query}`);
+  } catch (err) {
+    console.error("Failed to load metrics:", err);
+  }
+
+  destroyCharts();
+
+  if (metrics) {
     renderMetrics(metrics);
     updateHeatMap(metrics);
     if (metrics.version_breakdown?.length > 0) {
       renderBarChart(metrics.version_breakdown);
     }
-    renderPieChart(metrics);
+  }
+
+  if (runs && runs.length > 0) {
+    if (metrics) {
+      renderPieChart(metrics);
+    }
     renderTable(runs);
-  } catch (err) {
-    console.error("Failed to generate report:", err);
+  } else {
+    showEmpty();
   }
 }
 

@@ -12,6 +12,7 @@ from db import (
     get_run_count,
     get_scenario_result_count,
     init_schema,
+    upsert_scenario_history,
 )
 
 
@@ -460,6 +461,30 @@ def backfill_jobs(dry_run=False):
     return created
 
 
+def backfill_scenario_history(conn):
+    rows = conn.execute("""
+        SELECT sr.doors_number_at_run, sr.scenario_uid, sr.name_at_run, sr.run_id,
+               sr.status, sr.duration_seconds, r.version, r.started_at
+        FROM scenario_results sr
+        JOIN runs r ON sr.run_id = r.id
+        WHERE sr.doors_number_at_run IS NOT NULL
+        ORDER BY sr.doors_number_at_run, r.started_at
+    """).fetchall()
+
+    for row in rows:
+        doors_number, scenario_uid, name, run_id, status, duration, version, started_at = row
+        upsert_scenario_history(
+            conn,
+            doors_number=doors_number,
+            scenario_uid=scenario_uid,
+            name=name,
+            run_id=run_id,
+            status=status,
+            version=version,
+            timestamp=started_at,
+        )
+
+
 def migrate():
     conn = get_connection()
     init_schema(conn)
@@ -475,6 +500,7 @@ def migrate():
             status, rows = import_manifest(conn, manifest_path, aliases, bug_lookup)
             summary[status] += 1
             summary["rows_imported"] += rows
+        backfill_scenario_history(conn)
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

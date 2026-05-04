@@ -1,3 +1,4 @@
+import json
 import os
 
 import duckdb
@@ -214,6 +215,7 @@ def init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_results_status ON scenario_results(status);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_results_doors_number ON scenario_results(doors_number_at_run);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_results_scenario_run ON scenario_results(scenario_uid, run_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_results_scenario_status ON scenario_results(scenario_uid, status);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bug_mappings_jira_key ON bug_mappings(jira_key);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_started_at ON jobs(started_at);")
@@ -227,6 +229,25 @@ def init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_override_audit_timestamp ON override_audit(timestamp);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_public_snapshots_job_id ON public_snapshots(job_id);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_public_snapshots_status ON public_snapshots(status);")
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS scenario_history (
+      doors_number TEXT PRIMARY KEY,
+      scenario_uid TEXT,
+      current_name TEXT,
+      first_seen_at TIMESTAMP,
+      last_seen_at TIMESTAMP,
+      total_runs INTEGER DEFAULT 0,
+      pass_count INTEGER DEFAULT 0,
+      fail_count INTEGER DEFAULT 0,
+      skip_count INTEGER DEFAULT 0,
+      last_status TEXT,
+      run_history JSON,
+      updated_at TIMESTAMP DEFAULT current_timestamp
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scenario_history_uid ON scenario_history(scenario_uid);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scenario_history_last_seen ON scenario_history(last_seen_at);")
 
 
 def fetch_all_dicts(conn, query, params=None):
@@ -245,3 +266,174 @@ def get_scenario_result_count(conn):
 
 def get_bug_mapping_count(conn):
     return conn.execute("SELECT COUNT(*) FROM bug_mappings").fetchone()[0]
+
+
+def upsert_scenario_history(conn, doors_number, scenario_uid, name, run_id, status, version, jira_keys=None, timestamp=None):
+    """Upsert a scenario result into the history table.
+
+    For PASSED tests, explanation is auto-generated: "{version} sürümünde test otomasyon ile doğrulanmıştır"
+    For FAILED/BROKEN tests, explanation comes from Jira keys (if any).
+    """
+    if timestamp is None:
+        timestamp = datetime.now()
+
+    if status == "PASSED":
+        explanation = f"{version or 'N/A'} sürümünde test otomasyon ile doğrulanmıştır"
+    else:
+        if jira_keys:
+            explanation = ", ".join(jira_keys) if isinstance(jira_keys, (list, tuple)) else str(jira_keys)
+        else:
+            explanation = None
+
+    existing = conn.execute(
+        "SELECT run_history, pass_count, fail_count, skip_count, total_runs, first_seen_at FROM scenario_history WHERE doors_number = ?",
+        [doors_number]
+    ).fetchone()
+
+    if existing:
+        run_history = json.loads(existing[0]) if existing[0] else []
+        pass_count = existing[1] + (1 if status == "PASSED" else 0)
+        fail_count = existing[2] + (1 if status in ("FAILED", "BROKEN") else 0)
+        skip_count = existing[3] + (1 if status == "SKIPPED" else 0)
+        total_runs = existing[4] + 1
+        first_seen_at = existing[5]
+
+        run_entry = {
+            "run_id": run_id,
+            "status": status,
+            "explanation": explanation,
+            "timestamp": timestamp.isoformat(),
+        }
+        run_history.append(run_entry)
+
+        conn.execute("""
+            UPDATE scenario_history
+            SET current_name = ?, last_seen_at = ?, total_runs = ?, pass_count = ?,
+                fail_count = ?, skip_count = ?, last_status = ?, run_history = ?,
+                updated_at = current_timestamp
+            WHERE doors_number = ?
+        """, [name, timestamp, total_runs, pass_count, fail_count, skip_count, status, json.dumps(run_history), doors_number])
+    else:
+        run_entry = {
+            "run_id": run_id,
+            "status": status,
+            "explanation": explanation,
+            "timestamp": timestamp.isoformat(),
+        }
+        run_history = [run_entry]
+        pass_count = 1 if status == "PASSED" else 0
+        fail_count = 1 if status in ("FAILED", "BROKEN") else 0
+        skip_count = 1 if status == "SKIPPED" else 0
+
+        conn.execute("""
+            INSERT INTO scenario_history
+            (doors_number, scenario_uid, current_name, first_seen_at, last_seen_at,
+             total_runs, pass_count, fail_count, skip_count, last_status, run_history)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [doors_number, scenario_uid, name, timestamp, timestamp, 1,
+              pass_count, fail_count, skip_count, status, json.dumps(run_history)])
+
+
+def update_scenario_history_explanation(conn, doors_number, run_id, explanation):
+    """Update the explanation for a specific run in scenario_history (e.g. after Jira creation)."""
+    existing = conn.execute(
+        "SELECT run_history FROM scenario_history WHERE doors_number = ?",
+        [doors_number]
+    ).fetchone()
+    if not existing or not existing[0]:
+        return False
+
+    run_history = json.loads(existing[0])
+    for entry in run_history:
+        if entry.get("run_id") == run_id:
+            entry["explanation"] = explanation
+            break
+    else:
+        return False
+
+    conn.execute("""
+        UPDATE scenario_history
+        SET run_history = ?, updated_at = current_timestamp
+        WHERE doors_number = ?
+    """, [json.dumps(run_history), doors_number])
+    return True
+
+
+def get_scenario_history(conn, doors_number=None):
+    """Get scenario history. If doors_number provided, returns single row. Otherwise all rows."""
+    if doors_number:
+        row = conn.execute("""
+            SELECT doors_number, scenario_uid, current_name, first_seen_at, last_seen_at,
+                   total_runs, pass_count, fail_count, skip_count, last_status, run_history
+            FROM scenario_history
+            WHERE doors_number = ?
+        """, [doors_number]).fetchone()
+        if not row:
+            return None
+        return {
+            "doors_number": row[0],
+            "scenario_uid": row[1],
+            "current_name": row[2],
+            "first_seen_at": row[3],
+            "last_seen_at": row[4],
+            "total_runs": row[5],
+            "pass_count": row[6],
+            "fail_count": row[7],
+            "skip_count": row[8],
+            "last_status": row[9],
+            "history": json.loads(row[10]) if row[10] else [],
+        }
+    else:
+        rows = conn.execute("""
+            SELECT doors_number, scenario_uid, current_name, first_seen_at, last_seen_at,
+                   total_runs, pass_count, fail_count, skip_count, last_status, run_history
+            FROM scenario_history
+            ORDER BY last_seen_at DESC
+        """).fetchall()
+        return [{
+            "doors_number": r[0],
+            "scenario_uid": r[1],
+            "current_name": r[2],
+            "first_seen_at": r[3],
+            "last_seen_at": r[4],
+            "total_runs": r[5],
+            "pass_count": r[6],
+            "fail_count": r[7],
+            "skip_count": r[8],
+            "last_status": r[9],
+            "history": json.loads(r[10]) if r[10] else [],
+        } for r in rows]
+
+
+def get_scenario_matrix(conn, limit=100, offset=0):
+    """Return scenario history formatted as a matrix view for dashboard display."""
+    rows = conn.execute("""
+        SELECT doors_number, scenario_uid, current_name, total_runs, pass_count, fail_count, skip_count, last_status, run_history
+        FROM scenario_history
+        ORDER BY last_seen_at DESC
+        LIMIT ? OFFSET ?
+    """, [limit, offset]).fetchall()
+
+    matrix = []
+    for r in rows:
+        run_history = json.loads(r[8]) if r[8] else []
+        runs = {}
+        for entry in run_history:
+            runs[entry["run_id"]] = {
+                "status": entry["status"],
+                "explanation": entry.get("explanation"),
+                "timestamp": entry["timestamp"],
+            }
+
+        matrix.append({
+            "doors_number": r[0],
+            "scenario_uid": r[1],
+            "scenario_name": r[2],
+            "total_runs": r[3],
+            "pass_count": r[4],
+            "fail_count": r[5],
+            "skip_count": r[6],
+            "last_status": r[7],
+            "runs": runs,
+        })
+    return matrix
