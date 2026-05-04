@@ -1324,6 +1324,38 @@ async def list_public_reports():
         conn.close()
 
 
+@app.get("/api/csv/export", dependencies=[Depends(verify_token)])
+def export_csv(run_id: str):
+    conn = get_connection(read_only=True)
+    try:
+        rows = conn.execute(
+            "SELECT doors_number_at_run, status, name_at_run, error_message FROM scenario_results WHERE run_id = ? AND doors_number_at_run IS NOT NULL ORDER BY doors_number_at_run",
+            [run_id],
+        ).fetchall()
+
+        if not rows:
+            raise HTTPException(status_code=404, detail="No scenarios with DOORS numbers found for this run")
+
+        lines = ["absnumber,test_sonucu,test_aciklamasi"]
+        for r in rows:
+            doors_number, status, name, error = r
+            explanation = ""
+            if status == "PASSED":
+                explanation = f"{name} - PASS"
+            else:
+                explanation = f"{name} - {error}" if error else name
+            lines.append(f"{doors_number},{status},{explanation}")
+
+        content = "\n".join(lines)
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=doors_export_{run_id}.csv"},
+        )
+    finally:
+        conn.close()
+
+
 @app.get("/public/reports/{share_id}", response_class=HTMLResponse)
 async def render_public_report(share_id: str):
     """Render public HTML report (anonymous access).
