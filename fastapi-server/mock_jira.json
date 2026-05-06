@@ -1,0 +1,4 @@
+{
+  "BUG-001": {"key": "BUG-001", "status": "Open", "doors_number": "DOORS-12345"},
+  "BUG-002": {"key": "BUG-002", "status": "In Progress", "doors_number": "REQ-LOGIN-001"}
+}

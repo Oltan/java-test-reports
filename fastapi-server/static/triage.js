@@ -396,7 +396,17 @@ async function init() {
       throw new Error(err.detail ?? `HTTP ${res.status}`);
     }
 
-    const data = await res.json();
+    // Auto-match Jira issues by DOORS number (silent — ignore errors)
+    try {
+      await fetch(`/api/triage/${RUN_ID}/auto-match-jira`, {
+        method: 'POST', headers: authHeaders(),
+      });
+    } catch { /* Jira not configured or unavailable */ }
+
+    // Re-fetch triage data after auto-match so newly linked issues appear
+    const finalRes = await fetch(`/api/triage/${RUN_ID}`, { headers: authHeaders() });
+    const data = finalRes.ok ? await finalRes.json() : await res.json();
+
     document.getElementById('triage-loading').style.display = 'none';
     document.getElementById('triage-header').style.display = '';
     document.getElementById('triage-filter').style.display = '';

@@ -1623,9 +1623,10 @@ def sync_runs() -> dict:
                     conn.execute(
                         """INSERT INTO scenario_results
                            (run_id, scenario_uid, name_at_run, status, duration_seconds,
-                            error_message, feature_file_at_run)
-                           VALUES (?, ?, ?, ?, ?, ?, '')""",
-                        [run_id, uid, s.name, s.status.upper(), 0.0, None],
+                            error_message, feature_file_at_run, doors_number_at_run)
+                           VALUES (?, ?, ?, ?, ?, ?, '', ?)""",
+                        [run_id, uid, s.name, s.status.upper(), 0.0, None,
+                         s.doorsAbsNumber or None],
                     )
                 inserted_to_db += 1
 
@@ -2206,6 +2207,76 @@ def get_triage_state(run_id: str):
             for row in rows
         ]
         return TriageStateResponse(run_id=run_id, total_failed=len(scenarios), scenarios=scenarios)
+    finally:
+        conn.close()
+
+
+@app.post("/api/triage/{run_id}/auto-match-jira", dependencies=[Depends(verify_token)])
+def auto_match_jira(run_id: str) -> dict:
+    """For each failed scenario with a DOORS number, search Jira for existing issues and auto-link."""
+    if not jira_client.is_configured():
+        return {"matched": 0, "details": [], "skipped_reason": "Jira not configured"}
+
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        rows = conn.execute("""
+            SELECT sr.scenario_uid, sr.name_at_run,
+                   COALESCE(sr.doors_number_at_run, sd.doors_number) AS doors_number
+            FROM scenario_results sr
+            LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
+            WHERE sr.run_id = ? AND sr.status IN ('FAILED', 'BROKEN')
+              AND COALESCE(sr.doors_number_at_run, sd.doors_number) IS NOT NULL
+              AND COALESCE(sr.doors_number_at_run, sd.doors_number) != ''
+        """, [run_id]).fetchall()
+
+        matched = 0
+        details = []
+        for scenario_uid, scenario_name, doors_number in rows:
+            existing = conn.execute(
+                "SELECT jira_key FROM jira_mappings WHERE scenario_uid = ? LIMIT 1",
+                [scenario_uid],
+            ).fetchone()
+            if existing:
+                continue
+
+            existing_decision = conn.execute(
+                "SELECT decision FROM triage_decisions WHERE scenario_uid = ? LIMIT 1",
+                [scenario_uid],
+            ).fetchone()
+            if existing_decision:
+                continue
+
+            try:
+                issues = jira_client.search_by_doors_number(doors_number)
+            except Exception:
+                continue
+
+            if not issues:
+                continue
+
+            best = issues[0]
+            jira_key = best["key"]
+            conn.execute(
+                "INSERT OR IGNORE INTO jira_mappings (scenario_uid, doors_id, jira_key, created_at) VALUES (?, ?, ?, ?)",
+                [scenario_uid, doors_number, jira_key, datetime.now()],
+            )
+            conn.execute(
+                """INSERT OR REPLACE INTO triage_decisions
+                   (scenario_uid, decision, reason, actor, timestamp)
+                   VALUES (?, 'jira_linked', ?, 'auto-match', ?)""",
+                [scenario_uid, f"Auto-matched by DOORS number {doors_number}", datetime.now()],
+            )
+            matched += 1
+            details.append({
+                "scenario_uid": scenario_uid,
+                "scenario_name": scenario_name,
+                "doors_number": doors_number,
+                "jira_key": jira_key,
+                "jira_status": best.get("status", ""),
+            })
+
+        return {"matched": matched, "details": details}
     finally:
         conn.close()
 

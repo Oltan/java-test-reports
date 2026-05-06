@@ -1,6 +1,8 @@
+import json
 import os
 import hashlib
 import time
+from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
 from atlassian import Jira  # type: ignore[reportMissingImports]
@@ -39,6 +41,10 @@ class JiraClient:
         self.retry_count = retry_count if retry_count is not None else int(os.getenv("JIRA_RETRY_COUNT", "3"))
         self.jira = Jira(url=self.url, token=self.pat) if not self.dry_run and self.url and self.pat else None
         self._dry_run_issues: dict[str, dict[str, str]] = {}
+        if self.dry_run:
+            mock_path = Path(__file__).parent / "mock_jira.json"
+            if mock_path.exists():
+                self._dry_run_issues.update(json.loads(mock_path.read_text()))
 
     def is_configured(self) -> bool:
         return self.dry_run or bool(self.url and self.pat and self.project_key)
