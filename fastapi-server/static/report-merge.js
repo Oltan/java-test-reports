@@ -488,6 +488,7 @@ function updateGenerateSection() {
   $("share-result").style.display = "none";
   currentShareId = null;
   $("doors-export-btn").disabled = true;
+  $("csv-export-btn").disabled = true;
   $("email-share-btn").disabled = true;
   $("share-action-status").textContent = "";
   $("share-action-status").className = "rpt-share-action-status";
@@ -524,6 +525,7 @@ async function generateShare() {
     statusEl.className = "rpt-generate-status rpt-generate-status--success";
 
     $("doors-export-btn").disabled = false;
+    $("csv-export-btn").disabled = false;
     $("email-share-btn").disabled = false;
     $("share-action-status").textContent = "";
     $("share-action-status").className = "rpt-share-action-status";
@@ -549,7 +551,6 @@ async function generateShare() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Paylaşım Bağlantısı Oluştur`;
-    updateGenerateSection();
   }
 }
 
@@ -581,6 +582,36 @@ async function shareToDoors(shareId) {
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
+  }
+}
+
+async function downloadCsv(shareId) {
+  const statusEl = $("share-action-status");
+  statusEl.textContent = "CSV indiriliyor…";
+  statusEl.className = "rpt-share-action-status";
+
+  try {
+    const token = getToken();
+    const headers = { Authorization: `Bearer ${token}` };
+    const res = await fetch(`/api/csv/share/${encodeURIComponent(shareId)}`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw { status: res.status, body };
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `report_${shareId.slice(0, 8)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    statusEl.textContent = "CSV indirildi!";
+    statusEl.className = "rpt-share-action-status rpt-share-action-status--success";
+  } catch (e) {
+    statusEl.textContent = `CSV hatası: ${e.body?.detail || e.message || "Bilinmeyen hata"}`;
+    statusEl.className = "rpt-share-action-status rpt-share-action-status--error";
   }
 }
 
@@ -693,6 +724,10 @@ function initThemeToggle() {
 
   $("doors-export-btn")?.addEventListener("click", () => {
     if (currentShareId) shareToDoors(currentShareId);
+  });
+
+  $("csv-export-btn")?.addEventListener("click", () => {
+    if (currentShareId) downloadCsv(currentShareId);
   });
 
   $("email-share-btn")?.addEventListener("click", () => {
