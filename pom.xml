@@ -30,10 +30,8 @@
 
     <modules>
         <module>test-core</module>
-        <module>allure-integration</module>
-        <module>report-model</module>
         <!-- fastapi-server is Python, not a Maven module -->
-        <!-- Removed: email-service, jira-service, doors-service, orchestrator, extent-integration, javalin-server -->
+        <!-- Removed: allure-integration, report-model, email-service, jira-service, doors-service, orchestrator, extent-integration, javalin-server -->
     </modules>
 
     <dependencyManagement>

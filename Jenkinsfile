@@ -36,7 +36,7 @@ pipeline {
 
     stage('Run Java Tests') {
       steps {
-        sh '/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn -B test -pl test-core,report-model,allure-integration'
+        sh '/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn -B test -pl test-core'
       }
     }
 

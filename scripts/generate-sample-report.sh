@@ -8,14 +8,14 @@ export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:/home/ol_ta/tools/allure-2
 
 cd /mnt/c/Users/ol_ta/desktop/java_reports
 
-echo "Running Maven tests for allure-integration..."
-mvn -q -pl allure-integration test
+echo "Running Maven tests for test-core (AllureVerificationTest)..."
+mvn -q -pl test-core test -Dtest="AllureVerificationTest"
 
 echo "Generating Allure report..."
-allure generate --clean allure-integration/target/allure-results -o allure-integration/target/allure-report
+allure generate --clean test-core/target/allure-results -o test-core/target/allure-report
 
-if test -f allure-integration/target/allure-report/index.html; then
-    echo "SUCCESS: Allure report generated at allure-integration/target/allure-report/index.html"
+if test -f test-core/target/allure-report/index.html; then
+    echo "SUCCESS: Allure report generated at test-core/target/allure-report/index.html"
 else
     echo "ERROR: Allure report index.html not found"
     exit 1
