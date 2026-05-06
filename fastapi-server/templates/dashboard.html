@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Test Raporlama Sistemi</title>
-  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/dashboard.css?v=3">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
 </head>
@@ -66,6 +66,15 @@
         <div class="date-range-wrap" id="date-range-wrap">
           <input id="date-range" class="filter-date" type="text" placeholder="Tarih seçin...">
         </div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" for="status-filter">Durum</label>
+        <select id="status-filter" class="filter-select">
+          <option value="">Tümü</option>
+          <option value="passed">Passed</option>
+          <option value="failed">Failed</option>
+          <option value="skipped">Skipped</option>
+        </select>
       </div>
       <button class="btn btn-primary" id="generate-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -153,7 +162,8 @@
             <th>Run</th>
             <th>Tarih</th>
             <th>Geçen</th>
-            <th>Kalan</th>
+            <th>Hata</th>
+            <th>Skip</th>
             <th>Başarı</th>
             <th>Süre</th>
             <th>Retry</th>
@@ -175,7 +185,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js"></script>
-<script type="module" src="/static/vendor.js"></script>
-<script type="module" src="/static/dashboard.js"></script>
+<script type="module" src="/static/vendor.js?v=2"></script>
+<script type="module" src="/static/dashboard.js?v=2"></script>
 </body>
 </html>

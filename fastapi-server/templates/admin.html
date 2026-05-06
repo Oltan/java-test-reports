@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Test Raporlama</title>
-  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/dashboard.css?v=3">
 </head>
 <body>
 
@@ -60,12 +60,24 @@
    <!-- Live Progress — top of page, full width -->
    <div id="live-progress" style="display:none; background:var(--card-bg); border:2px solid var(--accent); border-radius:12px; padding:20px; margin-bottom:20px;">
      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
-       <h3 style="margin:0">⚡ Canlı Test</h3>
-       <div style="display:flex; gap:24px; font-size:16px;">
-         <span>✅ <strong id="live-passed" style="color:#00c853">0</strong></span>
-         <span>❌ <strong id="live-failed" style="color:#ff1744">0</strong></span>
-         <span>⏭️ <strong id="live-skipped" style="color:#ffc107">0</strong></span>
-         <span>📊 <strong id="live-pct" style="font-size:24px;color:var(--accent)">0%</strong></span>
+       <h3 style="margin:0">Canlı Test</h3>
+       <div style="display:flex; gap:24px; font-size:16px; align-items:center;">
+         <span style="display:flex;align-items:center;gap:6px;">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00c853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+           <strong id="live-passed" style="color:#00c853">0</strong>
+         </span>
+         <span style="display:flex;align-items:center;gap:6px;">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff1744" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+           <strong id="live-failed" style="color:#ff1744">0</strong>
+         </span>
+         <span style="display:flex;align-items:center;gap:6px;">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 12 5 19 12"/></svg>
+           <strong id="live-skipped" style="color:#ffc107">0</strong>
+         </span>
+         <span style="display:flex;align-items:center;gap:6px;">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+           <strong id="live-pct" style="font-size:24px;color:var(--accent)">0%</strong>
+         </span>
        </div>
      </div>
      <pre id="live-output" style="background:#0a0a0a; color:#0f0; padding:16px; border-radius:8px; max-height:250px; overflow-y:auto; font-size:13px; font-family:'JetBrains Mono',monospace; line-height:1.5; white-space:pre-wrap; margin-top:12px; scroll-behavior:smooth;"></pre>
@@ -180,7 +192,7 @@
   Test Raporlama Sistemi v3.0 · Admin Panel
 </footer>
 
-<script type="module" src="/static/vendor.js"></script>
-<script type="module" src="/static/admin.js"></script>
+<script type="module" src="/static/vendor.js?v=3"></script>
+<script type="module" src="/static/admin.js?v=3"></script>
 </body>
 </html>

@@ -124,7 +124,7 @@ def init_schema(conn):
 
     conn.execute("""
     CREATE TABLE IF NOT EXISTS pipeline_status (
-      run_id TEXT REFERENCES runs(id),
+      run_id TEXT,
       stage TEXT NOT NULL,
       status TEXT NOT NULL,
       started_at TIMESTAMP,
@@ -152,8 +152,8 @@ def init_schema(conn):
     conn.execute("""
     CREATE TABLE IF NOT EXISTS worker_runs (
       worker_id TEXT PRIMARY KEY,
-      job_id TEXT REFERENCES jobs(job_id),
-      run_id TEXT REFERENCES runs(id),
+      job_id TEXT,
+      run_id TEXT,
       shard INTEGER,
       status TEXT,
       output_dir TEXT,
@@ -165,7 +165,7 @@ def init_schema(conn):
     conn.execute("""
     CREATE TABLE IF NOT EXISTS triage_decisions (
       scenario_uid TEXT PRIMARY KEY,
-      run_id TEXT REFERENCES runs(id),
+      run_id TEXT,
       decision TEXT CHECK (decision IN ('needs_jira', 'jira_linked', 'jira_created', 'accepted_pass', 'accepted_skip')),
       actor TEXT,
       reason TEXT,

@@ -12,16 +12,21 @@
 
 <!-- ── Scenario card macro ── -->
 {% macro scard(scenario) %}
-<div class="scard scard--{{ scenario.status }}"
+{% set norm_status = 'failed' if scenario.status in ('failed', 'broken') else scenario.status %}
+<div class="scard scard--{{ norm_status }}"
      data-scenario-id="{{ scenario.id }}"
-     data-status="{{ scenario.status }}"
+     data-status="{{ norm_status }}"
      {% if scenario.doorsAbsNumber %}data-doors-number="{{ scenario.doorsAbsNumber }}"{% endif %}>
 
   <div class="scard-header">
     <span class="scard-status-icon">
-      {% if scenario.status == 'passed' %}✅
-      {% elif scenario.status == 'failed' %}❌
-      {% else %}⏭{% endif %}
+      {% if norm_status == 'passed' %}
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      {% elif norm_status == 'failed' %}
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      {% else %}
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 12 5 19 12"/></svg>
+      {% endif %}
     </span>
     <span class="scard-name">{{ scenario.name }}</span>
     <span class="scard-duration">{{ scenario.duration }}</span>
@@ -114,7 +119,7 @@
   </div>
   {% endif %}
 
-  {% if scenario.status == 'failed' and scenario.doorsAbsNumber %}
+  {% if norm_status == 'failed' and scenario.doorsAbsNumber %}
   <div class="bug-section" data-bug-status>
     <span class="bug-pill bug-pill--loading">⏳ Yükleniyor…</span>
   </div>

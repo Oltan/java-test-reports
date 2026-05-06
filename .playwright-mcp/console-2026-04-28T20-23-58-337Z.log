@@ -1,4 +1,0 @@
-[      71ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/favicon.ico:0
-[   81590ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/v1/runs/run-2026-04-26-001/bug-status:0
-[   81592ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/reports/screenshots/order-failure.png:0
-[   81593ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/reports/screenshots/login-success.png:0

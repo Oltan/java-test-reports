@@ -2,12 +2,13 @@
 @REQ-LOGIN-001
 Feature: Login Feature
 
-  @sample-fail
+  @smoke @sample-fail
   Scenario: Hatalı giriş
     Given user is on the login page
     When user enters valid credentials
     Then user should see element that doesn't exist
 
+  @smoke
   Scenario: Başarılı giriş
     Given user is on the login page
     When user enters valid credentials

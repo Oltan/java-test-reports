@@ -376,13 +376,14 @@ tbody tr:hover { background: var(--surface-hover); }
 .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
 .badge-pass { background: var(--success); color: #0c0f14; }
 .badge-fail { background: var(--danger); color: #fff; }
+.badge-skip { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning); }
 .badge-retry { background: var(--warning); color: #0c0f14; }
 .badge-dep { background: var(--accent); color: #fff; }
 
 .status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .pill-pass { background: var(--success-bg); color: var(--success); }
 .pill-fail { background: var(--danger-bg); color: var(--danger); }
-.pill-skip { background: var(--skip-bg); color: var(--skip); }
+.pill-skip { background: var(--warning-bg); color: var(--warning); }
 
 /* ═══════════════════════════════════════════════════════════════
    PROGRESS BAR
@@ -399,6 +400,18 @@ tbody tr:hover { background: var(--surface-hover); }
 .td-muted { color: var(--text-muted); }
 .action-link { color: var(--accent); font-size: 13px; cursor: pointer; }
 .action-link:hover { text-decoration: underline; }
+
+.tr-fail td { color: var(--danger-text); }
+.tr-fail .run-link { color: var(--danger); }
+.tr-fail .run-link:hover { color: var(--danger-text); }
+.tr-fail .td-muted { color: var(--danger-text); opacity: .7; }
+.tr-fail .action-link { color: var(--danger); }
+
+.tr-skip td { color: var(--warning-text); }
+.tr-skip .run-link { color: var(--warning); }
+.tr-skip .run-link:hover { color: var(--warning-text); }
+.tr-skip .td-muted { color: var(--warning-text); opacity: .7; }
+.tr-skip .action-link { color: var(--warning); }
 
 .run-meta { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
 .run-ver { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; background: var(--heat-accent); color: #fff; white-space: nowrap; }

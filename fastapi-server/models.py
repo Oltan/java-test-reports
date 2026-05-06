@@ -16,7 +16,7 @@ class Attachment(BaseModel):
 
 
 class AttemptResult(BaseModel):
-    status: str = Field(pattern=r"^(passed|failed|skipped)$")
+    status: str = Field(pattern=r"^(passed|failed|skipped|broken)$")
     timestamp: str
     errorMessage: Optional[str] = None
 
@@ -24,7 +24,7 @@ class AttemptResult(BaseModel):
 class ScenarioResult(BaseModel):
     id: str
     name: str
-    status: str = Field(pattern=r"^(passed|failed|skipped)$")
+    status: str = Field(pattern=r"^(passed|failed|skipped|broken)$")
     duration: str
     doorsAbsNumber: Optional[str] = None
     tags: List[str] = Field(default_factory=list)

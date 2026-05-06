@@ -33,6 +33,7 @@ async function handleLogin(e) {
       body: JSON.stringify({ username, password }),
     });
     setToken(data.token);
+    document.cookie = `access_token=${data.token}; path=/; SameSite=Lax`;
     showDashboard();
   } catch {
     errorEl.textContent = "Geçersiz kullanıcı adı veya şifre";
@@ -200,12 +201,18 @@ function renderTable(runs) {
     const pct = total > 0 ? Math.round((run.passed / total) * 100) : 0;
     const hasRetries = run.scenarios?.some(s => s.attempts?.length > 1);
     const hasDeps = run.scenarios?.some(s => s.dependencies?.length > 0);
-    const isPass = run.failed === 0;
+    const skipped = run.skipped || 0;
+    const isPass = run.failed === 0 && skipped === 0;
+    const isSkipped = run.failed === 0 && skipped > 0;
+    const rowStatus = isPass ? "passed" : isSkipped ? "skipped" : "failed";
+    const rowClass = isPass ? "" : isSkipped ? "tr-skip" : "tr-fail";
+    const pillClass = isPass ? "pill-pass" : isSkipped ? "pill-skip" : "pill-fail";
+    const pillLabel = isPass ? "PASSED" : isSkipped ? "SKIPPED" : "FAILED";
     const allTags = [...new Set((run.scenarios || []).flatMap(s => s.tags || []))];
     const tagBadges = allTags.slice(0, 4).map(t => `<span class="run-tag">${t}</span>`).join("");
     const moreTag = allTags.length > 4 ? `<span class="run-tag run-tag-more">+${allTags.length - 4}</span>` : "";
     const verBadge = run.version ? `<span class="run-ver">${run.version}</span>` : "";
-    return `<tr>
+    return `<tr data-status="${rowStatus}" class="${rowClass}">
       <td>
         <a class="run-link" href="/reports/${run.runId}">${run.runId.slice(0, 22)}</a>
         <div class="run-meta">${verBadge}${tagBadges}${moreTag}</div>
@@ -213,6 +220,7 @@ function renderTable(runs) {
       <td class="td-muted">${date}</td>
       <td><span class="badge badge-pass">${run.passed}</span></td>
       <td><span class="badge badge-fail">${run.failed}</span></td>
+      <td><span class="badge badge-skip">${skipped}</span></td>
       <td>
         <div class="prog-wrap"><div class="prog-bar" style="width:${pct}%"></div></div>
         <span class="prog-label">${pct}%</span>
@@ -220,7 +228,7 @@ function renderTable(runs) {
       <td class="td-muted">${parseFloat(run.duration).toFixed(1)}s</td>
       <td>${hasRetries ? '<span class="badge badge-retry">retried</span>' : '<span class="td-muted">—</span>'}</td>
       <td>${hasDeps ? '<span class="badge badge-dep">⛓️ deps</span>' : '<span class="td-muted">—</span>'}</td>
-      <td><span class="status-pill ${isPass ? "pill-pass" : "pill-fail"}">${isPass ? "PASSED" : "FAILED"}</span></td>
+      <td><span class="status-pill ${pillClass}">${pillLabel}</span></td>
       <td><a class="action-link" href="/reports/${run.runId}/triage">Triage →</a></td>
     </tr>`;
   }).join("");
@@ -393,14 +401,19 @@ function initWebSocket() {
   ws.onclose = () => { /* auto-reconnect handled by browser */ };
 }
 
-function initTableSearch() {
-  const input = $("table-search");
-  input?.addEventListener("input", () => {
-    const q = input.value.toLowerCase();
-    document.querySelectorAll("#run-tbody tr").forEach(tr => {
-      tr.style.display = tr.textContent?.toLowerCase().includes(q) ? "" : "none";
-    });
+function applyTableFilters() {
+  const q = ($("table-search")?.value || "").toLowerCase();
+  const status = $("status-filter")?.value || "";
+  document.querySelectorAll("#run-tbody tr").forEach(tr => {
+    const textMatch = !q || tr.textContent?.toLowerCase().includes(q);
+    const statusMatch = !status || tr.dataset.status === status;
+    tr.style.display = textMatch && statusMatch ? "" : "none";
   });
+}
+
+function initTableSearch() {
+  $("table-search")?.addEventListener("input", applyTableFilters);
+  $("status-filter")?.addEventListener("change", applyTableFilters);
 }
 
 (async function init() {

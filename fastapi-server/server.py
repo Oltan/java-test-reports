@@ -67,6 +67,15 @@ def get_run_alias(run_id: str) -> str:
     return _load_aliases().get(run_id, run_id)
 
 
+def _log_task_exception(task: asyncio.Task) -> None:
+    if task.done() and not task.cancelled():
+        exc = task.exception()
+        if exc is not None:
+            import traceback
+            print(f"[ERROR] Background task failed: {exc}")
+            traceback.print_exception(type(exc), exc, exc.__traceback__)
+
+
 def load_manifests() -> list[RunManifest]:
     if not MANIFESTS_DIR.exists():
         return []
@@ -179,14 +188,6 @@ async def home(request: Request):
         latest_run=latest_run,
     )
     return HTMLResponse(content=html)
-    if not MANIFESTS_DIR.exists():
-        return []
-    manifests = []
-    for f in sorted(MANIFESTS_DIR.glob("*.json")):
-        with open(f) as fh:
-            data = json.load(fh)
-        manifests.append(RunManifest.model_validate(data))
-    return manifests
 
 
 @app.post("/api/pipeline/run", dependencies=[Depends(verify_token)])
@@ -258,6 +259,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
     workers = []
 
     with get_connection(read_only=False) as conn:
+        init_schema(conn)
         conn.execute(
             """
             INSERT INTO jobs (job_id, requester, tags, retry_count, parallel, environment, version, status, started_at)
@@ -273,10 +275,10 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
             output_dir = str(PROJECT_ROOT / "target" / f"allure-results-{run_id}")
             conn.execute(
                 """
-                INSERT INTO worker_runs (worker_id, job_id, shard, status, output_dir, started_at)
-                VALUES (?, ?, ?, 'running', ?, ?)
+                INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
+                VALUES (?, ?, ?, ?, 'running', ?, ?)
                 """,
-                [worker_id, job_id, i, output_dir, now],
+                [worker_id, job_id, run_id, i, output_dir, now],
             )
             run_ids.append(run_id)
             workers.append({"worker_id": worker_id, "run_id": run_id, "shard": i, "output_dir": output_dir})
@@ -287,13 +289,14 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
         for run_id, worker in zip(run_ids, workers):
             task = asyncio.create_task(execute_test_run(run_id, options, output_dir=worker["output_dir"]))
             test_tasks.add(task)
-            await task
-            test_tasks.discard(task)
+            task.add_done_callback(lambda t: test_tasks.discard(t))
+            task.add_done_callback(_log_task_exception)
     else:
         for run_id in run_ids:
             task = asyncio.create_task(execute_test_run(run_id, options))
             test_tasks.add(task)
-            task.add_done_callback(test_tasks.discard)
+            task.add_done_callback(lambda t: test_tasks.discard(t))
+            task.add_done_callback(_log_task_exception)
 
     return {"job_id": job_id, "workers": workers, "runs": run_ids, "status": "started", "mode": "serialized_safe", "parallel": options.parallel}
 
@@ -301,6 +304,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
 @app.get("/api/tests/running", dependencies=[Depends(verify_token)])
 async def list_running_tests():
     with get_connection(read_only=False) as conn:
+        init_schema(conn)
         rows = conn.execute(
             """
             SELECT j.job_id, j.tags, j.retry_count, j.parallel, j.environment, j.version, j.started_at,
@@ -567,6 +571,9 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         saved = _save_results_to_duckdb(run_id, options, started_at)
         if saved:
             stats.update({"total": saved["total"], "passed": saved["passed"], "failed": saved["failed"], "skipped": saved["skipped"], "running": 0})
+    except Exception as e:
+        stats["error"] = str(e)
+        stats["running"] = 0
     finally:
         with tests_lock:
             running_tests.pop(run_id, None)
@@ -578,19 +585,18 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             **stats,
             "finished": True,
             "type": "complete",
-            "exit_code": proc.returncode,
-            "pct": 100 if completed or proc.returncode == 0 else 0,
+            "exit_code": getattr(proc, "returncode", -1),
+            "pct": 100 if completed or getattr(proc, "returncode", -1) == 0 else 0,
         },
     )
 
-    # Mark worker_run and job as completed
     now = datetime.now()
+    final_status = "completed" if not stats.get("error") else "failed"
     with get_connection(read_only=False) as conn:
         conn.execute(
-            "UPDATE worker_runs SET status = 'completed', ended_at = ? WHERE run_id = ?",
-            [now, run_id],
+            "UPDATE worker_runs SET status = ?, ended_at = ? WHERE run_id = ?",
+            [final_status, now, run_id],
         )
-        # Check if all workers for this job are done
         pending = conn.execute(
             "SELECT COUNT(*) FROM worker_runs WHERE job_id = (SELECT job_id FROM worker_runs WHERE run_id = ?) AND status = 'running'",
             [run_id],
@@ -602,8 +608,8 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             ).fetchone()
             if job_row:
                 conn.execute(
-                    "UPDATE jobs SET status = 'completed', ended_at = ? WHERE job_id = ?",
-                    [now, job_row[0]],
+                    "UPDATE jobs SET status = ?, ended_at = ? WHERE job_id = ?",
+                    [final_status, now, job_row[0]],
                 )
         conn.commit()
 
@@ -901,8 +907,47 @@ def login(req: LoginRequest, response: Response):
         httponly=False,
         max_age=JWT_EXPIRATION_HOURS * 3600,
         samesite="lax",
+        path="/",
     )
     return LoginResponse(token=token)
+
+
+@app.websocket("/ws/test-status/live")
+async def ws_test_status(websocket: WebSocket, token: str = Query(...)):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("sub") is None:
+            await websocket.close(code=4001)
+            return
+    except jwt.InvalidTokenError:
+        await websocket.close(code=4001)
+        return
+
+    await ws_manager.connect("live", websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect("live", websocket)
+
+
+@app.websocket("/ws/test-status/{run_id}")
+async def ws_test_run(websocket: WebSocket, run_id: str, token: str = Query(...)):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("sub") is None:
+            await websocket.close(code=4001)
+            return
+    except jwt.InvalidTokenError:
+        await websocket.close(code=4001)
+        return
+
+    await ws_manager.connect(run_id, websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(run_id, websocket)
 
 
 @app.get("/api/v1/runs", response_model=List[RunManifest])
@@ -943,7 +988,7 @@ def get_run_failures(run_id: str):
     manifests = load_manifests()
     for m in manifests:
         if m.runId == run_id:
-            return [s for s in m.scenarios if s.status == "failed"]
+            return [s for s in m.scenarios if s.status in ("failed", "broken")]
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"Run '{run_id}' not found",
@@ -1711,7 +1756,7 @@ def triage_page(run_id: str, request: Request, _: TokenData = Depends(verify_tok
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Run '{run_id}' not found",
         )
-    failures = [s for s in manifest.scenarios if s.status == "failed"]
+    failures = [s for s in manifest.scenarios if s.status in ("failed", "broken")]
 
     template = jinja_env.get_template("triage.html")
     html = template.render(
@@ -2000,7 +2045,7 @@ def get_triage_state(run_id: str):
             LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
             LEFT JOIN jira_mappings jm ON sr.scenario_uid = jm.scenario_uid
             LEFT JOIN triage_decisions td ON sr.scenario_uid = td.scenario_uid
-            WHERE sr.run_id = ? AND sr.status = 'FAILED'
+            WHERE sr.run_id = ? AND sr.status IN ('FAILED', 'BROKEN')
             ORDER BY sr.id
         """, [run_id]).fetchall()
         if not rows:
@@ -2196,26 +2241,6 @@ def link_jira_issue(run_id: str, scenario_id: str, req: LinkJiraRequest, _: Toke
         return JiraResponse(jiraKey=jira_key, jiraUrl=jira_client.issue_url(jira_key))
     finally:
         conn.close()
-
-
-@app.websocket("/ws/test-status/{run_id}")
-async def test_status_ws(websocket: WebSocket, run_id: str, token: str = Query(None)):
-    if not token:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    try:
-        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except JWTError:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    await ws_manager.connect(run_id, websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            if data == "start":
-                await stream_test_output(run_id)
-    except WebSocketDisconnect:
-        ws_manager.disconnect(run_id, websocket)
 
 
 MANIFESTS_DIR.mkdir(parents=True, exist_ok=True)

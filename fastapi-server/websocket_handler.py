@@ -54,6 +54,16 @@ class ConnectionManager:
                 self.active_connections[run_id].remove(ws)
         if not self.active_connections[run_id]:
             del self.active_connections[run_id]
+        if run_id != "live" and "live" in self.active_connections:
+            live_stale: list[WebSocket] = []
+            for ws in list(self.active_connections["live"]):
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    live_stale.append(ws)
+            for ws in live_stale:
+                if ws in self.active_connections.get("live", []):
+                    self.active_connections["live"].remove(ws)
 
 
 manager = ConnectionManager()

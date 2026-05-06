@@ -34,6 +34,7 @@ async function handleLogin(e) {
       body: JSON.stringify({ username, password }),
     });
     setToken(data.token);
+    document.cookie = `access_token=${data.token}; path=/; SameSite=Lax`;
     showAdmin();
   } catch {
     errorEl.textContent = "Geçersiz kullanıcı adı veya şifre";
@@ -75,8 +76,9 @@ function showAdmin() {
 }
 
 function connectTestRunWebSocket(runId) {
-  if (!runId) return;
-  if (liveProgressSocket) liveProgressSocket.close();
+  // Connect WebSocket for live test progress
+  if (!runId) { console.log("[WS] runId empty, returning"); return; }
+  if (liveProgressSocket) { console.log("[WS] closing old socket"); liveProgressSocket.close(); }
 
   const progress = $("live-progress");
   const output = $("live-output");
@@ -88,30 +90,40 @@ function connectTestRunWebSocket(runId) {
   if (output) output.textContent = "";
 
   const protocol = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${protocol}://${location.host}/ws/test-status/${runId}`);
+  const token = getToken();
+  const wsUrl = `${protocol}://${location.host}/ws/test-status/${runId}?token=${encodeURIComponent(token)}`;
+  const ws = new WebSocket(wsUrl);
   liveProgressSocket = ws;
+  ws.onopen = () => {};
+  ws.onerror = () => {};
+  ws.onclose = () => {};
   ws.onmessage = (e) => {
-    const raw = JSON.parse(e.data);
-    const d = raw.data || raw;
-    if (raw.type === "progress" || d.type === "progress" || raw.type === "update") {
-      if ($("live-passed")) $("live-passed").textContent = d.passed ?? 0;
-      if ($("live-failed")) $("live-failed").textContent = d.failed ?? 0;
-      if ($("live-running")) $("live-running").textContent = d.running ?? 0;
-      if ($("live-pct")) $("live-pct").textContent = `${d.pct ?? 0}%`;
-      if (output) {
-        output.textContent = (d.output || []).slice(-50).join("\n");
-        output.scrollTop = output.scrollHeight;
+    try {
+      const raw = JSON.parse(e.data);
+      const d = raw.data || raw;
+      if (raw.type === "progress" || d.type === "progress" || raw.type === "update") {
+        if ($("live-passed")) $("live-passed").textContent = d.passed ?? 0;
+        if ($("live-failed")) $("live-failed").textContent = d.failed ?? 0;
+        if ($("live-running")) $("live-running").textContent = d.running ?? 0;
+        if ($("live-pct")) $("live-pct").textContent = `${d.pct ?? 0}%`;
+        if (output) {
+          output.textContent = (d.output || []).slice(-50).join("\n");
+          output.scrollTop = output.scrollHeight;
+        }
+      } else if (raw.type === "complete" || d.type === "complete") {
+        if ($("live-pct")) $("live-pct").textContent = "100% - Tamamlandı!";
+        if (output && d.output) output.textContent = d.output.slice(-50).join("\n");
+        setTimeout(() => {
+          loadRunningTests();
+          loadJobHistory();
+        }, 1500);
       }
-    } else if (raw.type === "complete" || d.type === "complete") {
-      if ($("live-pct")) $("live-pct").textContent = "100% - Tamamlandı!";
-      if (output && d.output) output.textContent = d.output.slice(-50).join("\n");
-      setTimeout(() => {
-        loadRunningTests();
-        loadJobHistory();
-      }, 1500);
+    } catch (err) {
+      console.error("[WS] onmessage error:", err);
     }
   };
-  ws.onerror = () => {
+  ws.onerror = (e) => {
+    console.log("[WS] Connection error:", e);
     if ($("test-status-msg")) {
       $("test-status-msg").textContent = "WebSocket bağlantısı kurulamadı";
       $("test-status-msg").className = "admin-status-msg admin-status--error";
@@ -212,8 +224,8 @@ function renderJobCard(job, showCancel = false) {
 
   const flakyInfo = status === "completed" && job.flaky_count !== undefined
     ? `<div class="job-summary-stats">
-        ${job.flaky_count > 0 ? `<span class="stat-flaky">⚡ Flaky: ${job.flaky_count}</span>` : ""}
-        ${job.retry_total > 0 ? `<span class="stat-retry">🔄 Retry: ${job.retry_total}</span>` : ""}
+        ${job.flaky_count > 0 ? `<span class="stat-flaky">Flaky: ${job.flaky_count}</span>` : ""}
+        ${job.retry_total > 0 ? `<span class="stat-retry">Retry: ${job.retry_total}</span>` : ""}
         ${job.flaky_count === 0 && job.retry_total === 0 ? `<span class="stat-stable">✓ Stabil</span>` : ""}
       </div>`
     : "";
@@ -229,10 +241,10 @@ function renderJobCard(job, showCancel = false) {
       </div>
       <div class="job-card-details">
         ${tags ? `<span class="job-tag">${tags}</span>` : ""}
-        ${retry > 0 ? `<span class="job-detail">🔄 Retry: ${retry}</span>` : ""}
-        <span class="job-detail">⚡ Paralel: ${parallel}</span>
-        ${env ? `<span class="job-detail">🌐 ${env}</span>` : ""}
-        ${version ? `<span class="job-detail">📦 ${version}</span>` : ""}
+        ${retry > 0 ? `<span class="job-detail">Retry: ${retry}</span>` : ""}
+        <span class="job-detail">Paralel: ${parallel}</span>
+        ${env ? `<span class="job-detail">${env}</span>` : ""}
+        ${version ? `<span class="job-detail">${version}</span>` : ""}
         ${startedAt ? `<span class="job-detail job-detail--time">${startedAt}</span>` : ""}
       </div>
       ${workersHtml}
