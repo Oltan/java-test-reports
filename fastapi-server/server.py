@@ -1,4 +1,6 @@
 import json
+import csv
+import io
 import os
 import re
 import shutil
@@ -597,10 +599,11 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             "UPDATE worker_runs SET status = ?, ended_at = ? WHERE run_id = ?",
             [final_status, now, run_id],
         )
-        pending = conn.execute(
+        pending_row = conn.execute(
             "SELECT COUNT(*) FROM worker_runs WHERE job_id = (SELECT job_id FROM worker_runs WHERE run_id = ?) AND status = 'running'",
             [run_id],
-        ).fetchone()[0]
+        ).fetchone()
+        pending = pending_row[0] if pending_row else 0
         if pending == 0:
             job_row = conn.execute(
                 "SELECT job_id FROM worker_runs WHERE run_id = ?",
@@ -653,9 +656,9 @@ def _parse_allure_result(result_file: Path) -> dict | None:
         label_value = label.get("value") or ""
         if label_name == "tag":
             tag_str = str(label_value).strip()
-            doors_match = re.search(r"@(?:DOORS-\d+|ABS-\d+)", tag_str, re.IGNORECASE)
+            doors_match = re.search(r"@?(?:DOORS-\d+|ABS-\d+)", tag_str, re.IGNORECASE)
             if doors_match:
-                doors_id = doors_match.group(0)[1:]
+                doors_id = doors_match.group(0).lstrip("@")
             else:
                 dep_match = re.match(r"@dep:(.+)", tag_str, re.IGNORECASE)
                 if dep_match:
@@ -706,7 +709,6 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     grouped: dict[str, list[dict]] = {}
     all_scenarios = []
 
-    DOORS_TAG_RE = re.compile(r"@(?:DOORS-\d+|ABS-\d+)", re.IGNORECASE)
     DEP_TAG_RE = re.compile(r"@dep:(.+)", re.IGNORECASE)
 
     if allure_dir.exists():
@@ -793,10 +795,10 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
                 conn.execute(
                     """
                     UPDATE scenario_definitions
-                    SET identity_source = 'allure', identity_key = ?, current_name = ?, current_feature_file = ?, last_seen_run_id = ?, last_seen_at = ?, active = true
+                    SET identity_source = 'allure', identity_key = ?, current_name = ?, current_feature_file = ?, doors_number = COALESCE(?, doors_number), last_seen_run_id = ?, last_seen_at = ?, active = true
                     WHERE scenario_uid = ?
                     """,
-                    [s["identity_key"], s["name"], s["feature_file"], run_id, finished_at, s["uid"]],
+                    [s["identity_key"], s["name"], s["feature_file"], s["doors_id"], run_id, finished_at, s["uid"]],
                 )
             else:
                 conn.execute(
@@ -1197,24 +1199,41 @@ async def generate_public_share(req: GenerateShareRequest):
                 },
             )
 
-        # Build snapshot rows, scoped to run when possible.
         scenario_rows = []
         for run_id, scenario_uid, _ in parsed:
             if run_id:
                 row = conn.execute("""
                     SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
-                           sr.error_message, sd.current_name, sd.doors_number
+                           sr.error_message, sd.current_name,
+                           COALESCE(sr.doors_number_at_run, sd.doors_number) AS doors_number,
+                           COALESCE(
+                               sr.jira_key_at_run,
+                               (SELECT jm.jira_key FROM jira_mappings jm WHERE jm.scenario_uid = sr.scenario_uid LIMIT 1),
+                               (SELECT bm.jira_key FROM bug_mappings bm WHERE bm.doors_number = COALESCE(sr.doors_number_at_run, sd.doors_number) LIMIT 1)
+                           ) AS jira_key,
+                           r.version,
+                           sr.run_id
                     FROM scenario_results sr
                     LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
+                    LEFT JOIN runs r ON sr.run_id = r.id
                     WHERE sr.run_id = ? AND sr.scenario_uid = ?
                     LIMIT 1
                 """, [run_id, scenario_uid]).fetchone()
             else:
                 row = conn.execute("""
                     SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
-                           sr.error_message, sd.current_name, sd.doors_number
+                           sr.error_message, sd.current_name,
+                           COALESCE(sr.doors_number_at_run, sd.doors_number) AS doors_number,
+                           COALESCE(
+                               sr.jira_key_at_run,
+                               (SELECT jm.jira_key FROM jira_mappings jm WHERE jm.scenario_uid = sr.scenario_uid LIMIT 1),
+                               (SELECT bm.jira_key FROM bug_mappings bm WHERE bm.doors_number = COALESCE(sr.doors_number_at_run, sd.doors_number) LIMIT 1)
+                           ) AS jira_key,
+                           r.version,
+                           sr.run_id
                     FROM scenario_results sr
                     LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
+                    LEFT JOIN runs r ON sr.run_id = r.id
                     WHERE sr.scenario_uid = ?
                     LIMIT 1
                 """, [scenario_uid]).fetchone()
@@ -1222,6 +1241,19 @@ async def generate_public_share(req: GenerateShareRequest):
                 scenario_rows.append(row)
 
         scenarios_internal = []
+        csv_rows = []
+        manifest_doors_by_run_name = {}
+        parsed_run_ids = {run_id for run_id, _, _ in parsed if run_id}
+        if parsed_run_ids:
+            for manifest in load_manifests():
+                if manifest.runId not in parsed_run_ids:
+                    continue
+                for scenario in manifest.scenarios:
+                    for tag in scenario.tags:
+                        doors_match = re.search(r"@?(?:DOORS-\d+|ABS-\d+)", tag, re.IGNORECASE)
+                        if doors_match:
+                            manifest_doors_by_run_name.setdefault((manifest.runId, scenario.name), doors_match.group(0).lstrip("@"))
+                            break
         passed = failed = skipped = 0
         for row in scenario_rows:
             status = row[2] or "UNKNOWN"
@@ -1237,6 +1269,13 @@ async def generate_public_share(req: GenerateShareRequest):
                 "status": status.lower(),
                 "duration": f"PT{row[3]:.3f}S" if row[3] else "PT0S",
             })
+            csv_rows.append({
+                "doors_id": row[6] or manifest_doors_by_run_name.get((row[9], row[1]), ""),
+                "name": row[5] or row[1] or row[0],
+                "status": status,
+                "jira_key": row[7] or "",
+                "version": row[8] or "vX.X",
+            })
 
         internal_report = {
             "totalScenarios": len(scenario_rows),
@@ -1249,7 +1288,9 @@ async def generate_public_share(req: GenerateShareRequest):
 
         from models import PublicReportSnapshot
         snapshot = PublicReportSnapshot.from_internal(internal_report)
-        snapshot_json = snapshot.model_dump_json() if hasattr(snapshot, "model_dump_json") else json.dumps(snapshot.model_dump(mode="json"), ensure_ascii=False)
+        snapshot_payload = snapshot.model_dump(mode="json")
+        snapshot_payload["_csv_export_rows"] = csv_rows
+        snapshot_json = json.dumps(snapshot_payload, ensure_ascii=False)
 
         share_id = str(uuid4())
         conn.execute("""
@@ -1277,7 +1318,9 @@ async def get_public_snapshot(share_id: str):
         if not row:
             raise HTTPException(status_code=404, detail="Snapshot not found")
         import json as _json
-        return _json.loads(row[0])
+        snapshot = _json.loads(row[0])
+        snapshot.pop("_csv_export_rows", None)
+        return snapshot
     finally:
         conn.close()
 
@@ -1369,33 +1412,115 @@ async def list_public_reports():
         conn.close()
 
 
-@app.get("/api/csv/export", dependencies=[Depends(verify_token)])
-def export_csv(run_id: str):
+@app.get("/api/csv/export")
+def export_csv(run_id: str, _: TokenData = Depends(verify_token_page)):
     conn = get_connection(read_only=True)
     try:
         rows = conn.execute(
-            "SELECT doors_number_at_run, status, name_at_run, error_message FROM scenario_results WHERE run_id = ? AND doors_number_at_run IS NOT NULL ORDER BY doors_number_at_run",
+            """
+            SELECT
+                COALESCE(sr.doors_number_at_run, sd.doors_number, '') AS doors_id,
+                sr.status,
+                COALESCE(
+                    sr.jira_key_at_run,
+                    (SELECT jm.jira_key FROM jira_mappings jm WHERE jm.scenario_uid = sr.scenario_uid LIMIT 1),
+                    (SELECT bm.jira_key FROM bug_mappings bm WHERE bm.doors_number = COALESCE(sr.doors_number_at_run, sd.doors_number) LIMIT 1),
+                    ''
+                ) AS jira_key,
+                COALESCE(r.version, 'vX.X') AS version,
+                sr.name_at_run
+            FROM scenario_results sr
+            LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
+            LEFT JOIN runs r ON sr.run_id = r.id
+            WHERE sr.run_id = ?
+            ORDER BY doors_id, sr.name_at_run
+            """,
             [run_id],
         ).fetchall()
 
         if not rows:
-            raise HTTPException(status_code=404, detail="No scenarios with DOORS numbers found for this run")
+            raise HTTPException(status_code=404, detail="No scenarios found for this run")
 
-        lines = ["absnumber,test_sonucu,test_aciklamasi"]
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Senaryo", "Durum", "Açıklama"])
+        manifest_doors_by_name = {}
+        for manifest in load_manifests():
+            if manifest.runId != run_id:
+                continue
+            for scenario in manifest.scenarios:
+                for tag in scenario.tags:
+                    doors_match = re.search(r"@?(?:DOORS-\d+|ABS-\d+)", tag, re.IGNORECASE)
+                    if doors_match:
+                        manifest_doors_by_name.setdefault(scenario.name, doors_match.group(0).lstrip("@"))
+                        break
+            break
+
         for r in rows:
-            doors_number, status, name, error = r
-            explanation = ""
+            doors_id, status, jira_key, version, name = r
+            doors_id = doors_id or manifest_doors_by_name.get(name, "")
             if status == "PASSED":
-                explanation = f"{name} - PASS"
+                result_status = "Yapildi - Hata Yok"
+                explanation = f"{version} sürümünde test otomasyon ile doğrulanmıştır."
+            elif status in {"FAILED", "BROKEN"}:
+                result_status = "Yapildi - Hata Var"
+                explanation = jira_key or ""
             else:
-                explanation = f"{name} - {error}" if error else name
-            lines.append(f"{doors_number},{status},{explanation}")
+                result_status = "Yapilmadi"
+                explanation = "Test kapsamına alınmadığı için yapılmadı"
+            writer.writerow([doors_id or "", result_status, explanation])
 
-        content = "\n".join(lines)
+        content = "\ufeff" + output.getvalue()
         return Response(
             content=content,
-            media_type="text/csv",
+            media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": f"attachment; filename=doors_export_{run_id}.csv"},
+        )
+    finally:
+        conn.close()
+
+
+@app.get("/api/csv/share/{share_id}", dependencies=[Depends(verify_token)])
+def export_csv_share(share_id: str):
+    conn = get_connection(read_only=True)
+    try:
+        row = conn.execute(
+            "SELECT snapshot_data FROM public_snapshots WHERE share_id = ? AND status = 'active'",
+            [share_id],
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Snapshot not found")
+
+        snapshot = json.loads(row[0])
+        csv_export_rows = snapshot.get("_csv_export_rows") or snapshot.get("scenario_list", [])
+        if not csv_export_rows:
+            raise HTTPException(status_code=404, detail="No scenarios in snapshot")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Senaryo", "Durum", "Açıklama"])
+        for s in csv_export_rows:
+            raw_status = (s.get("status") or "").upper()
+            doors_id = s.get("doors_id") or ""
+            version = s.get("version") or "vX.X"
+            jira_key = s.get("jira_key") or ""
+
+            if raw_status == "PASSED":
+                result_status = "Yapildi - Hata Yok"
+                explanation = f"{version} sürümünde test otomasyon ile doğrulanmıştır."
+            elif raw_status in {"FAILED", "BROKEN"}:
+                result_status = "Yapildi - Hata Var"
+                explanation = jira_key
+            else:
+                result_status = "Yapilmadi"
+                explanation = "Test kapsamına alınmadığı için yapılmadı"
+            writer.writerow([doors_id, result_status, explanation])
+
+        content = "\ufeff" + output.getvalue()
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename=report_{share_id[:8]}.csv"},
         )
     finally:
         conn.close()
