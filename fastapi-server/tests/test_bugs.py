@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
+from typing import Optional
 from unittest.mock import patch
 
 import pytest
@@ -16,7 +17,7 @@ from server import app, create_token
 client = TestClient(app)
 
 
-def _auth_headers(token: str = None) -> dict:
+def _auth_headers(token: Optional[str] = None) -> dict:
     if token is None:
         token = create_token("admin")
     return {"Authorization": f"Bearer {token}"}
@@ -50,7 +51,8 @@ def test_get_bug_404(temp_tracker):
         assert response.status_code == 404
 
 
-def test_create_bug_201(temp_tracker):
+def test_create_bug_201(temp_tracker, monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
     test_tracker, path = temp_tracker
     with patch("server.tracker", test_tracker):
         token = create_token("admin")
@@ -65,7 +67,8 @@ def test_create_bug_201(temp_tracker):
         assert data["doorsNumber"] == "DOORS-12345"
 
 
-def test_create_bug_409_conflict(temp_tracker):
+def test_create_bug_409_conflict(temp_tracker, monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
     test_tracker, path = temp_tracker
     with patch("server.tracker", test_tracker):
         token = create_token("admin")
@@ -82,7 +85,8 @@ def test_create_bug_409_conflict(temp_tracker):
         assert response.status_code == 409
 
 
-def test_get_bug_200(temp_tracker):
+def test_get_bug_200(temp_tracker, monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
     test_tracker, path = temp_tracker
     with patch("server.tracker", test_tracker):
         token = create_token("admin")
@@ -102,4 +106,4 @@ def test_unauthorized_401(temp_tracker):
     test_tracker, path = temp_tracker
     with patch("server.tracker", test_tracker):
         response = client.get("/api/v1/bugs")
-        assert response.status_code == 401
+        assert response.status_code == 401  # bugs endpoint now requires auth

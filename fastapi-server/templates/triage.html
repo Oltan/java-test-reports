@@ -1,346 +1,222 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="jwt-token" content="{{ token }}">
-    <title>Triage — Run {{ run_id }}</title>
-    <style>
-        :root {
-            --bg: #0f1117;
-            --surface: #1a1d27;
-            --surface-hover: #222633;
-            --border: #2a2e3d;
-            --text: #e4e6ed;
-            --text-muted: #8b8fa3;
-            --accent: #6366f1;
-            --accent-hover: #818cf8;
-            --danger: #ef4444;
-            --danger-bg: rgba(239, 68, 68, 0.08);
-            --success: #22c55e;
-            --radius: 10px;
-            --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="run-id" content="{{ run_id }}">
+  <meta name="jira-base-url" content="{{ jira_base_url }}">
+  <title>Triage — {{ run_id }}</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <style>
+    .triage-auth-wrap {
+      display: flex; justify-content: center; align-items: center;
+      min-height: calc(100vh - 56px); padding: var(--sp-6);
+      background: radial-gradient(ellipse at 50% 0%, var(--heat-accent-muted) 0%, transparent 60%);
+    }
+    .triage-auth-card {
+      background: var(--surface); border-radius: var(--radius-lg); padding: var(--sp-10) var(--sp-8);
+      box-shadow: var(--shadow-lg); width: 100%; max-width: 400px;
+      border: 1px solid var(--border);
+    }
+    .triage-auth-card h2 { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: var(--sp-6); letter-spacing: -.02em; }
+    .triage-auth-icon { text-align: center; margin-bottom: var(--sp-4); color: var(--accent); }
+    .triage-auth-error { color: var(--danger); font-size: 13px; min-height: 20px; margin-bottom: var(--sp-2); text-align: center; }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+    .triage-loading {
+      text-align: center; padding: var(--sp-16) var(--sp-6); color: var(--text-muted);
+    }
+    .triage-loading h2 { font-size: 20px; color: var(--text); margin-bottom: var(--sp-2); }
 
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-        }
+    .fcard[data-decision="accepted_pass"] { border-left: 4px solid var(--success); }
+    .fcard[data-decision="accepted_skip"] { border-left: 4px solid var(--skip); }
+    .fcard[data-decision="jira_created"],
+    .fcard[data-decision="jira_linked"] { border-left: 4px solid var(--warning); }
 
-        header {
-            padding: 2rem 2.5rem;
-            border-bottom: 1px solid var(--border);
-            background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
-        }
+    .fcard-meta-row {
+      display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3);
+      align-items: center;
+    }
+    .fcard-meta-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      letter-spacing: .3px;
+    }
+    .fcard-meta-tag--doors {
+      background: rgba(139,92,246,.12); color: #a78bfa;
+    }
+    .fcard-meta-tag--flaky {
+      background: var(--warning-bg); color: var(--warning);
+      animation: pulse-flaky 2s ease-in-out infinite;
+    }
+    .fcard-meta-tag--retry {
+      background: var(--skip-bg); color: var(--text-secondary);
+    }
+    @keyframes pulse-flaky {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .7; }
+    }
 
-        header h1 {
-            font-size: 1.75rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
+    .triage-actions {
+      display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-start;
+      margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border);
+    }
+    .triage-actions-group {
+      display: flex; gap: var(--sp-2); align-items: center;
+    }
+    .triage-actions-divider {
+      width: 1px; height: 28px; background: var(--border); margin: 0 var(--sp-1);
+    }
 
-        header p {
-            color: var(--text-muted);
-            margin-top: 0.35rem;
-            font-size: 0.9rem;
-        }
+    .override-section {
+      margin-top: var(--sp-3); padding: var(--sp-4);
+      background: var(--bg); border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .override-section[hidden] { display: none; }
+    .override-label {
+      font-size: 12px; font-weight: 700; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: var(--sp-2);
+      display: block;
+    }
+    .override-reason {
+      width: 100%; min-height: 60px; background: var(--surface);
+      border: 1px solid var(--border); color: var(--text);
+      padding: var(--sp-3); border-radius: var(--radius-sm);
+      font-family: var(--font-body); font-size: 14px; resize: vertical;
+      outline: none; transition: border-color var(--duration), box-shadow var(--duration);
+    }
+    .override-reason:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-muted); }
+    .override-reason::placeholder { color: var(--text-muted); opacity: .5; }
+    .override-reason--error { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-bg); }
+    .override-error {
+      color: var(--danger); font-size: 12px; margin-top: var(--sp-1);
+      min-height: 18px;
+    }
+    .override-actions {
+      display: flex; gap: var(--sp-2); margin-top: var(--sp-3);
+    }
 
-        .stats {
-            display: flex;
-            gap: 1.5rem;
-            margin-top: 1rem;
-        }
+    .link-jira-section {
+      margin-top: var(--sp-3); padding: var(--sp-4);
+      background: var(--bg); border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .link-jira-section[hidden] { display: none; }
+    .link-jira-row {
+      display: flex; gap: var(--sp-2); align-items: center;
+    }
+    .link-jira-input {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: var(--sp-2) var(--sp-3);
+      border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 14px;
+      outline: none; transition: border-color var(--duration), box-shadow var(--duration);
+    }
+    .link-jira-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-muted); }
+    .link-jira-input::placeholder { color: var(--text-muted); opacity: .5; }
 
-        .stat {
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius);
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
+    .decision-badge {
+      display: inline-flex; align-items: center; gap: var(--sp-2);
+      padding: var(--sp-2) var(--sp-4); border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600;
+    }
+    .decision-badge--pass { background: var(--success-bg); color: var(--success); }
+    .decision-badge--skip { background: var(--skip-bg); color: var(--skip); }
+    .decision-badge--jira { background: var(--warning-bg); color: var(--warning); }
 
-        .stat--failed {
-            background: var(--danger-bg);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
+    .decision-info {
+      margin-top: var(--sp-2); font-size: 12px; color: var(--text-muted);
+    }
+    .decision-info strong { color: var(--text-secondary); }
 
-        .stat--passed {
-            background: rgba(34, 197, 94, 0.08);
-            color: var(--success);
-            border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        main {
-            padding: 2rem 2.5rem;
-            max-width: 960px;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            margin-bottom: 1.25rem;
-            box-shadow: var(--shadow);
-            transition: border-color 0.2s;
-        }
-
-        .card:hover {
-            border-color: var(--accent);
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1rem;
-        }
-
-        .card-title {
-            font-size: 1.15rem;
-            font-weight: 600;
-        }
-
-        .card-id {
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            margin-top: 0.2rem;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.2rem 0.65rem;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        .badge--failed {
-            background: var(--danger-bg);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.25);
-        }
-
-        .steps {
-            margin: 0.75rem 0;
-            padding-left: 1.25rem;
-        }
-
-        .steps li {
-            font-size: 0.88rem;
-            color: var(--text-muted);
-            padding: 0.2rem 0;
-        }
-
-        .steps li.step--failed {
-            color: var(--danger);
-            font-weight: 600;
-        }
-
-        .error-box {
-            background: var(--danger-bg);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            border-radius: 6px;
-            padding: 0.75rem 1rem;
-            margin: 0.75rem 0;
-            font-family: 'Cascadia Code', 'Fira Code', monospace;
-            font-size: 0.82rem;
-            color: var(--danger);
-        }
-
-        .card-actions {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .btn {
-            padding: 0.55rem 1.25rem;
-            border-radius: 8px;
-            border: none;
-            font-size: 0.88rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-        }
-
-        .btn:active { transform: scale(0.97); }
-
-        .btn--primary {
-            background: var(--accent);
-            color: #fff;
-        }
-
-        .btn--primary:hover { background: var(--accent-hover); }
-
-        .btn--primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .jira-key {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.4rem 0.85rem;
-            background: rgba(34, 197, 94, 0.1);
-            border: 1px solid rgba(34, 197, 94, 0.25);
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--success);
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-muted);
-        }
-
-        .empty-state h2 {
-            font-size: 1.3rem;
-            margin-bottom: 0.5rem;
-            color: var(--text);
-        }
-    </style>
+    .filter-search-wrap {
+      display: flex; align-items: center; gap: var(--sp-2); background: var(--bg);
+      border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3);
+      transition: border-color var(--duration);
+    }
+    .filter-search-wrap:focus-within { border-color: var(--accent); }
+    .filter-search-wrap svg { color: var(--text-muted); flex-shrink: 0; }
+    .filter-search {
+      background: none; border: none; color: var(--text); font-size: 14px;
+      font-family: var(--font-body); outline: none; width: 220px;
+    }
+    .filter-search::placeholder { color: var(--text-muted); opacity: .6; }
+  </style>
 </head>
 <body>
-    <header>
-        <h1>Triage — Run {{ run_id }}</h1>
-        <p>{{ manifest.totalScenarios }} scenarios &middot; {{ manifest.passed }} passed &middot; {{ manifest.failed }} failed</p>
-        <div class="stats">
-            <span class="stat stat--failed">{{ manifest.failed }} Failed</span>
-            <span class="stat stat--passed">{{ manifest.passed }} Passed</span>
-        </div>
-    </header>
 
-    <main>
-        {% if failures %}
-            {% for scenario in failures %}
-            <div class="card" data-testid="failure-card" data-doors-number="{{ scenario.doorsAbsNumber }}">
-                <div class="card-header">
-                    <div>
-                        <div class="card-title">{{ scenario.name }}</div>
-                        <div class="card-id">{{ scenario.id }}</div>
-                    </div>
-                    <span class="badge badge--failed">{{ scenario.status }}</span>
-                </div>
+<!-- ── Nav ── -->
+<nav class="nav">
+  <div class="nav-brand">
+    <a href="/" class="nav-back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Test Reports
+  </div>
+  <div class="nav-right">
+    <span class="nav-label nav-label--muted">Run: {{ run_id }}</span>
+  </div>
+</nav>
 
-                <div data-testid="bug-status" style="margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">⏳ Loading bug status…</div>
+<!-- ── Auth Gate ── -->
+<div id="triage-auth" class="triage-auth-wrap">
+  <div class="triage-auth-card">
+    <div class="triage-auth-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h2>Triage Erişimi</h2>
+    <form id="triage-login-form">
+      <div class="field">
+        <label for="triage-username">Kullanıcı Adı</label>
+        <input id="triage-username" name="username" type="text" placeholder="admin" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="triage-password">Şifre</label>
+        <input id="triage-password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <div class="triage-auth-error" id="triage-auth-error"></div>
+      <button class="btn btn-primary btn-block" type="submit">Giriş Yap</button>
+    </form>
+  </div>
+</div>
 
-                {% if scenario.steps %}
-                <ol class="steps">
-                    {% for step in scenario.steps %}
-                    <li class="{% if step.status == 'failed' %}step--failed{% endif %}">
-                        {{ step.name }}{% if step.status == 'failed' %} ✗{% else %} ✓{% endif %}
-                    </li>
-                    {% endfor %}
-                </ol>
-                {% endif %}
+<!-- ── Header ── -->
+<header class="triage-header" id="triage-header" style="display:none">
+  <div class="triage-header-inner">
+    <div>
+      <h1 class="triage-title">Failure Analysis</h1>
+      <p class="triage-sub" id="triage-sub"></p>
+    </div>
+    <div class="triage-stats" id="triage-stats"></div>
+  </div>
+</header>
 
-                {% for step in scenario.steps %}
-                    {% if step.errorMessage %}
-                    <div class="error-box">{{ step.errorMessage }}</div>
-                    {% endif %}
-                {% endfor %}
+<!-- ── Filter bar ── -->
+<div class="filter-bar" id="triage-filter" style="display:none">
+  <div class="filter-inner">
+    <div class="filter-search-wrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="filter-input" class="filter-search" type="text" placeholder="Senaryo ara…">
+    </div>
+    <span class="filter-count">
+      <span id="visible-count">0</span> failure(s)
+    </span>
+  </div>
+</div>
 
-                {% if scenario.attachments %}
-                <div style="margin-top: 0.5rem;">
-                    {% for att in scenario.attachments %}
-                        {% if att.type == 'image/png' %}
-                        <div style="color: var(--text-muted); font-size: 0.82rem;">
-                            📎 {{ att.name }} (screenshot placeholder)
-                        </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                {% endif %}
+<!-- ── Loading ── -->
+<div id="triage-loading" class="triage-loading" style="display:none">
+  <h2>Yükleniyor…</h2>
+  <p>Triaj verileri alınıyor</p>
+</div>
 
-                <div class="card-actions">
-                    <button
-                        class="btn btn--primary"
-                        data-testid="create-jira-button"
-                        data-scenario-id="{{ scenario.id }}"
-                        onclick="createJira(this, '{{ run_id }}', '{{ scenario.id }}')"
-                    >
-                        Create Jira Bug
-                    </button>
-                    <span data-testid="jira-key-display" class="jira-key" style="display:none;"></span>
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="empty-state">
-                <h2>No failures to triage</h2>
-                <p>All scenarios passed for this run.</p>
-            </div>
-        {% endif %}
-    </main>
+<!-- ── Failure cards ── -->
+<main class="triage-main" id="triage-main" style="display:none"></main>
 
-    <script>
-    function getToken() { return document.querySelector('meta[name="jwt-token"]')?.content || ''; }
+<footer class="footer" id="triage-footer" style="display:none">
+  Test Raporlama Sistemi v2.0 · <a href="/">Dashboard'a Dön</a>
+</footer>
 
-    async function loadBugStatuses() {
-      const cards = document.querySelectorAll('[data-testid="failure-card"]');
-      for (const card of cards) {
-        const doorsNum = card.dataset.doorsNumber;
-        if (!doorsNum) continue;
-        const statusEl = card.querySelector('[data-testid="bug-status"]');
-        const btnEl = card.querySelector('[data-testid="create-jira-button"]');
-        try {
-          const resp = await fetch(`/api/v1/bugs/${doorsNum}`, {
-            headers: {'Authorization': `Bearer ${getToken()}`}
-          });
-          if (resp.ok) {
-            const bug = await resp.json();
-            const emoji = bug.status === 'OPEN' ? '🟡' : bug.status === 'CLOSED' ? '🔴' : '🟡';
-            statusEl.innerHTML = `${emoji} <a href="#" data-testid="jira-link">${bug.jiraKey}</a> (${bug.status})`;
-            statusEl.title = `First seen: ${bug.firstSeen}\nLast seen: ${bug.lastSeen}\nRuns: ${bug.runIds.length}`;
-            btnEl.disabled = true;
-            btnEl.textContent = 'Already Reported';
-          } else if (resp.status === 404) {
-            statusEl.innerHTML = '🟢 New — not yet reported';
-          } else {
-            statusEl.textContent = '⚠️ Status unknown';
-          }
-        } catch(e) {
-          statusEl.textContent = '⚠️ Status unknown';
-        }
-      }
-    }
-
-    async function createJira(button, runId, scenarioId) {
-        button.disabled = true;
-        button.textContent = 'Creating…';
-
-        try {
-            const res = await fetch(`/api/v1/runs/${runId}/scenarios/${scenarioId}/jira`, {
-                method: 'POST',
-            });
-
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-            const data = await res.json();
-            const display = button.parentElement.querySelector('[data-testid="jira-key-display"]');
-            display.textContent = data.jiraKey;
-            display.style.display = 'inline-flex';
-            button.textContent = 'Bug Created';
-        } catch (err) {
-            button.textContent = 'Error — Retry';
-            button.disabled = false;
-            console.error(err);
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', loadBugStatuses);
-    </script>
+<script type="module" src="/static/triage.js?v=2"></script>
 </body>
 </html>

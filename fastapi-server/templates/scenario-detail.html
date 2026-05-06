@@ -43,6 +43,16 @@
     .info-card .value { font-size:18px; font-weight:700; }
     .section-title { font-size:16px; font-weight:600; margin:24px 0 12px; color:var(--text-muted); }
     .empty-state { text-align:center; padding:40px; color:var(--text-muted); }
+    .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; margin:2px 4px 2px 0; }
+    .badge--dep { background:var(--accent); color:#fff; }
+    .badge--retry { background:var(--warning); color:#000; }
+    .attempt-row { display:flex; align-items:center; gap:12px; padding:10px 16px; border-radius:8px; margin-bottom:6px; }
+    .attempt-row.passed { background:rgba(22,163,74,.12); border-left:3px solid var(--success); }
+    .attempt-row.failed { background:rgba(220,38,38,.12); border-left:3px solid var(--danger); }
+    .attempt-row.skipped { background:rgba(148,163,184,.1); border-left:3px solid var(--text-muted); }
+    .attempt-num { font-size:13px; font-weight:700; min-width:80px; }
+    .attempt-ts { font-size:13px; color:var(--text-muted); flex:1; }
+    .attempt-err { font-size:12px; color:#fca5a5; font-family:monospace; }
   </style>
 </head>
 <body>
@@ -115,6 +125,45 @@
       <div class="empty-state">📭 Bu senaryo için adım detayı bulunamadı</div>
       {% endif %}
     </div>
+
+
+    <!-- Retry History -->
+    {% if scenario.attempts and scenario.attempts|length > 1 %}
+    <div class="section-title">🔄 Retry History ({{ scenario.attempts|length }} attempts)</div>
+    <div class="steps">
+      {% for attempt in scenario.attempts %}
+      <div class="attempt-row {{ attempt.status }}">
+        <div class="attempt-num">
+          Attempt {{ loop.index }}/{{ scenario.attempts|length }}:
+          {% if attempt.status == 'passed' %}✅{% elif attempt.status == 'failed' %}❌{% else %}⏭{% endif %}
+        </div>
+        <div class="attempt-ts">{{ attempt.timestamp }}</div>
+        {% if attempt.errorMessage %}
+        <div class="attempt-err">{{ attempt.errorMessage }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Dependencies -->
+    {% if scenario.dependencies and scenario.dependencies|length > 0 %}
+    <div class="section-title">🔗 Dependencies</div>
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="label">Scenario ID</div>
+        <div class="value" style="font-size:14px;">@id:{{ scenario.id }}</div>
+      </div>
+      <div class="info-card">
+        <div class="label">Depends On</div>
+        <div class="value" style="font-size:14px;">
+          {% for dep in scenario.dependencies %}
+          <span class="badge badge--dep">{{ dep }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Screenshots (Failed only) -->
     {% if scenario.attachments and scenario.status == 'failed' %}

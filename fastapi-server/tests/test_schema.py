@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from models import RunManifest, ScenarioResult, StepResult, Attachment
+from models import RunManifest, ScenarioResult, StepResult, Attachment, AttemptResult
 
 
 def test_load_sample_manifest():
@@ -16,12 +16,12 @@ def test_load_sample_manifest():
     manifest = RunManifest.model_validate(data)
 
     assert manifest.runId == "run-2026-04-26-001"
-    assert manifest.totalScenarios == 2
-    assert manifest.passed == 1
+    assert manifest.totalScenarios == 3
+    assert manifest.passed == 2
     assert manifest.failed == 1
     assert manifest.skipped == 0
     assert manifest.duration == "PT58.125S"
-    assert len(manifest.scenarios) == 2
+    assert len(manifest.scenarios) == 3
 
 
 def test_round_trip_serialization():
@@ -120,6 +120,39 @@ def test_null_doors_abs_number():
         doorsAbsNumber=None,
         tags=[],
         steps=[],
-        attachments=[]
+        attachments=[],
+        attempts=[],
+        dependencies=[]
     )
     assert scenario.doorsAbsNumber is None
+    assert scenario.attempts == []
+    assert scenario.dependencies == []
+
+
+def test_attempt_result_model():
+    attempt = AttemptResult(status="failed", timestamp="2026-01-01T00:00:00Z", errorMessage="Timeout")
+    assert attempt.status == "failed"
+    assert attempt.timestamp == "2026-01-01T00:00:00Z"
+    assert attempt.errorMessage == "Timeout"
+
+    attempt_pass = AttemptResult(status="passed", timestamp="2026-01-01T00:01:00Z")
+    assert attempt_pass.errorMessage is None
+
+
+def test_scenario_with_attempts_and_deps():
+    scenario = ScenarioResult(
+        id="retry-scenario",
+        name="Retry Scenario",
+        status="passed",
+        duration="PT30S",
+        attempts=[
+            AttemptResult(status="failed", timestamp="2026-01-01T00:00:00Z", errorMessage="Error 1"),
+            AttemptResult(status="failed", timestamp="2026-01-01T00:01:00Z", errorMessage="Error 2"),
+            AttemptResult(status="passed", timestamp="2026-01-01T00:02:00Z"),
+        ],
+        dependencies=["scenario-001", "scenario-002"]
+    )
+    assert len(scenario.attempts) == 3
+    assert scenario.attempts[0].status == "failed"
+    assert scenario.attempts[2].status == "passed"
+    assert scenario.dependencies == ["scenario-001", "scenario-002"]

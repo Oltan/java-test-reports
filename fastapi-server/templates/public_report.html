@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Raporu</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <style>
+    .pub-hero {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: var(--sp-8) var(--sp-6);
+      position: relative;
+      overflow: hidden;
+    }
+    .pub-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, var(--heat-accent-muted) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .pub-hero-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+    .pub-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--sp-2);
+      padding: var(--sp-1) var(--sp-4);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      background: var(--accent-muted);
+      color: var(--accent);
+      margin-bottom: var(--sp-4);
+    }
+    .pub-badge svg { width: 14px; height: 14px; }
+    .pub-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.03em;
+      line-height: 1.2;
+      margin-bottom: var(--sp-2);
+    }
+    .pub-timestamp {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+
+    .pub-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--sp-4);
+      max-width: 1400px;
+      margin: calc(-1 * var(--sp-6)) auto var(--sp-6);
+      padding: 0 var(--sp-6);
+      position: relative;
+      z-index: 2;
+    }
+    .pub-metric {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: var(--sp-5);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: var(--sp-4);
+      animation: cardRise 0.5s var(--ease) backwards;
+      box-shadow: var(--shadow-sm), var(--heat-glow);
+      transition: transform var(--duration) var(--ease), box-shadow var(--duration);
+    }
+    .pub-metric:hover { transform: translateY(-2px); box-shadow: var(--shadow), var(--heat-glow); }
+    .pub-metric:nth-child(1) { animation-delay: 0ms; }
+    .pub-metric:nth-child(2) { animation-delay: 100ms; }
+    .pub-metric:nth-child(3) { animation-delay: 200ms; }
+    .pub-metric:nth-child(4) { animation-delay: 300ms; }
+    .pub-metric-icon {
+      width: 44px; height: 44px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .pub-metric-icon--pass { background: var(--success-bg); color: var(--success); }
+    .pub-metric-icon--fail { background: var(--danger-bg); color: var(--danger); }
+    .pub-metric-icon--skip { background: var(--skip-bg); color: var(--skip); }
+    .pub-metric-icon--total { background: var(--accent-muted); color: var(--accent); }
+    .pub-metric-body { min-width: 0; }
+    .pub-metric-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      font-weight: 600;
+    }
+    .pub-metric-value {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -.02em;
+    }
+    .pub-metric-value--pass { color: var(--success); }
+    .pub-metric-value--fail { color: var(--danger); }
+    .pub-metric-value--skip { color: var(--skip); }
+    .pub-metric-value--total { color: var(--accent); }
+
+    .pub-bar-wrap {
+      max-width: 1400px;
+      margin: 0 auto var(--sp-6);
+      padding: 0 var(--sp-6);
+    }
+    .pub-bar-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: var(--sp-5);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      animation: cardRise 0.5s var(--ease) backwards;
+      animation-delay: 400ms;
+    }
+    .pub-bar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--sp-3);
+    }
+    .pub-bar-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .pub-bar-pct {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: var(--font-mono);
+    }
+    .pub-bar-track {
+      height: 10px;
+      background: var(--border);
+      border-radius: 5px;
+      overflow: hidden;
+      display: flex;
+    }
+    .pub-bar-seg {
+      height: 100%;
+      transition: width .6s var(--ease);
+    }
+    .pub-bar-seg--pass { background: var(--success); }
+    .pub-bar-seg--fail { background: var(--danger); }
+    .pub-bar-seg--skip { background: var(--skip); }
+    .pub-bar-legend {
+      display: flex;
+      gap: var(--sp-5);
+      margin-top: var(--sp-3);
+    }
+    .pub-bar-legend-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .pub-bar-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pub-bar-dot--pass { background: var(--success); }
+    .pub-bar-dot--fail { background: var(--danger); }
+    .pub-bar-dot--skip { background: var(--skip); }
+
+    .pub-scenarios {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 var(--sp-6) var(--sp-8);
+    }
+    .pub-scenarios-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      animation: cardRise 0.5s var(--ease) backwards;
+      animation-delay: 500ms;
+    }
+    .pub-scenarios-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-5);
+      border-bottom: 1px solid var(--border);
+    }
+    .pub-scenarios-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+    }
+    .pub-scenarios-count {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      background: var(--bg);
+      padding: var(--sp-1) var(--sp-3);
+      border-radius: 20px;
+    }
+    .pub-scenarios-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .pub-scenarios-table th {
+      text-align: left;
+      padding: var(--sp-3) var(--sp-5);
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .pub-scenarios-table td {
+      padding: var(--sp-3) var(--sp-5);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 14px;
+    }
+    .pub-scenarios-table tbody tr {
+      animation: cardRise 0.4s var(--ease) backwards;
+      transition: background var(--duration);
+    }
+    .pub-scenarios-table tbody tr:hover {
+      background: var(--surface-hover);
+    }
+    .pub-scenarios-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .pub-scenario-name {
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .pub-scenario-idx {
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      width: 40px;
+    }
+
+    @media (max-width: 1024px) {
+      .pub-metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .pub-metrics { grid-template-columns: 1fr; }
+      .pub-hero { padding: var(--sp-6) var(--sp-4); }
+      .pub-title { font-size: 22px; }
+      .pub-scenarios { padding: 0 var(--sp-4) var(--sp-6); }
+      .pub-bar-wrap { padding: 0 var(--sp-4); }
+      .pub-metrics { padding: 0 var(--sp-4); }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Test Reports
+  </div>
+  <div class="nav-right">
+    <span class="nav-label nav-label--muted">Public Report</span>
+  </div>
+</nav>
+
+<div class="pub-hero">
+  <div class="pub-hero-inner">
+    <div class="pub-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Verified Snapshot
+    </div>
+    <h1 class="pub-title">Test Raporu</h1>
+    {% if generated_timestamp %}
+    <div class="pub-timestamp">{{ generated_timestamp }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="pub-metrics">
+  <div class="pub-metric">
+    <div class="pub-metric-icon pub-metric-icon--pass">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="pub-metric-body">
+      <div class="pub-metric-label">Passed</div>
+      <div class="pub-metric-value pub-metric-value--pass">{{ total_passed }}</div>
+    </div>
+  </div>
+  <div class="pub-metric">
+    <div class="pub-metric-icon pub-metric-icon--fail">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </div>
+    <div class="pub-metric-body">
+      <div class="pub-metric-label">Failed</div>
+      <div class="pub-metric-value pub-metric-value--fail">{{ total_failed }}</div>
+    </div>
+  </div>
+  <div class="pub-metric">
+    <div class="pub-metric-icon pub-metric-icon--skip">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+    </div>
+    <div class="pub-metric-body">
+      <div class="pub-metric-label">Skipped</div>
+      <div class="pub-metric-value pub-metric-value--skip">{{ total_skipped }}</div>
+    </div>
+  </div>
+  <div class="pub-metric">
+    <div class="pub-metric-icon pub-metric-icon--total">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div class="pub-metric-body">
+      <div class="pub-metric-label">Total</div>
+      <div class="pub-metric-value pub-metric-value--total">{{ total_scenarios }}</div>
+    </div>
+  </div>
+</div>
+
+{% if total_scenarios > 0 %}
+<div class="pub-bar-wrap">
+  <div class="pub-bar-card">
+    <div class="pub-bar-header">
+      <div class="pub-bar-title">Pass Rate</div>
+      <div class="pub-bar-pct">{{ "%.0f" | format((total_passed / total_scenarios * 100) if total_scenarios > 0 else 0) }}%</div>
+    </div>
+    <div class="pub-bar-track">
+      {% set pass_pct = (total_passed / total_scenarios * 100) if total_scenarios > 0 else 0 %}
+      {% set fail_pct = (total_failed / total_scenarios * 100) if total_scenarios > 0 else 0 %}
+      {% set skip_pct = (total_skipped / total_scenarios * 100) if total_scenarios > 0 else 0 %}
+      <div class="pub-bar-seg pub-bar-seg--pass" style="width: {{ pass_pct }}%"></div>
+      <div class="pub-bar-seg pub-bar-seg--fail" style="width: {{ fail_pct }}%"></div>
+      <div class="pub-bar-seg pub-bar-seg--skip" style="width: {{ skip_pct }}%"></div>
+    </div>
+    <div class="pub-bar-legend">
+      <div class="pub-bar-legend-item"><span class="pub-bar-dot pub-bar-dot--pass"></span>Passed</div>
+      <div class="pub-bar-legend-item"><span class="pub-bar-dot pub-bar-dot--fail"></span>Failed</div>
+      <div class="pub-bar-legend-item"><span class="pub-bar-dot pub-bar-dot--skip"></span>Skipped</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="pub-scenarios">
+  {% if scenario_list %}
+  <div class="pub-scenarios-card">
+    <div class="pub-scenarios-header">
+      <h3 class="pub-scenarios-title">Senaryo Sonuçları</h3>
+      <span class="pub-scenarios-count">{{ scenario_list | length }} senaryo</span>
+    </div>
+    <div class="table-wrap">
+      <table class="pub-scenarios-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Senaryo</th>
+            <th>Durum</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in scenario_list %}
+          <tr style="animation-delay: {{ 550 + loop.index0 * 50 }}ms">
+            <td class="pub-scenario-idx">{{ loop.index }}</td>
+            <td class="pub-scenario-name">{{ s.name }}</td>
+            <td>
+              <span class="status-pill {% if s.status == 'passed' %}pill-pass{% elif s.status == 'failed' %}pill-fail{% else %}pill-skip{% endif %}">
+                {{ s.status | upper }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">📋</div>
+    <h2>Bu raporda senaryo bulunamadı</h2>
+    <p>Henüz sonuç yüklenmemiş olabilir.</p>
+  </div>
+  {% endif %}
+</div>
+
+<footer class="footer">
+  Test Raporlama Sistemi · Public Snapshot
+</footer>
+
+</body>
+</html>

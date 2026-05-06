@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapor Bulunamadı</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <style>
+    .not-found-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: calc(100vh - 56px);
+      padding: var(--sp-6);
+    }
+    .not-found-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-12) var(--sp-10);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      text-align: center;
+      max-width: 440px;
+      width: 100%;
+    }
+    .not-found-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto var(--sp-5);
+      color: var(--text-muted);
+      opacity: .5;
+    }
+    .not-found-card h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: var(--sp-3);
+    }
+    .not-found-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: var(--sp-6);
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Test Reports
+  </div>
+  <div class="nav-right">
+    <span class="nav-label nav-label--muted">Public</span>
+  </div>
+</nav>
+
+<div class="not-found-wrap">
+  <div class="not-found-card">
+    <svg class="not-found-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <line x1="8" y1="11" x2="14" y2="11"/>
+    </svg>
+    <h2>Rapor Bulunamadı</h2>
+    <p>Bu bağlantı geçerli değil veya süresi dolmuş olabilir. Lütfen bağlantıyı kontrol edip tekrar deneyin.</p>
+  </div>
+</div>
+
+</body>
+</html>

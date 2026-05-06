@@ -1,96 +1,62 @@
-# Test Raporlama Sistemi Entegrasyon Rehberi
+# Entegrasyon Rehberi
 
-Bu rehber, bu depodaki raporlama altyapısını herhangi bir Java, Selenium ve Cucumber projesine adım adım eklemek için hazırlandı. Örnekler mevcut proje köküne göre verilmiştir:
+Bu rehber, başka bir Java, Cucumber ve Selenium projesinin bu raporlama sistemine bağlanması için yazıldı. Amaç basit: testler Allure sonucu üretsin, sonuçlar `run-manifest.json` dosyalarına çevrilsin, FastAPI dashboard bu manifestleri okusun, başarısız senaryolar DOORS etiketi ve Jira triage akışıyla takip edilsin.
 
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports
-```
-
-Mevcut sistem şu ana parçalardan oluşur:
+Mevcut depo kökü:
 
 ```text
-test-core              Cucumber koşucusu, step sınıfları, Selenium sürücü kurulumu
-allure-integration    Allure ekran görüntüsü ve video hook sınıfları
-report-model          run manifest modeli, Jackson okuma ve yazma sınıfları
-fastapi-server        Dashboard, API, triage sayfası ve bug eşleştirme servisi
-jira-service          Jira REST API v2 istemcisi
-doors-service         IBM DOORS batch DXL çalıştırıcısı
-orchestrator          Servisleri bir araya getiren boru hattı katmanı
+/home/ol_ta/projects/java_reports
 ```
 
-## 1. Genel Bakış
+Ana parçalar:
 
-Bu sistem, otomasyon testlerinin ham çıktılarını okunabilir bir raporlama akışına dönüştürür. Cucumber senaryoları Selenium ile çalışır, Allure sonuçları üretir, hata anında ekran görüntüsü ve video ekler, run manifest dosyalarını dashboard üzerinde gösterir, başarısız senaryolar için triage ekranı açar, Jira ve DOORS bağlantılarını aynı akışa bağlar.
+```text
+test-core             Cucumber runner, Selenium step + Allure hook sınıfları
+fastapi-server       Dashboard, API, triage, Jira ve DOORS köprüleri
+manifests            FastAPI tarafından okunan run manifest dosyaları
+bug-tracker.json     DOORS numarası ve Jira issue eşleştirmesi
+```
 
-Kullanım amacı şudur:
+## 1. Quick Start
 
-* Test sonucunu tek ekranda görmek.
-* Başarısız senaryolarda ekran görüntüsü, video ve hata mesajını birlikte saklamak.
-* Her run için makine tarafından okunabilir manifest üretmek.
-* Hata kartlarını triage ekranında incelemek.
-* Aynı DOORS gereksinimi için tekrar tekrar Jira açılmasını engellemek.
-* CI/CD içinde Java testleri, Python API testleri ve Allure rapor üretimini birlikte çalıştırmak.
+En kısa entegrasyon yolu:
 
-Bu depoda FastAPI dashboard varsayılan olarak şu adreste çalışır:
+1. Hedef projede Maven test modülüne Cucumber, Selenium, JUnit Platform ve Allure bağımlılıklarını ekleyin.
+2. `test-core/src/test/java/com/testreports/allure/` altındaki hook sınıflarını hedef projeye kopyalayın (=4 Java dosyası).
+3. `src/test/resources` altına `cucumber.properties`, `allure.properties` ve gerekiyorsa `junit-platform.properties` ekleyin.
+4. Feature dosyalarında DOORS ilişkisini `@DOORS-NNNNN` etiketiyle yazın.
+5. Testleri çalıştırıp `target/allure-results` üretin.
+6. FastAPI sunucusuna `MANIFESTS_DIR` verip dashboardu açın.
+7. Jira için önce dry run modunu kullanın, sonra gerçek Jira ortam değişkenlerini verin.
+
+Mevcut depoda hızlı yerel koşu:
+
+```bash
+cd /home/ol_ta/projects/java_reports
+export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:$PATH"
+export PATH="$PATH:/home/ol_ta/tools/allure-2.33.0/bin"
+mvn -pl test-core test -Dcucumber.filter.tags="@sample-fail"
+allure generate --clean test-core/target/allure-results -o test-core/target/allure-report
+```
+
+FastAPI dashboard:
+
+```bash
+cd /home/ol_ta/projects/java_reports/fastapi-server
+python3 -m uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+Tarayıcı:
 
 ```text
 http://localhost:8000
 ```
 
-Varsayılan giriş bilgileri:
+## 2. Maven config
 
-```text
-Kullanıcı adı: admin
-Şifre: admin123
-```
+### 2.1 Parent veya tek modül POM sürümleri
 
-## 2. Gereksinimler
-
-Hedef projede şu araçlar bulunmalıdır:
-
-* Java 17 veya üzeri. Bu depodaki ana `pom.xml` Java 21 ile ayarlanmıştır.
-* Maven 3.9 veya üzeri.
-* Python 3.12 veya üzeri.
-* Allure CLI.
-* ffmpeg.
-* Chrome ve ChromeDriver. Bu depodaki örnek WSL içinde şu yolları kullanır:
-
-```text
-/tmp/chrome-linux64/chrome
-/tmp/chromedriver-linux64/chromedriver
-```
-
-Hızlı kontrol komutları:
-
-```bash
-java -version
-mvn -version
-python3 --version
-allure --version
-ffmpeg -version
-```
-
-Bu depoda Maven yolu bazı komutlarda açık yazılmıştır:
-
-```bash
-export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:$PATH"
-```
-
-Kurumsal projede JDK 17 kullanılıyorsa `maven.compiler.source` ve `maven.compiler.target` değerlerini 17 yapabilirsiniz. Bu depodaki hazır değer 21'dir.
-
-## 3. Maven Entegrasyonu
-
-### 3.1 Ana sürüm yönetimi
-
-Hedef projenizde tek modüllü yapı varsa aşağıdaki sürüm değerlerini doğrudan ana `pom.xml` içine ekleyin. Çok modüllü yapı varsa bu değerleri parent POM içinde tutun.
-
-Bu depodaki ana dosya:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/pom.xml
-```
-
-Kullanılan sürümler:
+Hedef proje tek modüllüyse bu değerleri ana `pom.xml` içine koyun. Çok modüllü yapıda parent POM içinde tutun.
 
 ```xml
 <properties>
@@ -107,31 +73,56 @@ Kullanılan sürümler:
 </properties>
 ```
 
-### 3.2 Gerekli dependency tanımları
+Java 17 kullanan ekipler `maven.compiler.source` ve `maven.compiler.target` değerlerini `17` yapabilir.
 
-Hedef projenizde Cucumber, Selenium, Allure ve Jackson için şu bağımlılıkları ekleyin:
+### 2.2 test-core benzeri modül bağımlılıkları
+
+Mevcut örnek dosya:
+
+```text
+test-core/pom.xml
+```
+
+Hedef test modülü için temel bağımlılıklar:
 
 ```xml
 <dependencies>
     <dependency>
         <groupId>io.cucumber</groupId>
         <artifactId>cucumber-java</artifactId>
-        <version>${cucumber.version}</version>
     </dependency>
     <dependency>
         <groupId>io.cucumber</groupId>
         <artifactId>cucumber-junit-platform-engine</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.cucumber</groupId>
+        <artifactId>cucumber-core</artifactId>
         <version>${cucumber.version}</version>
     </dependency>
     <dependency>
         <groupId>org.seleniumhq.selenium</groupId>
         <artifactId>selenium-java</artifactId>
-        <version>${selenium.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter-api</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter-engine</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.junit.platform</groupId>
+        <artifactId>junit-platform-launcher</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.junit.platform</groupId>
+        <artifactId>junit-platform-suite</artifactId>
     </dependency>
     <dependency>
         <groupId>io.qameta.allure</groupId>
         <artifactId>allure-cucumber7-jvm</artifactId>
-        <version>${allure.version}</version>
         <exclusions>
             <exclusion>
                 <groupId>io.cucumber</groupId>
@@ -139,126 +130,52 @@ Hedef projenizde Cucumber, Selenium, Allure ve Jackson için şu bağımlılıkl
             </exclusion>
         </exclusions>
     </dependency>
-    <dependency>
-        <groupId>io.qameta.allure</groupId>
-        <artifactId>allure-junit-platform</artifactId>
-        <version>${allure.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>${jackson.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>com.fasterxml.jackson.datatype</groupId>
-        <artifactId>jackson-datatype-jsr310</artifactId>
-        <version>${jackson.version}</version>
-    </dependency>
 </dependencies>
 ```
 
-Bu depodaki `test-core/pom.xml` içinde `allure-integration` modülü ayrıca bağlıdır:
+### 2.3 Surefire ayarı
 
-```xml
-<dependency>
-    <groupId>com.testreports</groupId>
-    <artifactId>allure-integration</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-</dependency>
-```
-
-Başka bir projeye taşırken iki yol vardır:
-
-1. `allure-integration` modülünü aynı çok modüllü projeye ekleyin ve yukarıdaki bağımlılığı kullanın.
-2. `ScreenshotHook`, `VideoHook` ve `WebDriverHolder` sınıflarını hedef projenin test kaynaklarına kopyalayın.
-
-### 3.3 Surefire ve Allure Maven eklentileri
-
-Ana `pom.xml` içinde şu eklenti ayarlarını kullanın:
+Mevcut parent POM içindeki Surefire ayarı `*TestRunner.java` ve `*Test.java` sınıflarını çalıştırır. Test modülünde sadece Cucumber runner çalıştırmak isterseniz:
 
 ```xml
 <build>
-    <pluginManagement>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
-                <configuration>
-                    <source>21</source>
-                    <target>21</target>
-                    <encoding>UTF-8</encoding>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.2.5</version>
-                <configuration>
-                    <failIfNoTests>false</failIfNoTests>
-                    <includes>
-                        <include>**/CucumberTestRunner.java</include>
-                    </includes>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>io.qameta.allure</groupId>
-                <artifactId>allure-maven</artifactId>
-                <version>2.12.0</version>
-            </plugin>
-        </plugins>
-    </pluginManagement>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+                <includes>
+                    <include>**/CucumberTestRunner.java</include>
+                </includes>
+            </configuration>
+        </plugin>
+    </plugins>
 </build>
 ```
 
-Derleme kontrolü:
+Kontrol komutları:
 
 ```bash
+cd /home/ol_ta/projects/java_reports
+export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:$PATH"
 mvn validate
-mvn test
-mvn allure:generate --clean
+mvn -pl test-core test
 ```
 
-## 4. Cucumber Konfigürasyonu
+## 3. Cucumber ve Allure setup
 
-### 4.1 Dosya konumu
+### 3.1 Cucumber runner
 
-Bu depodaki Cucumber ayarı şu dosyadadır:
+Mevcut runner:
 
 ```text
-/mnt/c/Users/ol_ta/desktop/java_reports/test-core/src/test/resources/cucumber.properties
+test-core/src/test/java/com/testreports/runner/CucumberTestRunner.java
 ```
 
-Mevcut içerik:
-
-```properties
-cucumber.publish.quiet=true
-cucumber.plugin=io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,json:target/cucumber-report.json,pretty
-cucumber.glue=com.testreports.allure,com.testreports.steps
-```
-
-Hedef projeye uyarlarken `com.testreports.steps` yerine kendi step paketinizin adını yazın. Hook sınıflarını aynı pakette bırakıyorsanız `com.testreports.allure` değerini koruyabilirsiniz. Kopyalayıp kendi paketiniz altına aldıysanız glue değerini de değiştirin.
-
-Örnek hedef proje ayarı:
-
-```properties
-cucumber.publish.quiet=true
-cucumber.plugin=io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,json:target/cucumber-report.json,pretty
-cucumber.glue=com.sirket.proje.allure,com.sirket.proje.steps
-```
-
-### 4.2 Cucumber koşucusu
-
-Bu depodaki koşucu:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/test-core/src/test/java/com/testreports/runner/CucumberTestRunner.java
-```
-
-Mevcut yapı:
+Örnek:
 
 ```java
-package com.testreports.runner;
+package com.company.project.runner;
 
 import org.junit.platform.suite.api.ConfigurationParameter;
 import org.junit.platform.suite.api.IncludeEngines;
@@ -272,21 +189,56 @@ import static io.cucumber.junit.platform.engine.Constants.PLUGIN_PROPERTY_NAME;
 @IncludeEngines("cucumber")
 @SelectClasspathResource("features")
 @ConfigurationParameter(key = PLUGIN_PROPERTY_NAME, value = "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,json:target/cucumber-report.json,pretty")
-@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "com.testreports.allure,com.testreports.steps")
+@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "com.testreports.allure,com.company.project.steps")
 public class CucumberTestRunner {
 }
 ```
 
-Hedef projede feature dosyaları `src/test/resources/features` altında olmalıdır. Farklı klasör kullanıyorsanız `@SelectClasspathResource` değerini değiştirin.
+`com.testreports.allure` glue değeri, screenshot, video ve failure location hook sınıflarını Cucumber'a tanıtır. Hook sınıflarını kendi paketinize kopyalarsanız bu paketi değiştirin.
 
-## 5. Allure Entegrasyonu
+### 3.2 cucumber.properties
 
-### 5.1 Allure sonuç dizini
-
-Bu depodaki Allure ayarı:
+Mevcut dosya:
 
 ```text
-/mnt/c/Users/ol_ta/desktop/java_reports/test-core/src/test/resources/allure.properties
+test-core/src/test/resources/cucumber.properties
+```
+
+İçerik:
+
+```properties
+cucumber.publish.quiet=true
+cucumber.plugin=io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,\
+  com.testreports.allure.FailureLocationCapture,\
+  json:target/cucumber-report.json,\
+  pretty
+cucumber.glue=com.testreports.allure,com.testreports.steps
+```
+
+Hedef projede step paketini değiştirin:
+
+```properties
+cucumber.glue=com.testreports.allure,com.company.project.steps
+```
+
+Tag filtresiyle koşu:
+
+```bash
+mvn test -Dcucumber.filter.tags="@smoke"
+```
+
+Mevcut depodaki örnek:
+
+```bash
+mvn -pl test-core test -Dcucumber.filter.tags="@sample-fail"
+```
+
+### 3.3 allure.properties
+
+Mevcut dosya:
+
+```text
+test-core/src/test/resources/allure.properties
 ```
 
 İçerik:
@@ -295,575 +247,236 @@ Bu depodaki Allure ayarı:
 allure.results.directory=target/allure-results
 ```
 
-Bu değer Cucumber koşusu bittiğinde sonuçların `target/allure-results` altında toplanmasını sağlar.
-
-### 5.2 WebDriverHolder
-
-`ScreenshotHook` çalışırken aktif WebDriver nesnesine erişmelidir. Bu depoda bunun için ThreadLocal tabanlı holder kullanılır:
+Çok modüllü projede bu yol modülün `target` dizinine göre oluşur. Bu depoda sonuç dizini şudur:
 
 ```text
-/mnt/c/Users/ol_ta/desktop/java_reports/allure-integration/src/main/java/com/testreports/allure/WebDriverHolder.java
+test-core/target/allure-results
 ```
 
-Kod:
+Allure raporu üretme:
 
-```java
-package com.testreports.allure;
-
-import org.openqa.selenium.WebDriver;
-
-public final class WebDriverHolder {
-    private static final ThreadLocal<WebDriver> driver = new ThreadLocal<>();
-
-    private WebDriverHolder() {
-    }
-
-    public static void setDriver(WebDriver webDriver) {
-        driver.set(webDriver);
-    }
-
-    public static WebDriver getDriver() {
-        return driver.get();
-    }
-
-    public static void removeDriver() {
-        driver.remove();
-    }
-}
+```bash
+allure generate --clean test-core/target/allure-results -o test-core/target/allure-report
 ```
 
-Step veya driver factory içinde driver oluşturduktan sonra holder'a yazın:
+Tek modüllü hedef proje:
+
+```bash
+allure generate --clean target/allure-results -o target/allure-report
+```
+
+### 3.4 junit-platform.properties
+
+Bu depoda ayrı `junit-platform.properties` dosyası yok, çünkü runner sınıfı `@ConfigurationParameter` ile gerekli ayarları veriyor. Hedef proje properties dosyasıyla yönetmek isterse şu dosyayı oluşturabilir:
+
+```text
+src/test/resources/junit-platform.properties
+```
+
+Örnek:
+
+```properties
+cucumber.glue=com.testreports.allure,com.company.project.steps
+cucumber.plugin=io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,json:target/cucumber-report.json,pretty
+cucumber.publish.quiet=true
+```
+
+Runner ve properties dosyasında aynı ayarları iki kez vermeyin. Birini ana kaynak seçin.
+
+### 3.5 Screenshot, video ve WebDriverHolder
+
+Hook sınıfları:
+
+```text
+test-core/src/test/java/com/testreports/allure/ScreenshotHook.java
+test-core/src/test/java/com/testreports/allure/VideoHook.java
+test-core/src/test/java/com/testreports/allure/WebDriverHolder.java
+test-core/src/test/java/com/testreports/allure/FailureLocationCapture.java
+```
+
+Driver oluşturduktan sonra holder'a yazın:
 
 ```java
-driver = com.testreports.config.WebDriverFactory.createDriver();
+WebDriver driver = WebDriverFactory.createDriver();
 com.testreports.allure.WebDriverHolder.setDriver(driver);
 ```
 
-Test bitince driver kapatın:
+Test sonunda temizleyin:
 
 ```java
-@After(order = 1001)
-public void cleanup() {
-    if (driver != null) {
-        driver.quit();
-        com.testreports.allure.WebDriverHolder.removeDriver();
-    }
-}
+driver.quit();
+com.testreports.allure.WebDriverHolder.removeDriver();
 ```
 
-### 5.3 ScreenshotHook
+Screenshot sadece başarısız senaryoda eklenir. Video hook başarılı senaryoların videosunu siler, başarısız senaryonun videosunu Allure ekine koyar. `ffmpeg` yoksa test akışı durmaz, video kaydı atlanır.
 
-Bu depodaki sınıf:
+## 4. DOORS tagging
+
+Allure parser DOORS numarasını Cucumber tag listesinden okur. Beklenen biçim:
 
 ```text
-/mnt/c/Users/ol_ta/desktop/java_reports/allure-integration/src/main/java/com/testreports/allure/ScreenshotHook.java
+@DOORS-NNNNN
 ```
 
-Hata anında ekran görüntüsü ekler:
+Mevcut örnek:
+
+```text
+test-core/src/test/resources/features/login.feature
+```
+
+```gherkin
+@DOORS-12345
+@REQ-LOGIN-001
+Feature: Login Feature
+
+  @sample-fail
+  Scenario: Hatalı giriş
+    Given user is on the login page
+    When user enters valid credentials
+    Then user should see element that doesn't exist
+```
+
+Parser kuralı:
 
 ```java
-@After(order = 100)
-public void captureScreenshot(Scenario scenario) {
-    if (!scenario.isFailed()) {
-        return;
-    }
-
-    WebDriver driver = WebDriverHolder.getDriver();
-    if (driver == null) {
-        System.err.println("ScreenshotHook: WebDriver is null, cannot capture screenshot");
-        return;
-    }
-
-    if (!(driver instanceof TakesScreenshot)) {
-        System.err.println("ScreenshotHook: WebDriver does not support screenshots");
-        return;
-    }
-
-    try {
-        byte[] screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
-        Allure.addAttachment("Screenshot", "image/png", new ByteArrayInputStream(screenshot), "png");
-    } catch (WebDriverException e) {
-        System.err.println("ScreenshotHook: Failed to capture screenshot: " + e.getMessage());
-    }
-}
+private static final Pattern DOORS_TAG_PATTERN = Pattern.compile("@DOORS-(\\d+)", Pattern.CASE_INSENSITIVE);
 ```
 
-Bu hook, senaryo başarısız değilse ek dosya üretmez. Böylece başarılı koşularda rapor gereksiz büyümez.
+Bu yüzden `@DOORS-12345` manifest içinde şu alana çevrilir:
 
-### 5.4 VideoHook
-
-Bu depodaki sınıf:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/allure-integration/src/main/java/com/testreports/allure/VideoHook.java
+```json
+"doorsAbsNumber": "12345"
 ```
 
-Video dosyaları şu dizine yazılır:
+Triage ekranı ve bug tracker aynı değeri kullanır. Takım içinde tek biçim seçin, örnek olarak her senaryoya bir DOORS etiketi verin. Feature düzeyindeki etiketler Allure tarafından senaryolara taşınır.
 
-```text
-target/videos
-```
+## 5. FastAPI ingestion ve manifest dizini
 
-Kullanılan ffmpeg komutu Java içinden şu argümanlarla oluşturulur:
-
-```java
-ProcessBuilder pb = new ProcessBuilder(
-        "ffmpeg",
-        "-f", "x11grab",
-        "-framerate", "15",
-        "-video_size", "1920x1080",
-        "-i", ":0.0",
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-pix_fmt", "yuv420p",
-        "-y",
-        videoPath.toString()
-);
-```
-
-Davranış:
-
-* Her senaryo başında kayıt başlar.
-* Senaryo başarısızsa video Allure ekine eklenir.
-* Senaryo başarılıysa video silinir.
-* ffmpeg bulunamazsa test akışı durmaz, sadece video kaydı kapanır.
-
-Başsız tarayıcı ile gerçek ekran kaydı gerekiyorsa CI ortamında sanal ekran hazırlayın. WSL veya Linux ajanında genelde `:0.0` yerine ajan ekranınıza uygun display değeri gerekir.
-
-### 5.5 Allure rapor üretimi
-
-Testten sonra rapor üretin:
-
-```bash
-allure generate --clean test-core/target/allure-results -o allure-report
-```
-
-Tek modüllü projede komut genelde şöyle olur:
-
-```bash
-allure generate --clean target/allure-results -o allure-report
-```
-
-## 6. FastAPI Sunucu Kurulumu
-
-### 6.1 Dosyaları hedef projeye ekleme
-
-Bu dizini hedef projeye kopyalayın:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server
-```
-
-Manifest dosyaları varsayılan olarak proje kökündeki şu dizinden okunur:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/manifests
-```
-
-Sunucu kodundaki ayar:
+FastAPI manifest dosyalarını JSON olarak okur. Varsayılan yol `server.py` içinde şu şekilde hesaplanır:
 
 ```python
 MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent / "manifests")))
 ```
 
-Başka bir dizin kullanmak için ortam değişkeni verin:
+Mevcut depo varsayılan dizini:
+
+```text
+/home/ol_ta/projects/java_reports/manifests
+```
+
+Başka bir proje manifestlerini okutmak için:
 
 ```bash
 export MANIFESTS_DIR="/path/to/your/project/manifests"
+cd /home/ol_ta/projects/java_reports/fastapi-server
+python3 -m uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
-### 6.2 Python bağımlılıkları
-
-Bu depodaki dosya:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server/requirements.txt
-```
-
-İçerik:
-
-```text
-fastapi>=0.111.0
-uvicorn[standard]>=0.29.0
-pydantic>=2.7.0
-python-dotenv>=1.0.1
-PyJWT>=2.8.0
-jinja2>=3.1.0
-```
-
-Kurulum:
+Python bağımlılıkları:
 
 ```bash
-cd /mnt/c/Users/ol_ta/desktop/java_reports
+cd /home/ol_ta/projects/java_reports
 python3 -m pip install --upgrade pip
 pip install -r fastapi-server/requirements.txt
 ```
 
-### 6.3 Sunucuyu başlatma
-
-WSL veya Linux terminalinde:
-
-```bash
-cd /mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server
-python3 -m uvicorn server:app --host 0.0.0.0 --port 8000
-```
-
-Proje kökünden hazır script ile:
-
-```bash
-cd /mnt/c/Users/ol_ta/desktop/java_reports
-bash start.sh
-```
-
-Windows tarafından WSL üstünde başlatmak için hazır batch dosyası:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/scripts/start-server.bat
-```
-
-İçindeki komut:
-
-```bat
-wsl -d Ubuntu -e bash -c "cd /mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server && python3 -m uvicorn server:app --host 0.0.0.0 --port 8000"
-```
-
-### 6.4 Kimlik doğrulama
-
-Varsayılan kullanıcı bilgileri `server.py` içinde ortam değişkenlerinden okunur:
-
-```python
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
-JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
-```
-
-Üretim benzeri ortamda `.env` dosyasına şunları yazın:
-
-```text
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=guclu_sifre_yazin
-JWT_SECRET=uzun_rastgele_bir_deger_yazin
-JWT_EXPIRATION_HOURS=24
-MANIFESTS_DIR=/mnt/c/Users/ol_ta/desktop/java_reports/manifests
-```
-
-Token alma isteği:
+API kontrolü:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}'
-```
 
-Token ile run listesi alma:
-
-```bash
 curl http://localhost:8000/api/v1/runs \
   -H "Authorization: Bearer TOKEN_DEGERI"
 ```
 
-## 7. Web Dashboard
+Üretim benzeri kullanımda `ADMIN_USERNAME`, `ADMIN_PASSWORD` ve `JWT_SECRET` değerlerini ortam değişkeni veya `.env` ile verin. Gerçek şifre veya token dosyaya yazmayın.
 
-### 7.1 Dashboard dosyaları
+### 5.1 Manifest üretme
 
-Bu depoda dashboard şablonu ve statik dosyalar şuradadır:
+FastAPI sunucusu `_save_results_to_duckdb()` fonksiyonu ile Allure sonuçlarını otomatik parse edip manifest üretir. Manuel manifest üretimine gerek yoktur.
 
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server/templates/dashboard.html
-/mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server/templates/triage.html
-/mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server/static/dashboard.css
-/mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server/static/chart.min.js
-```
-
-Dashboard içinde Chart.js yerel dosyadan çağrılır:
-
-```html
-<script src="/static/chart.min.js"></script>
-```
-
-Bu sayede dış adreslere bağımlı kalmadan grafik çizilir.
-
-### 7.2 Statik dosya mount ayarı
-
-`server.py` sonunda şu mount tanımları vardır:
-
-```python
-app.mount("/reports", StaticFiles(directory=str(MANIFESTS_DIR)), name="reports")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-```
-
-Sunucuyu `fastapi-server` dizini içinden başlatın. Çünkü `/static` için göreli `static` dizini kullanılır. Başka dizinden başlatmak istiyorsanız mount değerini mutlak yola çevirin:
-
-```python
-STATIC_DIR = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-```
-
-### 7.3 Dashboard akışı
-
-Ana sayfa:
-
-```text
-http://localhost:8000/
-```
-
-Dashboard şunları gösterir:
-
-* Başarı oranı.
-* Toplam run sayısı.
-* Ortalama süre.
-* Trend.
-* Pass, fail ve skipped dağılımı.
-* Son run tablosu.
-* Triage bağlantısı.
-
-Run verileri şu endpoint üzerinden gelir:
-
-```text
-GET /api/v1/runs
-```
-
-Triage ekranı:
-
-```text
-http://localhost:8000/reports/live-demo-001/triage
-```
-
-Genel format:
-
-```text
-/reports/{runId}/triage
-```
-
-## 8. CI/CD Pipeline
-
-### 8.1 Jenkins örneği
-
-Bu depodaki dosya:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/Jenkinsfile
-```
-
-Temel akış:
-
-```groovy
-pipeline {
-  agent any
-
-  environment {
-    JAVA_HOME = tool 'JDK21'
-    PATH = "${JAVA_HOME}/bin:${PATH}"
-  }
-
-  stages {
-    stage('Setup Python') {
-      steps {
-        sh 'python3 --version'
-      }
-    }
-
-    stage('Install Python Dependencies') {
-      steps {
-        sh 'pip install -r fastapi-server/requirements.txt'
-      }
-    }
-
-    stage('Run Java Tests') {
-      steps {
-        sh '/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn -B test -pl test-core,jira-service,email-service,doors-service,report-model,allure-integration,javalin-server,orchestrator'
-      }
-    }
-
-    stage('Run Python Tests') {
-      steps {
-        sh 'cd fastapi-server && python3 -m pytest tests/ -v'
-      }
-    }
-
-    stage('Generate Allure Report') {
-      steps {
-        sh 'allure generate --clean test-core/target/allure-results -o allure-report'
-      }
-    }
-  }
-
-  post {
-    always {
-      allure includeProperties: false, results: [[path: 'test-core/target/allure-results']]
-    }
-  }
-}
-```
-
-Hedef projede modül adlarını kendi projenize göre değiştirin. Tek modüllü projede Java test adımı şu hale gelebilir:
-
-```groovy
-sh 'mvn -B test'
-```
-
-Allure sonuç dizini de tek modüllü yapı için genelde şöyledir:
-
-```groovy
-sh 'allure generate --clean target/allure-results -o allure-report'
-```
-
-Jenkins credential içinde Jira PAT saklayacaksanız bu depodaki örnek gibi credential kimliği kullanabilirsiniz:
-
-```groovy
-withCredentials([string(credentialsId: 'jira-pat-id', variable: 'JIRA_PAT')]) {
-    sh 'mvn -B test'
-}
-```
-
-### 8.2 GitHub Actions örneği
-
-Bu depodaki dosya:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/.github/workflows/test-report.yml
-```
-
-Temel akış:
-
-```yaml
-name: Test Report Pipeline
-
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
-  workflow_dispatch:
-
-env:
-  JAVA_VERSION: '21'
-  PYTHON_VERSION: '3.12'
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Python dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          pip install -r fastapi-server/requirements.txt
-
-      - name: Run Java tests
-        run: |
-          mvn -B test -pl test-core,jira-service,email-service,doors-service,report-model,allure-integration,javalin-server,orchestrator
-
-      - name: Run Python tests
-        run: |
-          cd fastapi-server && python3 -m pytest tests/ -v
-
-      - name: Generate Allure report
-        run: |
-          allure generate --clean test-core/target/allure-results -o allure-report
-
-      - name: Upload Allure report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-report
-          path: allure-report
-          retention-days: 30
-```
-
-GitHub Actions içinde Jira değerlerini secret olarak saklayın:
-
-```yaml
-env:
-  JIRA_URL: ${{ secrets.JIRA_URL }}
-  JIRA_PAT: ${{ secrets.JIRA_PAT }}
-  JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-```
-
-## 9. Jira Entegrasyonu
-
-### 9.1 Ortam değişkenleri
-
-Bu depodaki örnek dosya:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/.env.example
-```
-
-Jira için gerekli alanlar:
-
-```text
-JIRA_URL=JIRA_SUNUCU_ADRESI
-JIRA_PAT=JIRA_PERSONAL_ACCESS_TOKEN_DEGERI
-JIRA_PROJECT_KEY=TEST
-```
-
-Orchestrator kullanıyorsanız şu karşılıkları da doldurun:
-
-```text
-ORCHESTRATOR_JIRA_URL=JIRA_SUNUCU_ADRESI
-ORCHESTRATOR_JIRA_PAT=JIRA_PERSONAL_ACCESS_TOKEN_DEGERI
-ORCHESTRATOR_JIRA_PROJECT_KEY=TEST
-```
-
-PAT değerini asla repoya yazmayın. Jenkins credential, GitHub secret veya yerel `.env` kullanın.
-
-### 9.2 Java Jira istemcisi
-
-Bu depodaki istemci:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/jira-service/src/main/java/com/testreports/jira/JiraClient.java
-```
-
-Öne çıkan davranışlar:
-
-* REST API v2 endpoint yapısını kullanır.
-* PAT ile Basic Authentication yapar.
-* 429 ve 5xx cevaplarda tekrar dener.
-* Aynı dedup anahtarı için aynı oturumda ikinci kez issue açmaz.
-* Dosya eki gönderebilir.
-* `jira.dry-run` sistem özelliği ile gerçek istek atmadan denenebilir.
-
-Örnek kullanım:
-
-```java
-JiraClient client = new JiraClient(System.getenv("JIRA_URL"), System.getenv("JIRA_PAT"));
-JiraIssueRequest request = new JiraIssueRequest(
-        System.getenv("JIRA_PROJECT_KEY"),
-        "Bug",
-        "Otomasyon hatası: Login",
-        "Cucumber senaryosu başarısız oldu. Allure eklerini kontrol edin."
-);
-JiraIssueResponse response = client.createIssue(request);
-```
-
-Kuru koşu için:
+Çok modüllü mevcut depo için sonuç ve manifest yolları:
 
 ```bash
-mvn test -Djira.dry-run=true
+java -cp "target/classes:target/dependency/*" com.company.project.reporting.WriteRunManifest \
+  test-core/target/allure-results \
+  manifests
 ```
 
-### 9.3 bug-tracker.json
+Tek modüllü hedef proje için:
 
-Bu dosya DOORS numarası ile Jira anahtarını eşler:
+```bash
+java -cp "target/classes:target/dependency/*" com.company.project.reporting.WriteRunManifest \
+  target/allure-results \
+  manifests
+```
+
+Manifest alanları FastAPI modeliyle uyumlu olmalıdır:
+
+```json
+{
+  "runId": "20260503-120000-a1b2c3",
+  "timestamp": "2026-05-03T12:00:00Z",
+  "totalScenarios": 1,
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "duration": "PT12S",
+  "scenarios": [
+    {
+      "id": "scenario-001",
+      "name": "Hatalı giriş",
+      "status": "failed",
+      "duration": "PT12S",
+      "doorsAbsNumber": "12345",
+      "tags": ["@DOORS-12345", "@sample-fail"],
+      "steps": [],
+      "attachments": []
+    }
+  ]
+}
+```
+
+## 6. Jira mapping ve triage workflow
+
+Jira tarafı FastAPI içinden `fastapi-server/jira_client.py` ile çalışır. Desteklenen ortam değişkenleri:
 
 ```text
-/mnt/c/Users/ol_ta/desktop/java_reports/bug-tracker.json
+JIRA_URL=https://jira.example.local
+JIRA_PAT=PERSONAL_ACCESS_TOKEN_DEGERI
+JIRA_PROJECT_KEY=TEST
+JIRA_ISSUE_TYPE=Bug
+JIRA_RETRY_COUNT=3
+```
+
+Alternatif adlar da okunur:
+
+```text
+JIRA_BASE_URL
+JIRA_PROJECT
+```
+
+Dry run için gerçek Jira bilgisi gerekmez:
+
+```bash
+export DRY_RUN=true
+export JIRA_DRY_RUN=true
+cd /home/ol_ta/projects/java_reports/fastapi-server
+python3 -m uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+Dry run hata simülasyonu:
+
+```bash
+export JIRA_DRY_RUN_RESULT=failure
+```
+
+Bug eşleştirme dosyası:
+
+```text
+bug-tracker.json
 ```
 
 Başlangıç içeriği:
@@ -872,207 +485,274 @@ Başlangıç içeriği:
 {"version": "1.0", "mappings": {}}
 ```
 
-FastAPI tarafında kullanılan sınıf:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server/bug_tracker.py
-```
-
-Yeni eşleşme şu alanları yazar:
+Kayıt örneği:
 
 ```json
 {
-  "jiraKey": "PROJ-1234",
-  "status": "OPEN",
-  "firstSeen": "2026-04-26T10:30:00+00:00",
-  "lastSeen": "2026-04-26T10:30:00+00:00",
-  "scenarioName": "Order Submission",
-  "runIds": ["run-2026-04-26-001"],
-  "resolution": null
+  "12345": {
+    "jiraKey": "DRY-1a2b3c4d",
+    "status": "OPEN",
+    "firstSeen": "2026-05-03T12:00:00+00:00",
+    "lastSeen": "2026-05-03T12:00:00+00:00",
+    "scenarioName": "Hatalı giriş",
+    "runIds": ["20260503-120000-a1b2c3"],
+    "resolution": null
+  }
 }
 ```
 
-### 9.4 Web triage akışı
+Triage akışı:
 
-Triage ekranı başarısız senaryoları listeler ve DOORS numarasına göre bug durumunu kontrol eder.
+1. Test koşusu manifest üretir.
+2. FastAPI run listesini ve başarısız senaryoları gösterir.
+3. Triage sayfası `doorsAbsNumber` alanına bakar.
+4. Aynı DOORS numarası için daha önce Jira açıldıysa mevcut eşleşme gösterilir.
+5. Yeni bug gerekiyorsa Jira oluşturulur veya dry run modunda `DRY-...` anahtarı üretilir.
+6. Eşleşme `bug-tracker.json` içinde saklanır.
 
-Kullanılan endpoint'ler:
+İlgili endpointler:
 
 ```text
+GET  /api/v1/runs
+GET  /api/v1/runs/{run_id}/bug-status
 GET  /api/v1/bugs
 GET  /api/v1/bugs/{doors_number}
 POST /api/v1/bugs/{doors_number}/create
 POST /api/v1/runs/{run_id}/scenarios/{scenario_id}/jira
+POST /api/triage/{run_id}/scenarios/{scenario_id}/jira
+POST /api/triage/{run_id}/scenarios/{scenario_id}/link-jira
 ```
 
-Mevcut `server.py` içinde `/api/v1/runs/{run_id}/scenarios/{scenario_id}/jira` endpoint'i örnek olarak `PROJ-123` döndürür. Gerçek Jira bağlantısı için bu noktada `jira-service` istemcisini çağıran bir katman ekleyin.
-
-## 10. DOORS Entegrasyonu
-
-### 10.1 Gereksinim
-
-IBM DOORS batch DXL çalıştırması Windows gerektirir. Bu depodaki Java istemcisi Linux üzerinde gerçek `doors.exe` bulunmazsa çalışmayı atlar. Test double çalıştırılacaksa Linux üzerinde yürütülebilir bir sahte dosya kullanılabilir.
-
-Ortam değişkeni örneği:
+Triage sayfası formatı:
 
 ```text
-DOORS_PATH=C:/Program Files/IBM/DOORS/bin/dxl.exe
+http://localhost:8000/reports/{runId}/triage
 ```
 
-### 10.2 Java istemcisi
+## 7. DOORS çalıştırma
 
-Bu depodaki sınıf:
+Bu rehberdeki zorunlu entegrasyon noktası Cucumber tag biçimidir. DOORS batch güncellemesi için FastAPI pipeline komut alır:
 
 ```text
-/mnt/c/Users/ol_ta/desktop/java_reports/doors-service/src/main/java/com/testreports/doors/DoorsClient.java
+PIPELINE_DOORS_COMMAND
 ```
 
-Davranış:
+Örnek:
 
-* `RunManifest` içindeki senaryoları okur.
-* `doorsAbsNumber` dolu olanları DXL payload içine koyar.
-* Geçici JSON dosyası üretir.
-* DXL script dosyasını classpath üzerinden geçici dosyaya kopyalar.
-* `doors.exe` komutunu batch modda çalıştırır.
-* 120 saniye içinde bitmezse timeout hatası verir.
+```bash
+export PIPELINE_DOORS_COMMAND="python3 fastapi-server/doors_service.py manifests/latest.json"
+```
 
-Üretilen payload yapısı:
+IBM DOORS aracı Windows ajan gerektirebilir. Linux ajanlarda gerçek DOORS yoksa komutu dry run veya skip edecek şekilde ayarlayın. Kurumsal DOORS alan adları projeye göre değiştiği için DXL tarafını kendi alan adlarınızla eşleştirin.
 
-```json
-{
-  "runId": "run-123",
-  "results": [
-    { "absNumber": "DOORS-12345", "status": "failed" }
-  ]
+## 8. CI usage
+
+### 8.1 Bash pipeline örneği
+
+```bash
+set -e
+cd /home/ol_ta/projects/java_reports
+export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:$PATH"
+export PATH="$PATH:/home/ol_ta/tools/allure-2.33.0/bin"
+export DRY_RUN=true
+export JIRA_DRY_RUN=true
+
+mvn -B -pl test-core test
+allure generate --clean test-core/target/allure-results -o test-core/target/allure-report
+python3 -m pytest fastapi-server/tests/ -v
+```
+
+### 8.2 Jenkins örneği
+
+```groovy
+pipeline {
+  agent any
+
+  environment {
+    JAVA_HOME = tool 'JDK21'
+    MAVEN_HOME = '/home/ol_ta/tools/apache-maven-3.9.9'
+    ALLURE_HOME = '/home/ol_ta/tools/allure-2.33.0'
+    PATH = "${MAVEN_HOME}/bin:${ALLURE_HOME}/bin:${JAVA_HOME}/bin:${PATH}"
+    DRY_RUN = 'true'
+    JIRA_DRY_RUN = 'true'
+  }
+
+  stages {
+    stage('Install Python dependencies') {
+      steps {
+        sh 'python3 -m pip install --upgrade pip'
+        sh 'pip install -r fastapi-server/requirements.txt'
+      }
+    }
+
+    stage('Run Cucumber tests') {
+      steps {
+        sh 'mvn -B -pl test-core test -Dcucumber.filter.tags="@sample-fail"'
+      }
+    }
+
+    stage('Generate Allure report') {
+      steps {
+        sh 'allure generate --clean test-core/target/allure-results -o test-core/target/allure-report'
+      }
+    }
+
+    stage('FastAPI tests') {
+      steps {
+        sh 'python3 -m pytest fastapi-server/tests/ -v'
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'test-core/target/allure-report/**,manifests/*.json', allowEmptyArchive: true
+    }
+  }
 }
 ```
 
-Çalıştırılan komut biçimi:
+Gerçek Jira ortamında tokenı Jenkins credential olarak verin. Pipeline dosyasına PAT yazmayın.
 
-```text
-doors.exe -b DoorsDxlScript.dxl -paramFile <temp-json> -W
+### 8.3 GitHub Actions örneği
+
+```yaml
+name: test-reporting
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: 'true'
+      JIRA_DRY_RUN: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r fastapi-server/requirements.txt
+
+      - name: Run Cucumber tests
+        run: mvn -B -pl test-core test
+
+      - name: Generate Allure report
+        run: allure generate --clean test-core/target/allure-results -o test-core/target/allure-report
+
+      - name: Run FastAPI tests
+        run: python3 -m pytest fastapi-server/tests/ -v
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-report-assets
+          path: |
+            test-core/target/allure-report
+            manifests/*.json
 ```
 
-### 10.3 DXL script
+Gerçek Jira için secret kullanın:
 
-Bu depodaki script:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/doors-service/src/main/resources/DoorsDxlScript.dxl
+```yaml
+env:
+  JIRA_URL: ${{ secrets.JIRA_URL }}
+  JIRA_PAT: ${{ secrets.JIRA_PAT }}
+  JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 ```
 
-Mevcut script bir şablondur. Kurumsal DOORS alan adlarınıza göre değiştirmeniz gerekir.
+## 9. Troubleshooting
 
-Şablonda hedeflenen alanlar:
-
-```dxl
-requirement."Last Test Run" = runId
-requirement."Automated Test Status" = status
-requirement."Automated Test Updated" = today()
-save(requirement)
-```
-
-Dry run için:
-
-```bash
-mvn test -Ddoors.dry.run=true
-```
-
-## 11. Sorun Giderme
-
-### 11.1 Allure sonuçları oluşmuyor
+### 9.1 Allure sonuçları oluşmuyor
 
 Kontrol edin:
 
 ```text
-test-core/src/test/resources/allure.properties
-test-core/src/test/resources/cucumber.properties
+src/test/resources/cucumber.properties
+src/test/resources/allure.properties
 ```
 
-`cucumber.plugin` içinde Allure adaptörü olmalıdır:
+Gerekli plugin:
 
 ```properties
 cucumber.plugin=io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,json:target/cucumber-report.json,pretty
 ```
 
-Testten sonra dizini kontrol edin:
+Sonuç dizini:
 
 ```bash
 ls test-core/target/allure-results
 ```
 
-Tek modüllü projede:
+Tek modül için:
 
 ```bash
 ls target/allure-results
 ```
 
-### 11.2 Screenshot eklenmiyor
+### 9.2 Cucumber hook çalışmıyor
+
+`cucumber.glue` içinde hook paketi yoktur veya yanlış yazılmıştır.
+
+```properties
+cucumber.glue=com.testreports.allure,com.company.project.steps
+```
+
+Runner içindeki `GLUE_PROPERTY_NAME` ile properties dosyasındaki glue değeri çakışıyorsa tek kaynak seçin.
+
+### 9.3 Screenshot eklenmiyor
 
 Olası nedenler:
 
-* `WebDriverHolder.setDriver(driver)` çağrılmamış olabilir.
-* Driver `TakesScreenshot` desteklemiyor olabilir.
-* Hook paketi Cucumber glue içine eklenmemiş olabilir.
+1. `WebDriverHolder.setDriver(driver)` çağrılmamış olabilir.
+2. Driver `TakesScreenshot` desteklemiyor olabilir.
+3. Senaryo başarısız olmamıştır. Hook sadece fail durumunda ek üretir.
 
-Doğru glue örneği:
+### 9.4 Video eklenmiyor
 
-```properties
-cucumber.glue=com.testreports.allure,com.testreports.steps
-```
-
-Driver oluşturduktan sonra:
-
-```java
-com.testreports.allure.WebDriverHolder.setDriver(driver);
-```
-
-### 11.3 Video eklenmiyor
-
-Kontrol edin:
+Kontrol:
 
 ```bash
 ffmpeg -version
 ```
 
-Linux veya WSL ortamında display değeri doğru olmalıdır. Bu depoda varsayılan değer:
+Linux veya WSL ajanında display değeri uygun olmalıdır. CI ortamında sanal ekran yoksa `x11grab` çalışmayabilir. Video zorunlu değilse hook başarısız olduğunda test akışı devam eder.
 
-```text
-:0.0
+### 9.5 DOORS numarası manifestte boş
+
+Tag biçimini kontrol edin:
+
+```gherkin
+@DOORS-12345
+Scenario: Ödeme başarısız olur
 ```
 
-CI ortamında sanal ekran yoksa `x11grab` çalışmayabilir. Böyle bir durumda önce sanal ekran başlatın veya video hook'u sadece uygun ajanlarda açın.
+Parser sadece `@DOORS-` sonrası rakamları alır. `@DOORS-ABC` beklenen format değildir.
 
-### 11.4 FastAPI sunucusu açılmıyor
+### 9.6 FastAPI run listesi boş
 
-Sunucuyu doğru dizinden başlatın:
+Manifest dizinini kontrol edin:
 
 ```bash
-cd /mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server
-python3 -m uvicorn server:app --host 0.0.0.0 --port 8000
+export MANIFESTS_DIR="/path/to/your/project/manifests"
+ls "$MANIFESTS_DIR"
 ```
 
-Port doluysa farklı port kullanın:
+FastAPI yalnızca `*.json` dosyalarını okur. Dosya şeması `RunManifest` modeliyle uyumlu değilse API hata döndürür.
 
-```bash
-python3 -m uvicorn server:app --host 0.0.0.0 --port 8001
-```
-
-Windows tarayıcısından şu adresi deneyin:
-
-```text
-http://localhost:8000
-```
-
-WSL IP gerektiğinde:
-
-```bash
-wsl hostname -I
-```
-
-### 11.5 401 Unauthorized
-
-Token yoktur, süresi bitmiştir veya yanlış gönderilmiştir.
+### 9.7 401 Unauthorized
 
 Yeni token alın:
 
@@ -1082,285 +762,58 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   -d '{"username":"admin","password":"admin123"}'
 ```
 
-Header biçimi şu olmalıdır:
+Header biçimi:
 
 ```text
 Authorization: Bearer TOKEN_DEGERI
 ```
 
-### 11.6 404 Run bulunamadı
+### 9.8 Jira issue açılmıyor
 
-Önce run listesini alın:
-
-```bash
-curl http://localhost:8000/api/v1/runs \
-  -H "Authorization: Bearer TOKEN_DEGERI"
-```
-
-Manifest dizinini kontrol edin:
-
-```text
-/mnt/c/Users/ol_ta/desktop/java_reports/manifests
-```
-
-`MANIFESTS_DIR` farklı bir yeri gösteriyorsa o dizinde JSON dosyası olmalıdır.
-
-### 11.7 Dashboard CSS veya grafikler yüklenmiyor
-
-`/static` mount ayarını ve çalışma dizinini kontrol edin:
-
-```python
-app.mount("/static", StaticFiles(directory="static"), name="static")
-```
-
-Sunucuyu `fastapi-server` dizininden başlatmıyorsanız statik dizini mutlak yola alın.
-
-### 11.8 Jira bug açılmıyor
-
-Kontrol listesi:
-
-* `JIRA_URL` doğru mu?
-* `JIRA_PAT` geçerli mi?
-* `JIRA_PROJECT_KEY` doğru mu?
-* Projede Bug issue type var mı?
-* Ağ veya proxy Jira erişimini engelliyor mu?
-
-Kuru koşu ile test edin:
+Önce dry run ile deneyin:
 
 ```bash
-mvn test -Djira.dry-run=true
+export DRY_RUN=true
+export JIRA_DRY_RUN=true
 ```
 
-### 11.9 DOORS güncellemesi çalışmıyor
+Gerçek Jira için şu değerleri kontrol edin:
 
-Kontrol listesi:
+1. `JIRA_URL` veya `JIRA_BASE_URL`
+2. `JIRA_PAT`
+3. `JIRA_PROJECT_KEY` veya `JIRA_PROJECT`
+4. `JIRA_ISSUE_TYPE`
+5. Ağ ve proxy erişimi
 
-* Windows ajan kullanılıyor mu?
-* `DOORS_PATH` gerçek `doors.exe` veya `dxl.exe` dosyasını gösteriyor mu?
-* DXL script kurumunuzdaki alan adlarıyla uyumlu mu?
-* `doorsAbsNumber` manifest içinde dolu mu?
+### 9.9 Allure report komutu bulunmuyor
 
-Linux üzerinde gerçek DOORS beklenmemelidir. Bu depodaki istemci Linux üzerinde `doors.exe` yoksa atlar.
-
-### 11.10 ChromeDriver başlamıyor
-
-Bu depodaki örnek yollar:
-
-```java
-private static final String CHROME_PATH = "/tmp/chrome-linux64/chrome";
-private static final String CHROMEDRIVER_PATH = "/tmp/chromedriver-linux64/chromedriver";
-```
-
-Hedef projede kendi ajanınıza göre değiştirin. Örnek ChromeOptions:
-
-```java
-ChromeOptions options = new ChromeOptions();
-options.setBinary(CHROME_PATH);
-options.addArguments("--headless=new");
-options.addArguments("--disable-gpu");
-options.addArguments("--no-sandbox");
-options.addArguments("--disable-dev-shm-usage");
-System.setProperty("webdriver.chrome.driver", CHROMEDRIVER_PATH);
-return new ChromeDriver(options);
-```
-
-## 12. Örnek Proje Yapısı
-
-Çok modüllü kurulum için önerilen yapı:
-
-```text
-java_reports/
-├── pom.xml
-├── .env.example
-├── bug-tracker.json
-├── Jenkinsfile
-├── start.sh
-├── scripts/
-│   └── start-server.bat
-├── test-core/
-│   ├── pom.xml
-│   └── src/test/
-│       ├── java/com/testreports/
-│       │   ├── config/WebDriverFactory.java
-│       │   ├── runner/CucumberTestRunner.java
-│       │   └── steps/LoginSteps.java
-│       └── resources/
-│           ├── allure.properties
-│           ├── cucumber.properties
-│           └── features/login.feature
-├── allure-integration/
-│   ├── pom.xml
-│   └── src/main/java/com/testreports/allure/
-│       ├── ScreenshotHook.java
-│       ├── VideoHook.java
-│       └── WebDriverHolder.java
-├── report-model/
-│   ├── pom.xml
-│   └── src/main/java/com/testreports/model/
-├── jira-service/
-│   ├── pom.xml
-│   └── src/main/java/com/testreports/jira/
-├── doors-service/
-│   ├── pom.xml
-│   └── src/main/resources/DoorsDxlScript.dxl
-├── orchestrator/
-│   └── pom.xml
-├── fastapi-server/
-│   ├── requirements.txt
-│   ├── server.py
-│   ├── bug_tracker.py
-│   ├── models.py
-│   ├── static/
-│   │   ├── chart.min.js
-│   │   └── dashboard.css
-│   └── templates/
-│       ├── dashboard.html
-│       └── triage.html
-└── manifests/
-    └── sample-run-001.json
-```
-
-Tek modüllü hedef projede sade yapı:
-
-```text
-my-selenium-project/
-├── pom.xml
-├── bug-tracker.json
-├── manifests/
-├── fastapi-server/
-├── src/test/java/com/sirket/proje/
-│   ├── allure/
-│   │   ├── ScreenshotHook.java
-│   │   ├── VideoHook.java
-│   │   └── WebDriverHolder.java
-│   ├── config/WebDriverFactory.java
-│   ├── runner/CucumberTestRunner.java
-│   └── steps/
-└── src/test/resources/
-    ├── allure.properties
-    ├── cucumber.properties
-    └── features/
-```
-
-Manifest dosyası örneği:
-
-```json
-{
-  "runId": "run-2026-04-26-001",
-  "timestamp": "2026-04-26T10:30:00Z",
-  "totalScenarios": 2,
-  "passed": 1,
-  "failed": 1,
-  "skipped": 0,
-  "duration": "PT58.125S",
-  "scenarios": [
-    {
-      "id": "scenario-002",
-      "name": "Order Submission",
-      "status": "failed",
-      "duration": "PT42.891S",
-      "doorsAbsNumber": "ABS-12346",
-      "tags": ["checkout", "regression"],
-      "steps": [
-        { "name": "Navigate to checkout", "status": "passed", "errorMessage": null },
-        { "name": "Submit order", "status": "failed", "errorMessage": "Payment processing failed: card declined" }
-      ],
-      "attachments": [
-        { "name": "order-failure.png", "type": "image/png", "path": "screenshots/order-failure.png" }
-      ]
-    }
-  ]
-}
-```
-
-FastAPI Pydantic modeli şu alanları bekler:
-
-```python
-class ScenarioResult(BaseModel):
-    id: str
-    name: str
-    status: str
-    duration: str
-    doorsAbsNumber: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
-    steps: List[StepResult] = Field(default_factory=list)
-    attachments: List[Attachment] = Field(default_factory=list)
-
-class RunManifest(BaseModel):
-    runId: str
-    timestamp: datetime
-    totalScenarios: int
-    passed: int
-    failed: int
-    skipped: int
-    duration: str
-    scenarios: List[ScenarioResult]
-```
-
-## 13. Hızlı Başlangıç
-
-Beş dakikalık yerel kurulum için şu sırayı izleyin.
-
-### Adım 1, bağımlılıkları kontrol edin
+Bu depodaki Allure CLI yolu:
 
 ```bash
-java -version
-mvn -version
-python3 --version
+export PATH="$PATH:/home/ol_ta/tools/allure-2.33.0/bin"
 allure --version
-ffmpeg -version
 ```
 
-### Adım 2, Python paketlerini kurun
+### 9.10 Maven bulunmuyor
+
+Bu depodaki Maven yolu:
 
 ```bash
-cd /mnt/c/Users/ol_ta/desktop/java_reports
-pip install -r fastapi-server/requirements.txt
-```
-
-### Adım 3, Java testlerini çalıştırın
-
-```bash
-cd /mnt/c/Users/ol_ta/desktop/java_reports
 export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:$PATH"
-mvn -pl test-core test
+mvn -version
 ```
 
-### Adım 4, Allure raporu üretin
+## 10. Entegrasyon kontrol listesi
 
-```bash
-allure generate --clean test-core/target/allure-results -o allure-report
-```
-
-### Adım 5, FastAPI dashboard başlatın
-
-```bash
-cd /mnt/c/Users/ol_ta/desktop/java_reports/fastapi-server
-python3 -m uvicorn server:app --host 0.0.0.0 --port 8000
-```
-
-### Adım 6, tarayıcıdan açın
-
-```text
-http://localhost:8000
-```
-
-Giriş yaptıktan sonra dashboard run listesini gösterir. Hata kartları için bir run satırındaki triage bağlantısına tıklayın veya şu formatı kullanın:
-
-```text
-http://localhost:8000/reports/{runId}/triage
-```
-
-### Adım 7, CI içine alın
-
-Jenkins için `Jenkinsfile` örneğini, GitHub Actions için `.github/workflows/test-report.yml` örneğini kendi proje adlarınıza göre düzenleyin. En küçük pipeline sırası şu olmalıdır:
-
-1. Java kur.
-2. Python kur.
-3. `pip install -r fastapi-server/requirements.txt` çalıştır.
-4. `mvn -B test` çalıştır.
-5. Python testleri varsa çalıştır.
-6. `allure generate --clean ...` çalıştır.
-7. Allure raporunu artifact olarak sakla.
-
-Bu adımlar tamamlandığında hedef Java Selenium Cucumber projesi, Allure ekleri, FastAPI dashboard, triage ekranı, Jira eşleştirme ve DOORS batch güncelleme akışına hazır hale gelir.
+1. Maven bağımlılıkları eklendi.
+2. `cucumber.properties` Allure plugin ve glue değerlerini içeriyor.
+3. `allure.properties` `target/allure-results` yazıyor.
+4. Runner `features` classpath dizinini seçiyor.
+5. Hook paketi Cucumber glue içinde.
+6. Driver oluşturulunca `WebDriverHolder.setDriver(driver)` çağrılıyor.
+7. Senaryolarda `@DOORS-NNNNN` etiketi var.
+8. Test sonrası Allure sonuçları üretiliyor.
+9. Manifest dosyaları `MANIFESTS_DIR` altına yazılıyor.
+10. FastAPI `/api/v1/runs` endpointi run listesini döndürüyor.
+11. Jira önce dry run modunda deneniyor.
+12. CI Allure raporunu ve manifestleri artifact olarak saklıyor.

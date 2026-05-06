@@ -34,4 +34,25 @@ node_modules/
 
 # Reports
 manifests/
-allure-results/.sisyphus/ralph-loop.local.md
+**/allure-results/
+**/extent-reports/
+bug-tracker.json
+# WSL/Windows artifacts
+*Zone.Identifier
+
+# Runtime state
+run-aliases.json
+
+# Database (binary runtime data)
+*.duckdb
+*.duckdb.wal
+
+# Test tooling artifacts
+.playwright-mcp/
+.sisyphus/
+*.png
+
+# CI/CD (removed from git, keep ignored)
+.github/
+
+

@@ -1,0 +1,28 @@
+trigger: none
+pool: windows-latest
+
+parameters:
+  - name: CUCUMBER_TAGS
+    type: string
+    default: "@smoke"
+  - name: RETRY_COUNT
+    type: number
+    default: 0
+
+steps:
+  - task: Maven@4
+    inputs:
+      mavenPOMFile: 'pom.xml'
+      goals: 'test'
+      options: '-pl test-core -Dcucumber.filter.tags=$(CUCUMBER_TAGS) -Dretry.count=$(RETRY_COUNT)'
+
+  - script: |
+      allure generate --clean test-core/target/allure-results -o test-core/target/allure-report
+    displayName: 'Generate Allure Report'
+    condition: always()
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: 'test-core/target/allure-report'
+      ArtifactName: 'allure-report'
+    condition: always()
