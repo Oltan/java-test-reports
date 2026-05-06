@@ -17,7 +17,14 @@ class BugTracker:
 
     def _read(self) -> Dict[str, Any]:
         with self.lock:
-            return json.loads(self.path.read_text())
+            try:
+                data = json.loads(self.path.read_text())
+            except (json.JSONDecodeError, FileNotFoundError):
+                data = {}
+            if "mappings" not in data:
+                data = {"version": "1.0", "mappings": {}}
+                self.path.write_text(json.dumps(data, indent=2))
+            return data
 
     def _write(self, data: Dict[str, Any]) -> None:
         with self.lock:

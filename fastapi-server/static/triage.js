@@ -71,8 +71,8 @@ function renderCard(s) {
   }
 
   let jiraDisplay = '';
-  if (s.jira_key) {
-    jiraDisplay = `<span class="jira-key-display" data-testid="jira-key-display" style="display:inline-flex">${jiraLink(s.jira_key)}</span>`;
+  if (s.jira_keys && s.jira_keys.length) {
+    jiraDisplay = `<span class="jira-key-display" data-testid="jira-key-display" style="display:inline-flex;gap:6px">${s.jira_keys.map(k => jiraLink(k)).join('')}</span>`;
   }
 
   const stepsHtml = (s.error_message || '').trim()
@@ -85,8 +85,9 @@ function renderCard(s) {
       </div>`
     : '';
 
+  const createDisabled = (s.triage_decision === 'jira_created' || s.triage_decision === 'accepted_pass' || s.triage_decision === 'accepted_skip') ? ' disabled' : '';
   const actionsDisabled = hasDecision ? ' disabled' : '';
-  const btnDoneClass = hasDecision ? ' btn--done' : '';
+  const btnDoneClass = s.triage_decision === 'jira_created' ? ' btn--done' : '';
 
   return `
   <div class="fcard" data-testid="failure-card"
@@ -105,8 +106,8 @@ function renderCard(s) {
 
     ${decisionHtml ? `<div data-bug-status data-testid="bug-status">${decisionHtml}</div>` : `
     <div data-bug-status class="bug-status-row" data-testid="bug-status">
-      ${s.jira_key
-        ? `<span class="bug-pill bug-pill--open"><span class="bug-dot"></span>${jiraLink(s.jira_key)}<span class="bug-label">OPEN</span></span>`
+      ${s.jira_keys && s.jira_keys.length
+        ? s.jira_keys.map(k => `<span class="bug-pill bug-pill--open"><span class="bug-dot"></span>${jiraLink(k)}<span class="bug-label">OPEN</span></span>`).join('')
         : '<span class="bug-pill bug-pill--new">New — not yet reported</span>'}
     </div>`}
 
@@ -114,7 +115,7 @@ function renderCard(s) {
 
     <div class="fcard-actions" data-testid="card-actions">
       <div class="triage-actions-group">
-        <button class="btn btn-primary${btnDoneClass}" data-create-jira data-testid="create-jira-button"${actionsDisabled}>
+        <button class="btn btn-primary${btnDoneClass}" data-create-jira data-testid="create-jira-button"${createDisabled}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
           Create Jira Bug
         </button>

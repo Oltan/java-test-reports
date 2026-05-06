@@ -2030,7 +2030,7 @@ class TriageScenarioState(BaseModel):
     status: str
     error_message: Optional[str] = None
     doors_number: Optional[str] = None
-    jira_key: Optional[str] = None
+    jira_keys: List[str] = []
     triage_decision: Optional[str] = None
     triage_reason: Optional[str] = None
     triage_actor: Optional[str] = None
@@ -2160,8 +2160,8 @@ def get_triage_state(run_id: str):
                 COALESCE(sd.current_name, sr.name_at_run) as scenario_name,
                 sr.status,
                 sr.error_message,
-                sr.doors_number_at_run,
-                jm.jira_key,
+                COALESCE(sr.doors_number_at_run, sd.doors_number) as doors_number,
+                (SELECT string_agg(jm.jira_key, ',') FROM jira_mappings jm WHERE jm.scenario_uid = sr.scenario_uid) as jira_keys,
                 td.decision as triage_decision,
                 td.reason as triage_reason,
                 td.actor as triage_actor,
@@ -2169,7 +2169,6 @@ def get_triage_state(run_id: str):
                 sr.retry_attempt
             FROM scenario_results sr
             LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
-            LEFT JOIN jira_mappings jm ON sr.scenario_uid = jm.scenario_uid
             LEFT JOIN triage_decisions td ON sr.scenario_uid = td.scenario_uid
             WHERE sr.run_id = ? AND sr.status IN ('FAILED', 'BROKEN')
             ORDER BY sr.id
@@ -2196,7 +2195,7 @@ def get_triage_state(run_id: str):
                 status=row[2] or "UNKNOWN",
                 error_message=row[3],
                 doors_number=row[4],
-                jira_key=row[5],
+                jira_keys=[k for k in (row[5] or "").split(",") if k],
                 triage_decision=row[6],
                 triage_reason=row[7],
                 triage_actor=row[8],
@@ -2230,21 +2229,17 @@ def auto_match_jira(run_id: str) -> dict:
               AND COALESCE(sr.doors_number_at_run, sd.doors_number) != ''
         """, [run_id]).fetchall()
 
+        INACTIVE_STATUSES = {"done", "closed", "resolved", "cancelled", "wont fix", "won't fix", "duplicate", "rejected"}
+
         matched = 0
         details = []
         for scenario_uid, scenario_name, doors_number in rows:
-            existing = conn.execute(
-                "SELECT jira_key FROM jira_mappings WHERE scenario_uid = ? LIMIT 1",
-                [scenario_uid],
-            ).fetchone()
-            if existing:
-                continue
-
+            # Skip if manually triaged by a human
             existing_decision = conn.execute(
-                "SELECT decision FROM triage_decisions WHERE scenario_uid = ? LIMIT 1",
+                "SELECT actor FROM triage_decisions WHERE scenario_uid = ? LIMIT 1",
                 [scenario_uid],
             ).fetchone()
-            if existing_decision:
+            if existing_decision and existing_decision[0] != "auto-match":
                 continue
 
             try:
@@ -2252,28 +2247,32 @@ def auto_match_jira(run_id: str) -> dict:
             except Exception:
                 continue
 
-            if not issues:
+            active_issues = [i for i in issues if i.get("status", "").lower() not in INACTIVE_STATUSES]
+            if not active_issues:
                 continue
 
-            best = issues[0]
-            jira_key = best["key"]
-            conn.execute(
-                "INSERT OR IGNORE INTO jira_mappings (scenario_uid, doors_id, jira_key, created_at) VALUES (?, ?, ?, ?)",
-                [scenario_uid, doors_number, jira_key, datetime.now()],
-            )
+            linked_keys = []
+            for issue in active_issues:
+                jira_key = issue["key"]
+                conn.execute(
+                    "INSERT OR IGNORE INTO jira_mappings (scenario_uid, doors_id, jira_key, created_at) VALUES (?, ?, ?, ?)",
+                    [scenario_uid, doors_number, jira_key, datetime.now()],
+                )
+                linked_keys.append(jira_key)
+
             conn.execute(
                 """INSERT OR REPLACE INTO triage_decisions
                    (scenario_uid, decision, reason, actor, timestamp)
                    VALUES (?, 'jira_linked', ?, 'auto-match', ?)""",
-                [scenario_uid, f"Auto-matched by DOORS number {doors_number}", datetime.now()],
+                [scenario_uid, f"Auto-matched by DOORS number {doors_number}: {', '.join(linked_keys)}", datetime.now()],
             )
             matched += 1
             details.append({
                 "scenario_uid": scenario_uid,
                 "scenario_name": scenario_name,
                 "doors_number": doors_number,
-                "jira_key": jira_key,
-                "jira_status": best.get("status", ""),
+                "jira_keys": linked_keys,
+                "jira_statuses": [i.get("status", "") for i in active_issues],
             })
 
         return {"matched": matched, "details": details}
@@ -2288,7 +2287,8 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
         init_schema(conn)
         row = conn.execute("""
             SELECT sr.scenario_uid, sr.name_at_run, sr.error_message, sr.doors_number_at_run,
-                   sd.current_name, sd.current_feature_file, sd.current_feature_line
+                   sd.current_name, sd.current_feature_file, sd.current_feature_line,
+                   sr.screenshot_path, sr.video_path
             FROM scenario_results sr
             LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
             WHERE sr.run_id = ? AND sr.scenario_uid = ?
@@ -2298,13 +2298,8 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
 
         scenario_uid, name_at_run, error_message, doors_number = row[0], row[1], row[2], row[3]
         scenario_name = row[4] or name_at_run
-
-        existing_jira = conn.execute(
-            "SELECT jira_key FROM jira_mappings WHERE scenario_uid = ? LIMIT 1",
-            [scenario_id]
-        ).fetchone()
-        if existing_jira:
-            return JiraResponse(jiraKey=existing_jira[0], jiraUrl=jira_client.issue_url(existing_jira[0]))
+        screenshot_path = row[7]
+        video_path = row[8]
 
         if not jira_client.is_configured():
             raise HTTPException(
@@ -2331,7 +2326,7 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
             )
 
         conn.execute("""
-            INSERT INTO jira_mappings (scenario_uid, doors_id, jira_key, created_at)
+            INSERT OR IGNORE INTO jira_mappings (scenario_uid, doors_id, jira_key, created_at)
             VALUES (?, ?, ?, current_timestamp)
         """, [scenario_id, doors_number, key])
 
@@ -2345,6 +2340,16 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
 
         if doors_number:
             update_scenario_history_explanation(conn, doors_number, run_id, key)
+
+        # Attach screenshot/video if available
+        for fpath in [screenshot_path, video_path]:
+            if fpath:
+                full = (MANIFESTS_DIR / fpath).resolve()
+                if full.exists() and str(full).startswith(str(MANIFESTS_DIR.resolve())):
+                    try:
+                        jira_client.attach_screenshot(key, str(full))
+                    except Exception:
+                        pass
 
         return JiraResponse(jiraKey=key, jiraUrl=jira_client.issue_url(key))
     finally:
