@@ -36,10 +36,6 @@ node_modules/
 manifests/
 **/allure-results/
 **/extent-reports/
-allure-results/.sisyphus/ralph-loop.local.md
-fastapi-server/frontend/node_modules/
-fastapi-server/manifests/
-manifests/
 bug-tracker.json
 # WSL/Windows artifacts
 *Zone.Identifier
@@ -56,4 +52,7 @@ run-aliases.json
 .sisyphus/
 *.png
 
+# CI/CD (removed from git, keep ignored)
 .github/
+
+
