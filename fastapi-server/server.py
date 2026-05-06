@@ -206,7 +206,9 @@ def _maven_executable() -> str:
     bundled = Path("/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn")
     if bundled.exists():
         return str(bundled)
-    return shutil.which("mvn") or "mvn"
+    # Windows: mvn.cmd is the standard wrapper
+    win_mvn = shutil.which("mvn.cmd") or shutil.which("mvn")
+    return win_mvn or "mvn"
 
 
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
