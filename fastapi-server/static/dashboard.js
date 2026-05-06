@@ -33,7 +33,7 @@ async function handleLogin(e) {
       body: JSON.stringify({ username, password }),
     });
     setToken(data.token);
-    document.cookie = `access_token=${data.token}; path=/; SameSite=Lax`;
+    document.cookie = `access_token=${data.token}; path=/; SameSite=Lax; max-age=${24 * 3600}`;
     showDashboard();
   } catch {
     errorEl.textContent = "Geçersiz kullanıcı adı veya şifre";
