@@ -10,9 +10,8 @@ java_reports/
 ├── .gitignore
 ├── .env.example
 ├── README.md
-├── test-core/                 # Cucumber runner, step definitions, Selenium POM
-├── allure-integration/        # Allure adapter, screenshot/video hooks
-├── report-model/             # run-manifest.json DTO + Jackson parser
+├── test-core/                 # Cucumber runner, step defs, Selenium POM, Allure hooks
+
 └── fastapi-server/           # Python FastAPI (requirements.txt)
 ```
 
@@ -20,9 +19,8 @@ java_reports/
 
 | Module | Description |
 |--------|-------------|
-| `test-core` | Cucumber runner, step definitions, Selenium Page Object Model |
-| `allure-integration` | Allure adapter with screenshot and video capture hooks |
-| `report-model` | Data Transfer Objects for run-manifest.json with Jackson |
+| `test-core` | Cucumber runner, step defs, Selenium POM, Allure hooks (screenshot + video) |
+
 | `fastapi-server` | Python FastAPI server (separate from Maven build) |
 
 ## Requirements

@@ -190,8 +190,6 @@ your-project/
 │   │       └── java/
 │   │           └── com/company/
 │   │               └── pages/               # Page Object Model
-├── allure-integration/        # Bu repodan kopyala
-├── report-model/              # Bu repodan kopyala
 └── fastapi-server/            # Bu repodan kopyala (opsiyonel)
 ```
 
@@ -320,21 +318,12 @@ Feature: Kullanıcı girişi
 
 ### 4.6 Allure Hook'ları (Screenshot + Video)
 
-**`allure-integration` modülünü bağımlılık olarak ekle:**
-
-```xml
-<dependency>
-    <groupId>com.testreports</groupId>
-    <artifactId>allure-integration</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-</dependency>
-```
-
-**Veya hook sınıflarını doğrudan kopyala:**
+**Hook sınıflarını kopyala** (`test-core/src/test/java/com/testreports/allure/` altından):
 
 - `ScreenshotHook.java` — Başarısız senaryoda otomatik screenshot
 - `VideoHook.java` — Başarısız senaryoda otomatik video kaydı
 - `WebDriverHolder.java` — Thread-local WebDriver yönetimi
+- `FailureLocationCapture.java` — Fail location'ı Allure label olarak ekler
 
 **`cucumber.properties`'ye glue ekle:**
 
@@ -534,9 +523,6 @@ allure generate --clean test-core/target/allure-results -o test-core/target/allu
 
 # FastAPI başlat
 cd fastapi-server && python3 -m uvicorn server:app --host 0.0.0.0 --port 8000
-
-# Manifest üret (Java CLI)
-cd report-model && mvn exec:java -Dexec.mainClass="com.testreports.model.ManifestGenerator"
 
 # DuckDB sorgula
 cd fastapi-server && duckdb reports.duckdb "SELECT * FROM scenario_history LIMIT 5"

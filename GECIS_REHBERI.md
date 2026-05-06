@@ -74,10 +74,10 @@ src/test/java/CucumberRetryRunnerTest.java
 **Ekleneckler:**
 
 ```
-java-test-reports/allure-integration/src/main/java/com/testreports/allure/VideoHook.java
-java-test-reports/allure-integration/src/main/java/com/testreports/allure/ScreenshotHook.java
-java-test-reports/allure-integration/src/main/java/com/testreports/allure/WebDriverHolder.java
-java-test-reports/allure-integration/src/main/java/com/testreports/allure/FailureLocationCapture.java
+java-test-reports/test-core/src/test/java/com/testreports/allure/VideoHook.java
+java-test-reports/test-core/src/test/java/com/testreports/allure/ScreenshotHook.java
+java-test-reports/test-core/src/test/java/com/testreports/allure/WebDriverHolder.java
+java-test-reports/test-core/src/test/java/com/testreports/allure/FailureLocationCapture.java
 ```
 
 ---

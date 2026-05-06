@@ -11,9 +11,7 @@ Mevcut depo kökü:
 Ana parçalar:
 
 ```text
-test-core             Cucumber runner, Selenium step sınıfları
-allure-integration   Screenshot, video, failure location hook sınıfları
-report-model         Allure sonuç parser sınıfları, manifest modeli, manifest writer
+test-core             Cucumber runner, Selenium step + Allure hook sınıfları
 fastapi-server       Dashboard, API, triage, Jira ve DOORS köprüleri
 manifests            FastAPI tarafından okunan run manifest dosyaları
 bug-tracker.json     DOORS numarası ve Jira issue eşleştirmesi
@@ -24,13 +22,12 @@ bug-tracker.json     DOORS numarası ve Jira issue eşleştirmesi
 En kısa entegrasyon yolu:
 
 1. Hedef projede Maven test modülüne Cucumber, Selenium, JUnit Platform ve Allure bağımlılıklarını ekleyin.
-2. `allure-integration` modülünü bağımlılık olarak bağlayın veya içindeki hook sınıflarını hedef projeye kopyalayın.
+2. `test-core/src/test/java/com/testreports/allure/` altındaki hook sınıflarını hedef projeye kopyalayın (=4 Java dosyası).
 3. `src/test/resources` altına `cucumber.properties`, `allure.properties` ve gerekiyorsa `junit-platform.properties` ekleyin.
 4. Feature dosyalarında DOORS ilişkisini `@DOORS-NNNNN` etiketiyle yazın.
 5. Testleri çalıştırıp `target/allure-results` üretin.
-6. `report-model` içindeki parser ve writer ile manifest dosyasını `manifests/` dizinine yazın.
-7. FastAPI sunucusuna `MANIFESTS_DIR` verip dashboardu açın.
-8. Jira için önce dry run modunu kullanın, sonra gerçek Jira ortam değişkenlerini verin.
+6. FastAPI sunucusuna `MANIFESTS_DIR` verip dashboardu açın.
+7. Jira için önce dry run modunu kullanın, sonra gerçek Jira ortam değişkenlerini verin.
 
 Mevcut depoda hızlı yerel koşu:
 
@@ -133,22 +130,7 @@ Hedef test modülü için temel bağımlılıklar:
             </exclusion>
         </exclusions>
     </dependency>
-    <dependency>
-        <groupId>com.testreports</groupId>
-        <artifactId>allure-integration</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
-    </dependency>
 </dependencies>
-```
-
-Manifest üretmek için hedef projeye `report-model` modülünü de ekleyin:
-
-```xml
-<dependency>
-    <groupId>com.testreports</groupId>
-    <artifactId>report-model</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-</dependency>
 ```
 
 ### 2.3 Surefire ayarı
@@ -306,10 +288,10 @@ Runner ve properties dosyasında aynı ayarları iki kez vermeyin. Birini ana ka
 Hook sınıfları:
 
 ```text
-allure-integration/src/main/java/com/testreports/allure/ScreenshotHook.java
-allure-integration/src/main/java/com/testreports/allure/VideoHook.java
-allure-integration/src/main/java/com/testreports/allure/WebDriverHolder.java
-allure-integration/src/main/java/com/testreports/allure/FailureLocationCapture.java
+test-core/src/test/java/com/testreports/allure/ScreenshotHook.java
+test-core/src/test/java/com/testreports/allure/VideoHook.java
+test-core/src/test/java/com/testreports/allure/WebDriverHolder.java
+test-core/src/test/java/com/testreports/allure/FailureLocationCapture.java
 ```
 
 Driver oluşturduktan sonra holder'a yazın:
@@ -413,39 +395,7 @@ curl http://localhost:8000/api/v1/runs \
 
 ### 5.1 Manifest üretme
 
-`report-model` şu iki sınıfı sağlar:
-
-```text
-report-model/src/main/java/com/testreports/model/AllureResultsParser.java
-report-model/src/main/java/com/testreports/model/ManifestWriter.java
-```
-
-Hedef projede test sonrası çalışan küçük bir sınıf veya Maven exec adımı ile Allure sonuçlarını manifeste çevirin:
-
-```java
-package com.company.project.reporting;
-
-import com.testreports.model.AllureResultsParser;
-import com.testreports.model.ManifestWriter;
-import com.testreports.model.ScenarioResult;
-
-import java.nio.file.Path;
-import java.time.Instant;
-import java.util.List;
-
-public class WriteRunManifest {
-    public static void main(String[] args) throws Exception {
-        Path allureResults = Path.of(args.length > 0 ? args[0] : "target/allure-results");
-        Path manifests = Path.of(args.length > 1 ? args[1] : "manifests");
-        List<ScenarioResult> scenarios = new AllureResultsParser(allureResults).parse();
-        String runId = new ManifestWriter(manifests).write(
-                scenarios,
-                new ManifestWriter.RunMetadata(Instant.now(), null)
-        );
-        System.out.println("Manifest written: " + runId);
-    }
-}
-```
+FastAPI sunucusu `_save_results_to_duckdb()` fonksiyonu ile Allure sonuçlarını otomatik parse edip manifest üretir. Manuel manifest üretimine gerek yoktur.
 
 Çok modüllü mevcut depo için sonuç ve manifest yolları:
 

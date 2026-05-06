@@ -13,9 +13,8 @@ Multi-module test automation reporting system. Cucumber Selenium testleri → Al
 ```
 java_reports/
 ├── pom.xml                    # Parent POM (3 Maven modules)
-├── test-core/                 # Cucumber runner + Selenium step defs
-├── allure-integration/        # Allure hooks (screenshot + video)
-├── report-model/              # Jackson DTO + parser/writer/bug-tracker
+├── test-core/                 # Cucumber runner + Selenium step defs + Allure hooks
+
 ├── fastapi-server/            # Python FastAPI web sunucu (Maven değil)
 ├── scripts/                   # start-server.bat, start-servers.sh
 ├── manifests/                 # run-manifest.json dosyaları
@@ -31,8 +30,8 @@ java_reports/
 | Task | Location | Notes |
 |------|----------|-------|
 | Cucumber test koşma | `test-core/` | `CucumberTestRunner.java`, `login.feature` |
-| Allure rapor hook'ları | `allure-integration/` | `ScreenshotHook.java`, `VideoHook.java` |
-| Run manifest şeması | `report-model/` | `RunManifest.java`, `AllureResultsParser.java` |
+| Allure rapor hook'ları | `test-core/src/test/java/com/testreports/allure/` | `ScreenshotHook.java`, `VideoHook.java` |
+| Run manifest şeması | `fastapi-server/` | `server.py` → `_write_manifest_json()` |
 | Web dashboard | `fastapi-server/` | `server.py`, `templates/dashboard.html` |
 | Bug tracker | `bug-tracker.json` | JSON-based bug mapping |
 | Pipeline | `fastapi-server/pipeline.py` | Stage execution |
