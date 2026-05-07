@@ -687,6 +687,17 @@ def _parse_allure_result(result_file: Path) -> dict | None:
     # Build AttemptResult
     attempt = {"status": raw_status, "timestamp": ts_str, "errorMessage": error or None}
 
+    # Parse steps
+    steps = []
+    for step in data.get("steps") or []:
+        step_status = str(step.get("status") or "unknown").lower()
+        step_error = ((step.get("statusDetails") or {}).get("message") or "")[:300]
+        steps.append({
+            "name": step.get("name") or "",
+            "status": step_status,
+            "errorMessage": step_error or None,
+        })
+
     return {
         "identity_key": identity_key,
         "name": name,
@@ -700,6 +711,7 @@ def _parse_allure_result(result_file: Path) -> dict | None:
         "dependencies": dependencies,
         "retry_attempt": retry_attempt,
         "attempt": attempt,
+        "steps": steps,
     }
 
 
@@ -868,7 +880,7 @@ def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, 
                 "duration": f"{s['duration']:.1f}s",
                 "doorsAbsNumber": s.get("doors_id"),
                 "tags": s.get("tags", []),
-                "steps": [],
+                "steps": s.get("steps", []),
                 "attachments": [],
                 "attempts": s.get("attempt_list", []),
                 "dependencies": s.get("dependencies", []),
