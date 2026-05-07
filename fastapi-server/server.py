@@ -212,10 +212,9 @@ def _maven_executable() -> str:
 
 
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
-    module = os.getenv("MAVEN_MODULE", "test-core")
     cmd = [
         _maven_executable(),
-        "-pl", module,
+        "-pl", "test-core",
         "test",
         f"-Dcucumber.filter.tags={options.tags}",
     ]
@@ -276,7 +275,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
         for i in range(options.parallel):
             run_id = f"test-{uuid4().hex[:8]}"
             worker_id = f"{job_id}-w{i}"
-            output_dir = str(PROJECT_ROOT / os.getenv("MAVEN_MODULE", "test-core") / "target" / f"allure-results-{run_id}")
+            output_dir = str(PROJECT_ROOT / "test-core" / "target" / f"allure-results-{run_id}")
             conn.execute(
                 """
                 INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
@@ -705,7 +704,7 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
     import hashlib
 
-    allure_dir = PROJECT_ROOT / os.getenv("MAVEN_MODULE", "test-core") / "target" / "allure-results"
+    allure_dir = PROJECT_ROOT / "test-core" / "target" / "allure-results"
 
     # Group results by identity_key to detect retries (multiple attempts)
     grouped: dict[str, list[dict]] = {}
