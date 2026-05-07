@@ -212,10 +212,11 @@ def _maven_executable() -> str:
 
 
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
+    module = os.getenv("MAVEN_MODULE", "test-core")
     cmd = [
         _maven_executable(),
         "-pl",
-        "test-core",
+        module,
         "test",
         f"-Dcucumber.filter.tags={options.tags}",
     ]
