@@ -685,6 +685,17 @@ def _parse_allure_result(result_file: Path) -> dict | None:
     # Build AttemptResult
     attempt = {"status": raw_status, "timestamp": ts_str, "errorMessage": error or None}
 
+    # Parse steps (Cucumber BDD steps from Allure result)
+    raw_steps = data.get("steps") or []
+    steps = []
+    for st in raw_steps:
+        step_error = ((st.get("statusDetails") or {}).get("message") or "")[:300]
+        steps.append({
+            "name": st.get("name") or "",
+            "status": (st.get("status") or "unknown").lower(),
+            "errorMessage": step_error or None,
+        })
+
     return {
         "identity_key": identity_key,
         "name": name,
@@ -698,6 +709,8 @@ def _parse_allure_result(result_file: Path) -> dict | None:
         "dependencies": dependencies,
         "retry_attempt": retry_attempt,
         "attempt": attempt,
+        "steps": steps,
+        "start_ts_ms": start_ts or 0,
     }
 
 
@@ -707,22 +720,51 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
 
     allure_dir = PROJECT_ROOT / "test-core" / "target" / "allure-results"
 
-    # Group results by identity_key to detect retries (multiple attempts)
+    # Fallback: read version from environment.properties if not provided in options
+    effective_version = options.version or ""
+    if not effective_version and allure_dir.exists():
+        env_props = allure_dir / "environment.properties"
+        if env_props.exists():
+            for line in env_props.read_text(errors="replace").splitlines():
+                key, _, val = line.partition("=")
+                if key.strip().lower() == "version":
+                    effective_version = val.strip()
+                    break
+
+    # Group results by identity_key to detect retries (multiple attempts).
+    # Only include files whose start timestamp is within the current run window to
+    # avoid mixing results from previous Maven invocations that weren't cleaned up.
+    # The window is: [started_at - 5 min, now+1 min]. If started_at is unknown we
+    # use a generous 24-hour window anchored at the newest file's timestamp.
     grouped: dict[str, list[dict]] = {}
     all_scenarios = []
 
     DEP_TAG_RE = re.compile(r"@dep:(.+)", re.IGNORECASE)
 
     if allure_dir.exists():
+        all_parsed = []
         for result_file in sorted(allure_dir.glob("*-result.json")):
             parsed = _parse_allure_result(result_file)
-            if parsed is None:
-                continue
+            if parsed is not None:
+                all_parsed.append(parsed)
 
-            key = parsed["identity_key"]
-            if key not in grouped:
-                grouped[key] = []
-            grouped[key].append(parsed)
+        # Determine the run window anchor
+        if all_parsed:
+            newest_ts_ms = max(p["start_ts_ms"] for p in all_parsed)
+            if started_at:
+                window_start_ms = int(started_at.timestamp() * 1000) - 5 * 60 * 1000
+            else:
+                # No known start time — take only files within 24 h of the newest file
+                window_start_ms = newest_ts_ms - 24 * 3600 * 1000
+            window_end_ms = newest_ts_ms + 60 * 1000
+
+            for parsed in all_parsed:
+                ts = parsed["start_ts_ms"]
+                if ts == 0 or window_start_ms <= ts <= window_end_ms:
+                    key = parsed["identity_key"]
+                    if key not in grouped:
+                        grouped[key] = []
+                    grouped[key].append(parsed)
 
     # Build scenarios list with attempt tracking
     scenario_map: dict[str, dict] = {}
@@ -758,6 +800,7 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
             "is_flaky": is_flaky,
             "attempt_list": attempt_list,
             "total_attempts": len(attempts_sorted),
+            "steps": final["steps"],
         }
         all_scenarios.append(scenario_map[key])
 
@@ -771,7 +814,7 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     try:
         init_schema(conn)
         conn.execute("DELETE FROM scenario_results WHERE run_id = ?", [run_id])
-        run_values = [options.version, options.environment, started_at or finished_at, finished_at, len(all_scenarios), passed, failed, skipped, options.visibility, run_id]
+        run_values = [effective_version, options.environment, started_at or finished_at, finished_at, len(all_scenarios), passed, failed, skipped, options.visibility, run_id]
         if conn.execute("SELECT 1 FROM runs WHERE id = ?", [run_id]).fetchone():
             conn.execute(
                 """
@@ -828,18 +871,18 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
                     name=s["name"],
                     run_id=run_id,
                     status=s["status"],
-                    version=options.version,
+                    version=effective_version,
                     timestamp=started_at or finished_at,
                 )
         # Write manifest JSON with full metadata
-        _write_manifest_json(run_id, options, all_scenarios, passed, failed, skipped, started_at or finished_at)
+        _write_manifest_json(run_id, options, all_scenarios, passed, failed, skipped, started_at or finished_at, effective_version)
     finally:
         conn.close()
 
     return {"total": len(all_scenarios), "passed": passed, "failed": failed, "skipped": skipped}
 
 
-def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, passed: int, failed: int, skipped: int, ts: datetime) -> None:
+def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, passed: int, failed: int, skipped: int, ts: datetime, effective_version: str = "") -> None:
     manifest_dir = PROJECT_ROOT / "manifests"
     manifest_dir.mkdir(exist_ok=True)
     manifest_path = manifest_dir / f"{run_id}.json"
@@ -852,7 +895,7 @@ def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, 
         "failed": failed,
         "skipped": skipped,
         "duration": "0.0s",
-        "version": options.version or "",
+        "version": effective_version or options.version or "",
         "environment": options.environment or "",
         "scenarios": [
             {
@@ -862,7 +905,7 @@ def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, 
                 "duration": f"{s['duration']:.1f}s",
                 "doorsAbsNumber": s.get("doors_id"),
                 "tags": s.get("tags", []),
-                "steps": [],
+                "steps": s.get("steps", []),
                 "attachments": [],
                 "attempts": s.get("attempt_list", []),
                 "dependencies": s.get("dependencies", []),
