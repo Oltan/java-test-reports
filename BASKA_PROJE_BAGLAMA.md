@@ -1,65 +1,48 @@
 # Başka Bir Java Projesini Bağlama
 
-Admin panelinden tag girip test başlatmak istiyorsanız, yeni projenizin bu repoya Maven modülü olarak bağlanması gerekir.
+Projenizi bu repoya taşımanıza gerek yok. Tek yapmanız gereken `.env` dosyasına projenizin yolunu yazmak.
 
 ---
 
 ## Nasıl Çalışır
 
-Admin panelinde "Tag" alanına `@smoke` gibi bir şey girip "Start" butonuna basınca sistem şu komutu çalıştırır:
+Admin panelinden tag girip "Start" butonuna basınca sistem şunu yapar:
 
 ```
-mvn -pl <MAVEN_MODULE> test -Dcucumber.filter.tags=@smoke
+cd C:\projects\benim-projem
+mvn test -Dcucumber.filter.tags=@2Dpoint -Dretry.count=2
 ```
 
-Bu komut **bu reponun kök dizininden** (`java-test-reports/`) çalışır. Yani yeni projeniz bu reponun içinde bir Maven modülü olmalıdır.
+Testler bitince `target/allure-results/` klasörünü okur ve sonuçları dashboard'a kaydeder.
 
 ---
 
-## Adım 1 — Projeyi Bu Repoya Ekleyin
+## Yapılacak Tek Şey — .env Ayarı
 
-Yeni projenizin klasörünü reponun köküne kopyalayın:
+`fastapi-server/.env` dosyasına (yoksa `.env.example`'dan kopyalayın) şunu ekleyin:
 
+```env
+# Windows
+MAVEN_PROJECT_DIR=C:\projects\benim-projem
+
+# Linux / Mac
+MAVEN_PROJECT_DIR=/home/user/projects/benim-projem
 ```
-java-test-reports/
-├── test-core/          ← mevcut proje
-├── benim-projem/       ← yeni proje buraya
-│   ├── pom.xml
-│   └── src/
-└── pom.xml             ← kök pom.xml'e modül olarak ekleyin
-```
 
-Kök `pom.xml`'e modülü bildirin:
+Sonra FastAPI sunucusunu yeniden başlatın:
 
-```xml
-<modules>
-    <module>test-core</module>
-    <module>benim-projem</module>   <!-- ekleyin -->
-</modules>
+```bash
+uvicorn server:app --reload
 ```
 
 ---
 
-## Adım 2 — Yeni Projenin pom.xml Gereksinimleri
+## Proje Gereksinimleri
 
 Projenizin `pom.xml`'inde şunlar olmalı:
 
+**Allure Cucumber entegrasyonu:**
 ```xml
-<!-- Cucumber runner için -->
-<dependency>
-    <groupId>io.cucumber</groupId>
-    <artifactId>cucumber-java</artifactId>
-    <version>7.18.0</version>
-    <scope>test</scope>
-</dependency>
-<dependency>
-    <groupId>io.cucumber</groupId>
-    <artifactId>cucumber-junit</artifactId>
-    <version>7.18.0</version>
-    <scope>test</scope>
-</dependency>
-
-<!-- Allure raporlama için -->
 <dependency>
     <groupId>io.qameta.allure</groupId>
     <artifactId>allure-cucumber7-jvm</artifactId>
@@ -68,8 +51,7 @@ Projenizin `pom.xml`'inde şunlar olmalı:
 </dependency>
 ```
 
-Surefire plugin'inde Cucumber tag filtresi için sistem property'sini geçirin:
-
+**Surefire — tag filtresi için:**
 ```xml
 <plugin>
     <groupId>org.apache.maven.plugins</groupId>
@@ -83,46 +65,22 @@ Surefire plugin'inde Cucumber tag filtresi için sistem property'sini geçirin:
 </plugin>
 ```
 
----
-
-## Adım 3 — allure.properties
-
-Projenizde `src/test/resources/allure.properties` dosyası oluşturun:
-
+**`src/test/resources/allure.properties`:**
 ```properties
 allure.results.directory=target/allure-results
 ```
 
 ---
 
-## Adım 4 — .env Dosyasına MAVEN_MODULE Ekleyin
-
-`java-test-reports/fastapi-server/.env` (veya `java-test-reports/.env`) dosyasına:
-
-```env
-MAVEN_MODULE=benim-projem
-```
-
-Klasör adı ne ise onu yazın. Tanımlanmazsa sistem varsayılan olarak `test-core` kullanır.
-
----
-
-## Adım 5 — Sunucuyu Yeniden Başlatın
-
-```bash
-# FastAPI sunucusunu durdurup yeniden başlatın
-cd fastapi-server
-uvicorn server:app --reload
-```
-
----
-
 ## Kontrol
 
-Admin paneline girin → Tag alanına projenizde var olan bir tag'i yazın (örn. `@regression`) → **Start Tests** butonuna basın.
+Admin paneline girin → Tag girin (örn. `@2Dpoint`) → **Start Tests**.
 
-Logda şunu görmelisiniz:
+Log'da şunu görmelisiniz:
 
 ```
-mvn -pl benim-projem test -Dcucumber.filter.tags=@regression
+[INFO] Running tests in: C:\projects\benim-projem
+mvn test -Dcucumber.filter.tags=@2Dpoint
 ```
+
+Testler bitince dashboard'da yeni run görünür.
