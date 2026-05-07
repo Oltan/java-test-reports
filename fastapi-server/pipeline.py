@@ -1,6 +1,7 @@
 import asyncio
 import os
 import shlex
+import shutil
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -99,6 +100,23 @@ class PipelineRunner:
                 [self.run_id, stage, status.value, started_at, finished_at, error],
             )
 
+    async def run_maven_tests(self):
+        command = os.getenv("PIPELINE_MAVEN_COMMAND")
+        if command:
+            await self._run_shell_command(command)
+            return
+
+        mvn = os.getenv("MAVEN_CMD") or self._find_maven()
+        module = os.getenv("MAVEN_MODULE", "test-core")
+        await self._run_exec_command([mvn, "-pl", module, "test"])
+
+    @staticmethod
+    def _find_maven() -> str:
+        bundled = Path("/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn")
+        if bundled.exists():
+            return str(bundled)
+        return shutil.which("mvn.cmd") or shutil.which("mvn") or "mvn"
+
     async def write_manifest(self):
         command = os.getenv("PIPELINE_MANIFEST_COMMAND")
         if command:
@@ -159,6 +177,7 @@ class PipelineRunner:
 async def execute_pipeline(run_id: str):
     runner = PipelineRunner(run_id)
     stages: list[tuple[str, bool, StageCallable]] = [
+        ("maven_test", False, runner.run_maven_tests),
         ("manifest", True, runner.write_manifest),
         ("allure", False, runner.generate_allure),
         ("jira", False, runner.create_jira_bugs),
