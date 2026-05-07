@@ -1993,6 +1993,7 @@ def create_jira_bug(run_id: str, scenario_id: str):
         f"*Run ID:* {run_id}\n"
         f"*Scenario:* {scenario.name}\n"
         f"*DOORS Number:* {scenario.doorsAbsNumber or 'N/A'}\n"
+        f"*Affects Version/s:* {manifest.version or 'N/A'}\n"
         f"*Duration:* {scenario.duration}\n"
         f"*Error:* {scenario.errorMessage or 'N/A'}\n\n"
         f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
@@ -2350,6 +2351,7 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
         scenario_name = row[4] or name_at_run
         screenshot_path = row[7]
         video_path = row[8]
+        run_version = (conn.execute("SELECT version FROM runs WHERE id=?", [run_id]).fetchone() or [None])[0]
 
         if not jira_client.is_configured():
             raise HTTPException(
@@ -2371,6 +2373,7 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
             f"*Run ID:* {run_id}\n"
             f"*Scenario:* {scenario_name}\n"
             f"*DOORS Number:* {doors_number or 'N/A'}\n"
+            f"*Affects Version/s:* {run_version or 'N/A'}\n"
             f"*Error:* {error_message or 'N/A'}\n\n"
             f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
         )
