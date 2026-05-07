@@ -704,7 +704,7 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
     import hashlib
 
-    allure_dir = PROJECT_ROOT / "test-core" / "target" / "allure-results"
+    allure_dir = Path(os.getenv("ALLURE_RESULTS_DIR", str(PROJECT_ROOT / "test-core" / "target" / "allure-results")))
 
     # Group results by identity_key to detect retries (multiple attempts)
     grouped: dict[str, list[dict]] = {}
@@ -1683,6 +1683,34 @@ def sync_runs() -> dict:
 def admin_sync_runs():
     """Backfill manifests ↔ DuckDB so version filters work across all historical runs."""
     return sync_runs()
+
+
+@app.delete("/api/admin/runs/{run_id}", dependencies=[Depends(verify_token)])
+def delete_run(run_id: str):
+    with get_connection(read_only=False) as conn:
+        init_schema(conn)
+        conn.execute("DELETE FROM scenario_results WHERE run_id = ?", [run_id])
+        conn.execute("DELETE FROM pipeline_status WHERE run_id = ?", [run_id])
+        conn.execute("DELETE FROM runs WHERE id = ?", [run_id])
+        conn.commit()
+    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
+    if manifest_path.exists():
+        manifest_path.unlink()
+    return {"deleted": run_id}
+
+
+@app.delete("/api/admin/runs", dependencies=[Depends(verify_token)])
+def delete_all_runs():
+    with get_connection(read_only=False) as conn:
+        init_schema(conn)
+        conn.execute("DELETE FROM scenario_results")
+        conn.execute("DELETE FROM pipeline_status")
+        conn.execute("DELETE FROM runs")
+        conn.commit()
+    if MANIFESTS_DIR.exists():
+        for f in MANIFESTS_DIR.glob("*.json"):
+            f.unlink()
+    return {"deleted": "all"}
 
 
 @app.get("/api/versions")

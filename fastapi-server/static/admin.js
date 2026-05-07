@@ -71,6 +71,7 @@ function showAdmin() {
   loadRunningTests();
   loadJobHistory();
   loadVersions();
+  loadRunsManage();
   setInterval(loadRunningTests, 5000);
   setInterval(loadJobHistory, 15000);
 }
@@ -306,6 +307,58 @@ async function cancelTest(runId) {
   }
 }
 
+async function loadRunsManage() {
+  const container = $("runs-manage-list");
+  try {
+    const data = await apiFetch("/api/v1/runs");
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div class="running-tests-empty">Koşum bulunamadı</div>';
+      return;
+    }
+    const sorted = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    container.innerHTML = sorted.map(run => {
+      const ts = new Date(run.timestamp).toLocaleString("tr-TR");
+      const passRate = run.totalScenarios > 0 ? Math.round((run.passed / run.totalScenarios) * 100) : 0;
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--card-bg);border-radius:8px;margin-bottom:8px;gap:12px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <span style="font-family:monospace;font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;">${run.runId}</span>
+            <span style="font-size:12px;color:var(--text-muted);">${ts}</span>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center;font-size:13px;flex-shrink:0;">
+            <span style="color:#00c853;">✓ ${run.passed}</span>
+            <span style="color:#ff1744;">✗ ${run.failed}</span>
+            <span style="color:#ffc107;">– ${run.skipped}</span>
+            <span style="color:var(--text-muted);">${passRate}%</span>
+            <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;" onclick="deleteRun('${run.runId}')">Sil</button>
+          </div>
+        </div>`;
+    }).join("");
+  } catch {
+    container.innerHTML = '<div class="running-tests-empty">Yüklenemedi</div>';
+  }
+}
+
+async function deleteRun(runId) {
+  if (!confirm(`"${runId}" koşumunu silmek istediğinize emin misiniz?`)) return;
+  try {
+    await apiFetch(`/api/admin/runs/${runId}`, { method: "DELETE" });
+    loadRunsManage();
+  } catch (e) {
+    alert("Silinemedi: " + e.message);
+  }
+}
+
+async function deleteAllRuns() {
+  if (!confirm("Tüm koşumları silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")) return;
+  try {
+    await apiFetch("/api/admin/runs", { method: "DELETE" });
+    loadRunsManage();
+  } catch (e) {
+    alert("Silinemedi: " + e.message);
+  }
+}
+
 async function loadVersions() {
   const list = $("version-list");
   try {
@@ -339,12 +392,14 @@ function initThemeToggle() {
 
 window.cancelTest = cancelTest;
 window.cancelJob = cancelJob;
+window.deleteRun = deleteRun;
 
 (async function init() {
   $("login-form")?.addEventListener("submit", handleLogin);
   $("logout-btn")?.addEventListener("click", handleLogout);
   $("start-test-btn")?.addEventListener("click", startTestRun);
   $("pipeline-btn")?.addEventListener("click", triggerPipeline);
+  $("delete-all-btn")?.addEventListener("click", deleteAllRuns);
   initThemeToggle();
 
   const token = getToken();
