@@ -30,8 +30,8 @@
 
     <modules>
         <module>test-core</module>
+        <!-- Başka bir proje bağlamak için buraya ekleyin, örn: <module>myproject</module> -->
         <!-- fastapi-server is Python, not a Maven module -->
-        <!-- Removed: allure-integration, report-model, email-service, jira-service, doors-service, orchestrator, extent-integration, javalin-server -->
     </modules>
 
     <dependencyManagement>

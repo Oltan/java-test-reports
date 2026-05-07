@@ -48,7 +48,6 @@ MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 RUN_ALIASES_FILE = Path(__file__).parent.parent / "run-aliases.json"
 PROJECT_ROOT = Path(__file__).parent.parent
-MAVEN_PROJECT_DIR = Path(os.getenv("MAVEN_PROJECT_DIR", str(PROJECT_ROOT / "test-core")))
 
 _aliases_lock = threading.Lock()
 
@@ -213,8 +212,10 @@ def _maven_executable() -> str:
 
 
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
+    module = os.getenv("MAVEN_MODULE", "test-core")
     cmd = [
         _maven_executable(),
+        "-pl", module,
         "test",
         f"-Dcucumber.filter.tags={options.tags}",
     ]
@@ -244,7 +245,7 @@ def _wait_for_test_run(run_id: str, proc: subprocess.Popen) -> None:
 
 def _launch_test_run(run_id: str, options: TestRunOptions) -> subprocess.Popen:
     try:
-        proc = subprocess.Popen(_test_command(options), cwd=str(MAVEN_PROJECT_DIR), env=_test_env())
+        proc = subprocess.Popen(_test_command(options), cwd=str(PROJECT_ROOT), env=_test_env())
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to start test run: {exc}") from exc
     with tests_lock:
@@ -275,7 +276,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
         for i in range(options.parallel):
             run_id = f"test-{uuid4().hex[:8]}"
             worker_id = f"{job_id}-w{i}"
-            output_dir = str(MAVEN_PROJECT_DIR / "target" / f"allure-results-{run_id}")
+            output_dir = str(PROJECT_ROOT / os.getenv("MAVEN_MODULE", "test-core") / "target" / f"allure-results-{run_id}")
             conn.execute(
                 """
                 INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
@@ -502,7 +503,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=str(MAVEN_PROJECT_DIR),
+        cwd=str(PROJECT_ROOT),
         env=_test_env(),
     )
     with tests_lock:
@@ -704,7 +705,7 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
     import hashlib
 
-    allure_dir = MAVEN_PROJECT_DIR / "target" / "allure-results"
+    allure_dir = PROJECT_ROOT / os.getenv("MAVEN_MODULE", "test-core") / "target" / "allure-results"
 
     # Group results by identity_key to detect retries (multiple attempts)
     grouped: dict[str, list[dict]] = {}
