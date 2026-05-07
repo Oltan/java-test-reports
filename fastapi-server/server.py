@@ -1992,8 +1992,10 @@ def create_jira_bug(run_id: str, scenario_id: str):
         f"h2. Automated Test Failure\n\n"
         f"*Run ID:* {run_id}\n"
         f"*Scenario:* {scenario.name}\n"
-        f"*Duration:* {scenario.duration}\n\n"
-        f"h3. Steps\n{{noformat}}\n{step_lines}\n{{noformat}}"
+        f"*DOORS Number:* {scenario.doorsAbsNumber or 'N/A'}\n"
+        f"*Duration:* {scenario.duration}\n"
+        f"*Error:* {scenario.errorMessage or 'N/A'}\n\n"
+        f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
     )
 
     try:
@@ -2356,12 +2358,21 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
             )
 
         summary = f"Automated test failed: {scenario_name}"
+        step_rows = conn.execute(
+            "SELECT name_at_run, status FROM scenario_results WHERE run_id=? AND scenario_uid=? ORDER BY id",
+            [run_id, scenario_id],
+        ).fetchall()
+        step_lines = "\n".join(
+            f"  [FAIL] {r[0]}" if str(r[1]).upper() in ("FAILED", "BROKEN") else f"  [pass] {r[0]}"
+            for r in step_rows
+        )
         description = (
             f"h2. Automated Test Failure\n\n"
             f"*Run ID:* {run_id}\n"
             f"*Scenario:* {scenario_name}\n"
-            f"*DOORS Number:* {doors_number or 'N/A'}\n\n"
-            f"h3. Error\n{{noformat}}\n{error_message or 'No error message'}\n{{noformat}}"
+            f"*DOORS Number:* {doors_number or 'N/A'}\n"
+            f"*Error:* {error_message or 'N/A'}\n\n"
+            f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
         )
 
         try:
