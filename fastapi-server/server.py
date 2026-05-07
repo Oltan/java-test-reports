@@ -275,7 +275,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
         for i in range(options.parallel):
             run_id = f"test-{uuid4().hex[:8]}"
             worker_id = f"{job_id}-w{i}"
-            output_dir = str(PROJECT_ROOT / "target" / f"allure-results-{run_id}")
+            output_dir = str(MAVEN_PROJECT_DIR / "target" / f"allure-results-{run_id}")
             conn.execute(
                 """
                 INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
