@@ -624,7 +624,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
 def _parse_allure_result(result_file: Path) -> dict | None:
     """Parse a single Allure result JSON file and extract full metadata."""
     try:
-        data = json.loads(result_file.read_text())
+        data = json.loads(result_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
 
