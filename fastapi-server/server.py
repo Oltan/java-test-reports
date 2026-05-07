@@ -575,6 +575,9 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         if saved:
             stats.update({"total": saved["total"], "passed": saved["passed"], "failed": saved["failed"], "skipped": saved["skipped"], "running": 0})
     except Exception as e:
+        import traceback
+        print(f"[ERROR] execute_test_run {run_id}: {e}")
+        traceback.print_exc()
         stats["error"] = str(e)
         stats["running"] = 0
     finally:
@@ -705,6 +708,10 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     import hashlib
 
     allure_dir = Path(os.getenv("ALLURE_RESULTS_DIR", str(PROJECT_ROOT / "test-core" / "target" / "allure-results")))
+    print(f"[INFO] allure_dir={allure_dir}  exists={allure_dir.exists()}")
+    if allure_dir.exists():
+        files = list(allure_dir.glob("*-result.json"))
+        print(f"[INFO] result files found: {len(files)}")
 
     # Group results by identity_key to detect retries (multiple attempts)
     grouped: dict[str, list[dict]] = {}
