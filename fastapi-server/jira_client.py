@@ -39,7 +39,8 @@ class JiraClient:
             else dry_run
         )
         self.retry_count = retry_count if retry_count is not None else int(os.getenv("JIRA_RETRY_COUNT", "3"))
-        self.jira = Jira(url=self.url, token=self.pat) if not self.dry_run and self.url and self.pat else None
+        verify_ssl = os.getenv("JIRA_VERIFY_SSL", "true").lower() not in {"0", "false", "no"}
+        self.jira = Jira(url=self.url, token=self.pat, verify_ssl=verify_ssl) if not self.dry_run and self.url and self.pat else None
         self._dry_run_issues: dict[str, dict[str, str]] = {}
         if self.dry_run:
             mock_path = Path(__file__).parent / "mock_jira.json"

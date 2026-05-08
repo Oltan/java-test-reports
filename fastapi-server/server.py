@@ -214,8 +214,7 @@ def _maven_executable() -> str:
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
     cmd = [
         _maven_executable(),
-        "-pl",
-        "test-core",
+        "-pl", "test-core",
         "test",
         f"-Dcucumber.filter.tags={options.tags}",
     ]
@@ -276,7 +275,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
         for i in range(options.parallel):
             run_id = f"test-{uuid4().hex[:8]}"
             worker_id = f"{job_id}-w{i}"
-            output_dir = str(PROJECT_ROOT / "target" / f"allure-results-{run_id}")
+            output_dir = str(PROJECT_ROOT / "test-core" / "target" / f"allure-results-{run_id}")
             conn.execute(
                 """
                 INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
@@ -576,6 +575,9 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         if saved:
             stats.update({"total": saved["total"], "passed": saved["passed"], "failed": saved["failed"], "skipped": saved["skipped"], "running": 0})
     except Exception as e:
+        import traceback
+        print(f"[ERROR] execute_test_run {run_id}: {e}")
+        traceback.print_exc()
         stats["error"] = str(e)
         stats["running"] = 0
     finally:
@@ -622,7 +624,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
 def _parse_allure_result(result_file: Path) -> dict | None:
     """Parse a single Allure result JSON file and extract full metadata."""
     try:
-        data = json.loads(result_file.read_text())
+        data = json.loads(result_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -718,7 +720,11 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
     import hashlib
 
-    allure_dir = PROJECT_ROOT / "test-core" / "target" / "allure-results"
+    allure_dir = Path(os.getenv("ALLURE_RESULTS_DIR", str(PROJECT_ROOT / "test-core" / "target" / "allure-results")))
+    print(f"[INFO] allure_dir={allure_dir}  exists={allure_dir.exists()}")
+    if allure_dir.exists():
+        files = list(allure_dir.glob("*-result.json"))
+        print(f"[INFO] result files found: {len(files)}")
 
     # Fallback: read version from environment.properties if not provided in options
     effective_version = options.version or ""
@@ -1729,6 +1735,34 @@ def admin_sync_runs():
     return sync_runs()
 
 
+@app.delete("/api/admin/runs/{run_id}", dependencies=[Depends(verify_token)])
+def delete_run(run_id: str):
+    with get_connection(read_only=False) as conn:
+        init_schema(conn)
+        conn.execute("DELETE FROM scenario_results WHERE run_id = ?", [run_id])
+        conn.execute("DELETE FROM pipeline_status WHERE run_id = ?", [run_id])
+        conn.execute("DELETE FROM runs WHERE id = ?", [run_id])
+        conn.commit()
+    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
+    if manifest_path.exists():
+        manifest_path.unlink()
+    return {"deleted": run_id}
+
+
+@app.delete("/api/admin/runs", dependencies=[Depends(verify_token)])
+def delete_all_runs():
+    with get_connection(read_only=False) as conn:
+        init_schema(conn)
+        conn.execute("DELETE FROM scenario_results")
+        conn.execute("DELETE FROM pipeline_status")
+        conn.execute("DELETE FROM runs")
+        conn.commit()
+    if MANIFESTS_DIR.exists():
+        for f in MANIFESTS_DIR.glob("*.json"):
+            f.unlink()
+    return {"deleted": "all"}
+
+
 @app.get("/api/versions")
 async def get_versions():
     conn = get_connection(read_only=False)
@@ -1989,8 +2023,11 @@ def create_jira_bug(run_id: str, scenario_id: str):
         f"h2. Automated Test Failure\n\n"
         f"*Run ID:* {run_id}\n"
         f"*Scenario:* {scenario.name}\n"
-        f"*Duration:* {scenario.duration}\n\n"
-        f"h3. Steps\n{{noformat}}\n{step_lines}\n{{noformat}}"
+        f"*DOORS Number:* {scenario.doorsAbsNumber or 'N/A'}\n"
+        f"*Affects Version/s:* {manifest.version or 'N/A'}\n"
+        f"*Duration:* {scenario.duration}\n"
+        f"*Error:* {scenario.errorMessage or 'N/A'}\n\n"
+        f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
     )
 
     try:
@@ -2345,6 +2382,7 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
         scenario_name = row[4] or name_at_run
         screenshot_path = row[7]
         video_path = row[8]
+        run_version = (conn.execute("SELECT version FROM runs WHERE id=?", [run_id]).fetchone() or [None])[0]
 
         if not jira_client.is_configured():
             raise HTTPException(
@@ -2353,12 +2391,22 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
             )
 
         summary = f"Automated test failed: {scenario_name}"
+        step_rows = conn.execute(
+            "SELECT name_at_run, status FROM scenario_results WHERE run_id=? AND scenario_uid=? ORDER BY id",
+            [run_id, scenario_id],
+        ).fetchall()
+        step_lines = "\n".join(
+            f"  [FAIL] {r[0]}" if str(r[1]).upper() in ("FAILED", "BROKEN") else f"  [pass] {r[0]}"
+            for r in step_rows
+        )
         description = (
             f"h2. Automated Test Failure\n\n"
             f"*Run ID:* {run_id}\n"
             f"*Scenario:* {scenario_name}\n"
-            f"*DOORS Number:* {doors_number or 'N/A'}\n\n"
-            f"h3. Error\n{{noformat}}\n{error_message or 'No error message'}\n{{noformat}}"
+            f"*DOORS Number:* {doors_number or 'N/A'}\n"
+            f"*Affects Version/s:* {run_version or 'N/A'}\n"
+            f"*Error:* {error_message or 'N/A'}\n\n"
+            f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
         )
 
         try:

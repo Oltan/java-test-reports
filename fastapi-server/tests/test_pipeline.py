@@ -1,4 +1,5 @@
-from unittest.mock import AsyncMock, patch
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import os
 os.environ.setdefault("JWT_SECRET", "test-secret")
@@ -35,6 +36,67 @@ def test_pipeline_status_endpoint():
     data = resp.json()
     assert data["run_id"] == "test-001"
     assert "stages" in data
+
+
+def test_maven_test_stage_uses_custom_command(monkeypatch):
+    from pipeline import PipelineRunner
+
+    monkeypatch.setenv("PIPELINE_MAVEN_COMMAND", "mvn -pl test-core test")
+    runner = PipelineRunner("run-001")
+
+    captured = []
+
+    async def fake_run_shell(cmd):
+        captured.append(cmd)
+
+    runner._run_shell_command = fake_run_shell
+
+    import asyncio
+    asyncio.run(runner.run_maven_tests())
+
+    assert captured == ["mvn -pl test-core test"]
+
+
+def test_maven_test_stage_auto_detects_mvn(monkeypatch):
+    from pipeline import PipelineRunner
+
+    monkeypatch.delenv("PIPELINE_MAVEN_COMMAND", raising=False)
+    monkeypatch.setenv("MAVEN_CMD", "/usr/bin/mvn")
+    monkeypatch.setenv("MAVEN_MODULE", "test-core")
+    runner = PipelineRunner("run-002")
+
+    captured = []
+
+    async def fake_run_exec(cmd):
+        captured.append(cmd)
+
+    runner._run_exec_command = fake_run_exec
+
+    import asyncio
+    asyncio.run(runner.run_maven_tests())
+
+    assert captured == [["/usr/bin/mvn", "-pl", "test-core", "test"]]
+
+
+def test_maven_test_stage_default_module(monkeypatch):
+    from pipeline import PipelineRunner
+
+    monkeypatch.delenv("PIPELINE_MAVEN_COMMAND", raising=False)
+    monkeypatch.setenv("MAVEN_CMD", "mvn")
+    monkeypatch.delenv("MAVEN_MODULE", raising=False)
+    runner = PipelineRunner("run-003")
+
+    captured = []
+
+    async def fake_run_exec(cmd):
+        captured.append(cmd)
+
+    runner._run_exec_command = fake_run_exec
+
+    import asyncio
+    asyncio.run(runner.run_maven_tests())
+
+    assert captured == [["mvn", "-pl", "test-core", "test"]]
 
 
 def test_tfs_trigger_endpoint_uses_mock_client():
