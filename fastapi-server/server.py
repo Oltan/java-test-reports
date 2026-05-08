@@ -698,6 +698,22 @@ def _parse_allure_result(result_file: Path) -> dict | None:
             "errorMessage": step_error or None,
         })
 
+    # Parse attachments (scenario-level + step-level)
+    _ATT_EXT = {"image/png": ".png", "video/mp4": ".mp4", "text/plain": ".txt"}
+    _ATT_ALLOWED = set(_ATT_EXT)
+    raw_atts: list = list(data.get("attachments") or [])
+    for st in raw_steps:
+        raw_atts.extend(st.get("attachments") or [])
+    attachments = []
+    for a in raw_atts:
+        src = a.get("source") or a.get("path") or ""
+        att_type = (a.get("type") or "").lower()
+        if not src or att_type not in _ATT_ALLOWED:
+            continue
+        if not Path(src).suffix:
+            src = src + _ATT_EXT[att_type]
+        attachments.append({"name": a.get("name") or "attachment", "source": src, "type": att_type})
+
     return {
         "identity_key": identity_key,
         "name": name,
@@ -712,6 +728,7 @@ def _parse_allure_result(result_file: Path) -> dict | None:
         "retry_attempt": retry_attempt,
         "attempt": attempt,
         "steps": steps,
+        "attachments": attachments,
         "start_ts_ms": start_ts or 0,
     }
 
@@ -807,8 +824,24 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
             "attempt_list": attempt_list,
             "total_attempts": len(attempts_sorted),
             "steps": final["steps"],
+            "attachments": final.get("attachments") or [],
         }
         all_scenarios.append(scenario_map[key])
+
+    # Copy attachment files from allure-results to MANIFESTS_DIR/{run_id}/
+    dest_dir = MANIFESTS_DIR / run_id
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for scenario in all_scenarios:
+        copied = []
+        for att in scenario.get("attachments") or []:
+            src_file = allure_dir / att["source"]
+            if src_file.exists():
+                try:
+                    shutil.copy2(src_file, dest_dir / att["source"])
+                    copied.append({"name": att["name"], "type": att["type"], "path": f"{run_id}/{att['source']}"})
+                except Exception:
+                    pass
+        scenario["attachments"] = copied
 
     # Count statuses
     passed = sum(1 for s in all_scenarios if s["status"] == "PASSED")
@@ -912,7 +945,7 @@ def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, 
                 "doorsAbsNumber": s.get("doors_id"),
                 "tags": s.get("tags", []),
                 "steps": s.get("steps", []),
-                "attachments": [],
+                "attachments": s.get("attachments") or [],
                 "attempts": s.get("attempt_list", []),
                 "dependencies": s.get("dependencies", []),
                 "is_flaky": s.get("is_flaky", False),
@@ -1021,6 +1054,37 @@ def list_runs(version: Optional[str] = None):
     if version:
         manifests = [m for m in manifests if m.version == version]
     manifests.sort(key=lambda m: str(m.timestamp), reverse=True)
+
+    # Adjust run-level passed/failed/skipped counts based on triage decisions
+    run_ids = [m.runId for m in manifests]
+    if run_ids:
+        try:
+            ph = ",".join(["?"] * len(run_ids))
+            with get_connection(read_only=True) as tconn:
+                rows = tconn.execute(
+                    f"""SELECT sr.run_id, sr.name_at_run, td.decision
+                        FROM scenario_results sr
+                        JOIN triage_decisions td ON sr.scenario_uid = td.scenario_uid
+                        WHERE sr.run_id IN ({ph})
+                        AND td.decision IN ('accepted_pass','accepted_skip')""",
+                    run_ids,
+                ).fetchall()
+            triage_by_run: dict[str, dict[str, str]] = {}
+            for r in rows:
+                triage_by_run.setdefault(r[0], {})[r[1]] = r[2]
+            for manifest in manifests:
+                triaged = triage_by_run.get(manifest.runId, {})
+                for scenario in manifest.scenarios:
+                    decision = triaged.get(scenario.name)
+                    if decision and scenario.status in ("failed", "broken"):
+                        manifest.failed = max(0, manifest.failed - 1)
+                        if decision == "accepted_pass":
+                            manifest.passed += 1
+                        else:
+                            manifest.skipped += 1
+        except Exception:
+            pass
+
     return manifests
 
 
@@ -1163,13 +1227,33 @@ async def reports_merge_data(run_ids: str = ""):
                 "duration": s.duration,
                 "tags": s.tags,
                 "steps": [{"name": st.name, "status": st.status, "errorMessage": st.errorMessage} for st in s.steps],
-                "errorMessage": s.steps[0].errorMessage if s.steps and s.status == "failed" and any(st.errorMessage for st in s.steps) else None,
+                "errorMessage": s.steps[0].errorMessage if s.steps and s.status in ("failed", "broken") and any(st.errorMessage for st in s.steps) else None,
             })
+
+    # Apply triage decisions server-side so all callers see effective status
+    all_uids = [s["scenario_uid"] for s in all_scenarios if s.get("scenario_uid")]
+    if all_uids:
+        try:
+            with get_connection(read_only=True) as tconn:
+                ph = ",".join(["?"] * len(all_uids))
+                triage_rows = tconn.execute(
+                    f"SELECT scenario_uid, decision FROM triage_decisions "
+                    f"WHERE scenario_uid IN ({ph}) AND decision IN ('accepted_pass','accepted_skip')",
+                    all_uids,
+                ).fetchall()
+            triage_map = {r[0]: r[1] for r in triage_rows}
+            for s in all_scenarios:
+                uid = s.get("scenario_uid")
+                if uid and uid in triage_map:
+                    s["status"] = "passed" if triage_map[uid] == "accepted_pass" else "skipped"
+        except Exception:
+            pass
+
     summary = {
         "total": len(all_scenarios),
         "passed": sum(1 for s in all_scenarios if s["status"] == "passed"),
-        "failed": sum(1 for s in all_scenarios if s["status"] == "failed"),
-        "skipped": sum(1 for s in all_scenarios if s["status"] == "skipped"),
+        "failed": sum(1 for s in all_scenarios if s["status"] in ("failed", "broken")),
+        "skipped": sum(1 for s in all_scenarios if s["status"] in ("skipped",)),
     }
     return {"runs": [{"runId": m.runId, "timestamp": str(m.timestamp), "totalScenarios": m.totalScenarios, "passed": m.passed, "failed": m.failed, "skipped": m.skipped} for m in selected], "scenarios": all_scenarios, "summary": summary}
 
@@ -1308,6 +1392,15 @@ async def generate_public_share(req: GenerateShareRequest):
         passed = failed = skipped = 0
         for row in scenario_rows:
             status = row[2] or "UNKNOWN"
+            scenario_uid = row[0]
+            # Apply triage override if present
+            triage_row = conn.execute(
+                "SELECT decision FROM triage_decisions WHERE scenario_uid = ? "
+                "AND decision IN ('accepted_pass','accepted_skip') LIMIT 1",
+                [scenario_uid],
+            ).fetchone()
+            if triage_row and status in {"FAILED", "BROKEN"}:
+                status = "PASSED" if triage_row[0] == "accepted_pass" else "SKIPPED"
             if status == "PASSED":
                 passed += 1
             elif status in {"FAILED", "BROKEN"}:
@@ -1315,7 +1408,7 @@ async def generate_public_share(req: GenerateShareRequest):
             else:
                 skipped += 1
             scenarios_internal.append({
-                "id": row[0],
+                "id": scenario_uid,
                 "name": row[5] or row[1] or row[0],
                 "status": "failed" if status in {"FAILED", "BROKEN"} else status.lower(),
                 "duration": f"PT{row[3]:.3f}S" if row[3] else "PT0S",
