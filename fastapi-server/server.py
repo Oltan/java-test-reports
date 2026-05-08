@@ -1317,7 +1317,7 @@ async def generate_public_share(req: GenerateShareRequest):
             scenarios_internal.append({
                 "id": row[0],
                 "name": row[5] or row[1] or row[0],
-                "status": status.lower(),
+                "status": "failed" if status in {"FAILED", "BROKEN"} else status.lower(),
                 "duration": f"PT{row[3]:.3f}S" if row[3] else "PT0S",
             })
             csv_rows.append({

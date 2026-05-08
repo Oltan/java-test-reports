@@ -218,16 +218,29 @@ function getTriageForScenario(scenarioId) {
   return triageCache[scenarioId] || null;
 }
 
+function normStatus(s) {
+  return (s.status === "broken") ? "failed" : (s.status || "unknown");
+}
+
+function effectiveStatus(s) {
+  const base = normStatus(s);
+  if (base !== "failed") return base;
+  const triage = getTriageForScenario(s.scenario_uid);
+  if (triage?.decision === "accepted_pass") return "passed";
+  if (triage?.decision === "accepted_skip") return "skipped";
+  return base;
+}
+
 function isScenarioBlocked(scenario) {
-  if (scenario.status !== "failed") return false;
-  const triage = getTriageForScenario(scenario.id);
+  if (normStatus(scenario) !== "failed") return false;
+  const triage = getTriageForScenario(scenario.scenario_uid);
   if (!triage) return true;
   const allowed = ["jira_linked", "jira_created", "accepted_pass", "accepted_skip"];
   return !allowed.includes(triage.decision);
 }
 
 function getBlockerReason(scenario) {
-  const triage = getTriageForScenario(scenario.id);
+  const triage = getTriageForScenario(scenario.scenario_uid);
   if (!triage) return "Triaj kararı yok — Jira ile ilişkilendirilmeli veya geçersiz kılınmalı";
   return `Triaj kararı '${triage.decision}' — Jira ile ilişkilendirilmeli veya geçersiz kılınmalı`;
 }
@@ -333,20 +346,21 @@ function renderScenarioCards() {
 
   $("generate-section").style.display = "block";
 
-  const statusOrder = { failed: 0, skipped: 1, passed: 2 };
-  const sorted = [...filtered].sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
+  const statusOrder = { failed: 0, broken: 0, skipped: 1, passed: 2 };
+  const sorted = [...filtered].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
 
   container.innerHTML = sorted.map(s => {
-    const statusClass = `rpt-card--${s.status}`;
-    const statusLabel = s.status === "passed" ? "PASSED" : s.status === "failed" ? "FAILED" : "SKIPPED";
+    const effStatus = effectiveStatus(s);
+    const statusClass = `rpt-card--${effStatus}`;
+    const statusLabel = effStatus === "passed" ? "PASSED" : effStatus === "failed" ? "FAILED" : "SKIPPED";
     const blocked = isScenarioBlocked(s);
-    const triage = getTriageForScenario(s.id);
+    const triage = getTriageForScenario(s.scenario_uid);
     const selectableClass = "rpt-card--selectable";
     const selectedClass = selectedScenarioUids.has(s.id) ? " rpt-card--selected" : "";
     const blockedClass = blocked ? " rpt-card--blocked" : "";
 
     let triageBadge = "";
-    if (s.status === "failed") {
+    if (normStatus(s) === "failed") {
       if (blocked) {
         triageBadge = `<span class="rpt-card-blocker-badge">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
@@ -388,7 +402,7 @@ function renderScenarioCards() {
     const featurePath = s.tags && s.tags.length > 0 ? s.tags.find(t => t.startsWith("@"))?.replace("@", "") : "";
 
     return `
-      <div class="rpt-card ${statusClass} ${selectableClass}${selectedClass}${blockedClass}" data-scenario-id="${escapeHtml(s.id)}" data-status="${s.status}" data-blocked="${blocked}">
+      <div class="rpt-card ${statusClass} ${selectableClass}${selectedClass}${blockedClass}" data-scenario-id="${escapeHtml(s.id)}" data-status="${effStatus}" data-blocked="${blocked}">
         <input type="checkbox" class="rpt-card-checkbox" ${selectedScenarioUids.has(s.id) ? 'checked' : ''} ${blocked ? 'disabled' : ''} value="${escapeHtml(s.id)}">
         <div class="rpt-card-header" onclick="window.toggleScenario('${escapeHtml(s.id)}')">
           <div class="rpt-card-left">
@@ -430,7 +444,7 @@ function renderScenarioCards() {
 
 function filterScenarios(scenarios, filter) {
   if (filter === "all") return scenarios;
-  return scenarios.filter(s => s.status === filter);
+  return scenarios.filter(s => effectiveStatus(s) === filter);
 }
 
 function updateCardStyles() {

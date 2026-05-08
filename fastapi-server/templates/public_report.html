@@ -376,8 +376,9 @@
             <td class="pub-scenario-idx">{{ loop.index }}</td>
             <td class="pub-scenario-name">{{ s.name }}</td>
             <td>
-              <span class="status-pill {% if s.status == 'passed' %}pill-pass{% elif s.status == 'failed' %}pill-fail{% else %}pill-skip{% endif %}">
-                {{ s.status | upper }}
+              {% set pub_status = 'failed' if s.status == 'broken' else s.status %}
+              <span class="status-pill {% if pub_status == 'passed' %}pill-pass{% elif pub_status == 'failed' %}pill-fail{% else %}pill-skip{% endif %}">
+                {{ pub_status | upper }}
               </span>
             </td>
           </tr>
