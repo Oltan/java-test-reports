@@ -44,8 +44,15 @@
   {% if scenario.steps %}
   <ol class="steps-list">
     {% for step in scenario.steps %}
-    <li class="step-row {% if step.status == 'failed' %}step--fail{% else %}step--pass{% endif %}">
-      <span class="step-icon">{% if step.status == 'failed' %}✗{% else %}✓{% endif %}</span>
+    {% set step_class = 'step--fail' if step.status in ('failed', 'broken', 'skipped') else 'step--pass' %}
+    <li class="step-row {{ step_class }}">
+      <span class="step-icon">
+        {% if step.status in ('failed', 'broken', 'skipped') %}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        {% else %}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        {% endif %}
+      </span>
       <span class="step-name">{{ step.name }}</span>
     </li>
     {% endfor %}
@@ -213,7 +220,7 @@
 <!-- ── Scenario groups ── -->
 <main class="run-detail-main">
 
-  {% set ns = namespace(tags=[], has_untagged=false) %}
+  {% set ns = namespace(tags=[], has_untagged=false, shown_ids=[]) %}
   {% for s in scenarios %}
     {% if s.tags %}
       {% for t in s.tags %}
@@ -227,20 +234,28 @@
   {% endfor %}
 
   {% for tag in ns.tags %}
+  {% set tag_scenarios = scenarios|selectattr('tags', 'contains', tag)|list %}
+  {% set new_scenarios = [] %}
+  {% for scenario in tag_scenarios %}
+    {% if scenario.id not in ns.shown_ids %}
+      {% set _ = new_scenarios.append(scenario) %}
+      {% set ns.shown_ids = ns.shown_ids + [scenario.id] %}
+    {% endif %}
+  {% endfor %}
+  {% if new_scenarios %}
   <div class="tag-group">
     <div class="tag-group-header" data-tag="{{ tag }}">
       <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       <span class="tag-group-name">{{ tag }}</span>
-      <span class="tag-group-count">{{ scenarios|selectattr('tags', 'contains', tag)|list|length }}</span>
+      <span class="tag-group-count">{{ new_scenarios|length }}</span>
     </div>
     <div class="tag-group-body">
-      {% for scenario in scenarios %}
-        {% if tag in scenario.tags %}
-          {{ scard(scenario) }}
-        {% endif %}
+      {% for scenario in new_scenarios %}
+        {{ scard(scenario) }}
       {% endfor %}
     </div>
   </div>
+  {% endif %}
   {% endfor %}
 
   {% if ns.has_untagged %}
