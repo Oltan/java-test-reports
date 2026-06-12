@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
@@ -29,6 +30,12 @@ public class VideoHook {
 
     @Before(order = 1)
     public void startVideoRecording(Scenario scenario) {
+        if (!isLinux()) {
+            LOGGER.info("VideoHook: skipping video recording - x11grab requires Linux (os.name="
+                    + System.getProperty("os.name") + ")");
+            return;
+        }
+
         createVideoDirectory();
 
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMAT);
@@ -40,8 +47,8 @@ public class VideoHook {
                     "ffmpeg",
                     "-f", "x11grab",
                     "-framerate", "15",
-                    "-video_size", "1920x1080",
-                    "-i", ":0.0",
+                    "-video_size", resolveVideoSize(),
+                    "-i", resolveDisplay(),
                     "-c:v", "libx264",
                     "-preset", "ultrafast",
                     "-pix_fmt", "yuv420p",
@@ -93,6 +100,31 @@ try {
         } else {
             deleteVideo(videoPath);
         }
+    }
+
+    private static boolean isLinux() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
+    }
+
+    /**
+     * X11 display to capture: {@code -Dvideo.display} if set, otherwise the
+     * {@code DISPLAY} environment variable, otherwise {@code :0.0}.
+     */
+    private static String resolveDisplay() {
+        String configured = System.getProperty("video.display");
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        String envDisplay = System.getenv("DISPLAY");
+        if (envDisplay != null && !envDisplay.isBlank()) {
+            return envDisplay;
+        }
+        return ":0.0";
+    }
+
+    /** Capture resolution: {@code -Dvideo.size}, defaulting to 1920x1080. */
+    private static String resolveVideoSize() {
+        return System.getProperty("video.size", "1920x1080");
     }
 
     private void createVideoDirectory() {

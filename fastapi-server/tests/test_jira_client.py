@@ -24,6 +24,7 @@ def test_dry_run_returns_deterministic_results(monkeypatch):
 
 def test_create_issue_uses_atlassian_with_wiki_renderer_description(monkeypatch):
     monkeypatch.delenv("JIRA_DRY_RUN", raising=False)
+    monkeypatch.delenv("JIRA_VERIFY_SSL", raising=False)
     jira = Mock()
     jira.create_issue.return_value = {
         "key": "BUG-123",
@@ -34,7 +35,8 @@ def test_create_issue_uses_atlassian_with_wiki_renderer_description(monkeypatch)
         client = JiraClient(base_url="https://jira.local/", pat="pat", project="BUG")
         result = client.create_issue("Failed scenario", "h2. Failure", "DOORS-42")
 
-    jira_class.assert_called_once_with(url="https://jira.local", token="pat")
+    # JiraClient passes verify_ssl (from JIRA_VERIFY_SSL, default true) to Jira.
+    jira_class.assert_called_once_with(url="https://jira.local", token="pat", verify_ssl=True)
     jira.create_issue.assert_called_once_with(
         fields={
             "project": {"key": "BUG"},

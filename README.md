@@ -27,7 +27,8 @@ java_reports/
 
 - Java 21
 - Maven 3.9+
-- Python 3.12+ (for fastapi-server)
+- Python 3.11+ (for fastapi-server)
+  - Install server and dev/test dependencies: `cd fastapi-server && pip install -r requirements.txt -r requirements-dev.txt`
 
 ## Quick Start
 
