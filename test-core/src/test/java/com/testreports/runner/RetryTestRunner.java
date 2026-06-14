@@ -21,15 +21,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -37,6 +34,9 @@ import java.util.stream.Stream;
  *
  * <p>Enable with {@code -Dretry.count=N}. The normal {@link CucumberTestRunner} remains
  * responsible for default Cucumber suite execution when retry is not requested.</p>
+ *
+ * <p>Scenario {@code @id:}/{@code @dep:} tag parsing and dependency ordering are delegated to
+ * {@link DependencyResolver}; this class only owns the retry loop and run-state bookkeeping.</p>
  */
 @Suite
 @IncludeEngines("cucumber")
@@ -46,11 +46,6 @@ public class RetryTestRunner {
     private static final String DEFAULT_FEATURES = "src/test/resources/features";
     private static final String DEFAULT_GLUE = "com.testreports.allure,com.testreports.steps";
     private static final Path RETRY_STATE_DIR = Paths.get(System.getProperty("retry.state.dir", "target/retry-state"));
-
-    private static final Pattern SCENARIO_LINE = Pattern.compile("^\\s*Scenario(?: Outline| Template)?\\s*:\\s*(.+)\\s*$");
-    private static final Pattern TAG_LINE = Pattern.compile("^\\s*@.+$");
-    private static final Pattern ID_TAG = Pattern.compile("@id:([^\\s@]+)");
-    private static final Pattern DEP_TAG = Pattern.compile("@dep:([^\\s@]+)");
 
     @Test
     void runWithRetry() throws IOException {
@@ -75,8 +70,11 @@ public class RetryTestRunner {
         List<Path> featureFiles = findFeatureFiles(featuresRoot);
         Assertions.assertFalse(featureFiles.isEmpty(), "No .feature files under: " + featuresRoot);
 
+        Map<String, DependencyResolver.ScenarioMeta> metadataByName =
+                DependencyResolver.parseScenarioMetadata(Paths.get(featuresRoot));
+
         List<String> scenarioNames = tagExpression.isBlank()
-                ? featureFiles.stream().flatMap(path -> scanScenarios(path).stream()).distinct().toList()
+                ? List.copyOf(metadataByName.keySet())
                 : discoverMatchingScenarios(gluePackages, tagExpression, featuresRoot);
 
         if (scenarioNames.isEmpty()) {
@@ -84,18 +82,39 @@ public class RetryTestRunner {
             return;
         }
 
-        Map<String, ScenarioMeta> metadataByName = buildScenarioMetadataMap(featureFiles);
-        List<ScenarioMeta> selected = scenarioNames.stream()
-                .map(name -> metadataByName.getOrDefault(name, new ScenarioMeta(name, name, Set.of())))
-                .collect(Collectors.toList());
+        List<DependencyResolver.ScenarioMeta> selected = scenarioNames.stream()
+                .map(name -> metadataByName.getOrDefault(name, new DependencyResolver.ScenarioMeta(name, name, Set.of())))
+                .toList();
 
-        RetrySummary summary = runSelectedScenarios(topologicalSort(selected), gluePackages, tagExpression, featuresRoot, retryCount);
+        RetrySummary summary = runSelectedScenarios(orderByDependencies(selected), gluePackages, tagExpression, featuresRoot, retryCount);
         printSummary(summary);
 
         Assertions.assertTrue(summary.failed().isEmpty(), "Failed scenarios: " + summary.failed());
     }
 
-    private static RetrySummary runSelectedScenarios(List<ScenarioMeta> scenarios,
+    /**
+     * Orders the selected scenarios via {@link DependencyResolver}. On a dependency cycle the run
+     * is not aborted: a warning is printed and every scenario stays in the list (cycle members are
+     * ordered last, so {@code dependenciesPassed} skips them at execution time).
+     */
+    private static List<DependencyResolver.ScenarioMeta> orderByDependencies(List<DependencyResolver.ScenarioMeta> scenarios) {
+        Map<String, DependencyResolver.ScenarioMeta> byId = new LinkedHashMap<>();
+        Map<String, Set<String>> graph = new LinkedHashMap<>();
+        for (DependencyResolver.ScenarioMeta scenario : scenarios) {
+            if (byId.putIfAbsent(scenario.id(), scenario) == null) {
+                graph.put(scenario.id(), scenario.dependencies());
+            }
+        }
+
+        DependencyResolver.SortOutcome outcome = DependencyResolver.topologicalSortLenient(graph);
+        if (outcome.hasCycle()) {
+            System.err.printf("[RetryRunner] Dependency cycle detected at '%s'%n", outcome.cyclic().get(0));
+        }
+
+        return outcome.ordered().stream().map(byId::get).toList();
+    }
+
+    private static RetrySummary runSelectedScenarios(List<DependencyResolver.ScenarioMeta> scenarios,
                                                      List<String> gluePackages,
                                                      String tagExpression,
                                                      String featuresRoot,
@@ -105,7 +124,7 @@ public class RetryTestRunner {
         List<String> failed = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
 
-        for (ScenarioMeta scenario : scenarios) {
+        for (DependencyResolver.ScenarioMeta scenario : scenarios) {
             if (!dependenciesPassed(scenario, resultsById, skipped)) {
                 continue;
             }
@@ -153,7 +172,7 @@ public class RetryTestRunner {
         return new RetrySummary(passed, failed, skipped);
     }
 
-    private static boolean dependenciesPassed(ScenarioMeta scenario, Map<String, Status> resultsById, List<String> skipped) {
+    private static boolean dependenciesPassed(DependencyResolver.ScenarioMeta scenario, Map<String, Status> resultsById, List<String> skipped) {
         for (String dependency : scenario.dependencies()) {
             Status dependencyStatus = resultsById.get(dependency);
             if (dependencyStatus != Status.PASS) {
@@ -218,103 +237,6 @@ public class RetryTestRunner {
         try (Stream<Path> stream = Files.walk(Paths.get(featuresRoot))) {
             return stream.filter(path -> path.toString().endsWith(".feature")).sorted().toList();
         }
-    }
-
-    private static List<String> scanScenarios(Path featureFile) {
-        try {
-            return Files.readAllLines(featureFile, StandardCharsets.UTF_8).stream()
-                    .map(SCENARIO_LINE::matcher)
-                    .filter(java.util.regex.Matcher::matches)
-                    .map(matcher -> matcher.group(1).trim())
-                    .toList();
-        } catch (IOException e) {
-            return List.of();
-        }
-    }
-
-    private static Map<String, ScenarioMeta> buildScenarioMetadataMap(List<Path> featureFiles) {
-        Map<String, ScenarioMeta> metadataByName = new LinkedHashMap<>();
-        featureFiles.forEach(featureFile -> parseFeatureMetadata(featureFile, metadataByName));
-        return metadataByName;
-    }
-
-    private static void parseFeatureMetadata(Path featureFile, Map<String, ScenarioMeta> metadataByName) {
-        List<String> lines;
-        try {
-            lines = Files.readAllLines(featureFile, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return;
-        }
-
-        Set<String> pendingDependencies = new LinkedHashSet<>();
-        String pendingId = null;
-
-        for (String rawLine : lines) {
-            String line = rawLine.trim();
-            if (TAG_LINE.matcher(line).matches()) {
-                java.util.regex.Matcher idMatcher = ID_TAG.matcher(line);
-                if (idMatcher.find()) {
-                    pendingId = idMatcher.group(1).trim();
-                }
-
-                java.util.regex.Matcher dependencyMatcher = DEP_TAG.matcher(line);
-                while (dependencyMatcher.find()) {
-                    Arrays.stream(dependencyMatcher.group(1).split(","))
-                            .map(String::trim)
-                            .filter(value -> !value.isEmpty())
-                            .forEach(pendingDependencies::add);
-                }
-                continue;
-            }
-
-            java.util.regex.Matcher scenarioMatcher = SCENARIO_LINE.matcher(line);
-            if (scenarioMatcher.matches()) {
-                String name = scenarioMatcher.group(1).trim();
-                metadataByName.put(name, new ScenarioMeta(
-                        name,
-                        pendingId == null ? name : pendingId,
-                        Set.copyOf(pendingDependencies)));
-                pendingId = null;
-                pendingDependencies.clear();
-            }
-        }
-    }
-
-    private static List<ScenarioMeta> topologicalSort(List<ScenarioMeta> scenarios) {
-        Map<String, ScenarioMeta> byId = scenarios.stream()
-                .collect(Collectors.toMap(ScenarioMeta::id, scenario -> scenario, (first, ignored) -> first, LinkedHashMap::new));
-        List<ScenarioMeta> ordered = new ArrayList<>();
-        Set<String> visited = new HashSet<>();
-        Set<String> visiting = new HashSet<>();
-
-        for (ScenarioMeta scenario : scenarios) {
-            visit(scenario, byId, visited, visiting, ordered);
-        }
-
-        return ordered;
-    }
-
-    private static void visit(ScenarioMeta scenario,
-                              Map<String, ScenarioMeta> byId,
-                              Set<String> visited,
-                              Set<String> visiting,
-                              List<ScenarioMeta> ordered) {
-        if (visited.contains(scenario.id())) {
-            return;
-        }
-        if (!visiting.add(scenario.id())) {
-            System.err.printf("[RetryRunner] Dependency cycle detected at '%s'%n", scenario.id());
-            return;
-        }
-        for (String dependency : scenario.dependencies()) {
-            ScenarioMeta dependencyScenario = byId.get(dependency);
-            if (dependencyScenario != null) {
-                visit(dependencyScenario, byId, visited, visiting, ordered);
-            }
-        }
-        visiting.remove(scenario.id());
-        visited.add(scenario.id());
-        ordered.add(scenario);
     }
 
     private static List<String> parseGlue(String glueProperty) {
@@ -446,8 +368,6 @@ public class RetryTestRunner {
     }
 
     private enum Status {PASS, FAIL, SKIP}
-
-    private record ScenarioMeta(String name, String id, Set<String> dependencies) {}
 
     private record RetrySummary(List<String> passed, List<String> failed, List<String> skipped) {}
 }

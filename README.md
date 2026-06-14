@@ -34,7 +34,6 @@ java_reports/
 
 ```bash
 # Validate Maven project
-export PATH="/home/ol_ta/tools/apache-maven-3.9.9/bin:$PATH"
 mvn validate
 
 # Build all modules
@@ -44,11 +43,9 @@ mvn clean install
 mvn test
 
 # Generate Allure report
-mvn allure:generate --clean
-# Serve the report locally (one way)
-open allure-report/index.html
-# Or use any static file server, e.g.:
-# python -m http.server 8080 -d allure-report
+allure generate --clean test-core/target/allure-results -o test-core/target/allure-report
+# Serve the report locally
+python3 -m http.server 8080 -d test-core/target/allure-report
 # Then visit http://localhost:8080
 ```
 

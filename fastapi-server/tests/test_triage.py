@@ -42,17 +42,6 @@ def test_triage_page_requires_auth():
     assert response.status_code in (302, 401, 403)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AttributeError,
-    reason=(
-        "Known product bug: create_jira_bug (server.py ~line 2029) reads "
-        "scenario.errorMessage, but models.ScenarioResult defines no such field, "
-        "so the endpoint raises AttributeError before reaching Jira. Fixing it "
-        "requires a change in server.py/models.py, which is out of scope for "
-        "this work package. strict=True will flag this test once the bug is fixed."
-    ),
-)
 def test_create_jira_bug_returns_jira_key():
     with patch.object(server.jira_client, "is_configured", return_value=True), \
          patch.object(server.jira_client, "create_issue", return_value="PROJ-123"), \

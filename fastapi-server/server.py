@@ -2019,6 +2019,8 @@ def create_jira_bug(run_id: str, scenario_id: str):
         f"  [FAIL] {s.name}" if s.status == "failed" else f"  [pass] {s.name}"
         for s in scenario.steps
     )
+    failed_step = next((s for s in scenario.steps if s.status == "failed"), None)
+    error_message = failed_step.errorMessage if failed_step and failed_step.errorMessage else "N/A"
     description = (
         f"h2. Automated Test Failure\n\n"
         f"*Run ID:* {run_id}\n"
@@ -2026,7 +2028,7 @@ def create_jira_bug(run_id: str, scenario_id: str):
         f"*DOORS Number:* {scenario.doorsAbsNumber or 'N/A'}\n"
         f"*Affects Version/s:* {manifest.version or 'N/A'}\n"
         f"*Duration:* {scenario.duration}\n"
-        f"*Error:* {scenario.errorMessage or 'N/A'}\n\n"
+        f"*Error:* {error_message}\n\n"
         f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
     )
 
