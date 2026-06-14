@@ -93,7 +93,7 @@ class PublicReportSnapshot(BaseModel):
 class TestRunOptions(BaseModel):
     tags: str = Field(
         default="@smoke",
-        pattern=r"^@[\w,\-]+$",
+        pattern=r"^[@\w\s\-,()]+$",
         description="Cucumber tag filter",
     )
     retry_count: int = Field(default=0, ge=0, le=10)

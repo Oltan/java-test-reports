@@ -16,6 +16,20 @@
   --border: #2a3348;
   --border-subtle: #1e2638;
 
+  /* New run states (Wave 2+) */
+  --status-queued: #818cf8;
+  --status-queued-bg: rgba(129,140,248,.1);
+  --status-queued-text: #a5b4fc;
+  --status-interrupted: var(--warning);
+  --status-interrupted-bg: var(--warning-bg);
+  --status-interrupted-text: var(--warning-text);
+  --status-cancelled: var(--text-secondary);
+  --status-cancelled-bg: rgba(139,149,168,.08);
+  --status-cancelled-text: var(--text-muted);
+  --queue-badge-bg: rgba(129,140,248,.1);
+  --queue-badge-text: #a5b4fc;
+  --queue-badge-border: rgba(129,140,248,.3);
+
   /* Heat-map responsive accent (overridden by JS) */
   --warmth: 10;
   --heat-hue: 160;
@@ -663,8 +677,21 @@ tbody tr:hover { background: var(--surface-hover); }
   color: var(--success);
 }
 .job-status--cancelled {
+  background: var(--status-cancelled-bg);
+  color: var(--status-cancelled-text);
+}
+.job-status--failed {
   background: var(--danger-bg);
   color: var(--danger);
+}
+.job-status--queued {
+  background: var(--status-queued-bg);
+  color: var(--status-queued-text);
+  border: 1px solid var(--queue-badge-border);
+}
+.job-status--interrupted {
+  background: var(--status-interrupted-bg);
+  color: var(--status-interrupted-text);
 }
 .job-status--unknown {
   background: var(--skip-bg);
@@ -749,6 +776,15 @@ tbody tr:hover { background: var(--surface-hover); }
 .worker-badge--failed {
   background: var(--danger-bg);
   color: var(--danger);
+}
+.worker-badge--queued {
+  background: var(--status-queued-bg);
+  color: var(--status-queued-text);
+  border: 1px solid var(--queue-badge-border);
+}
+.worker-badge--interrupted {
+  background: var(--status-interrupted-bg);
+  color: var(--status-interrupted-text);
 }
 .worker-badge--unknown {
   background: var(--skip-bg);

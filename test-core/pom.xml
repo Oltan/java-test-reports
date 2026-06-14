@@ -77,6 +77,12 @@
                     <includes>
                         <include>**/CucumberTestRunner.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <cucumber.plugin>${cucumber.plugin}</cucumber.plugin>
+                        <allure.results.directory>${allure.results.directory}</allure.results.directory>
+                        <video.dir>${video.dir}</video.dir>
+                        <retry.state.dir>${retry.state.dir}</retry.state.dir>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
@@ -102,6 +108,12 @@
                             <includeJUnit5Engines>
                                 <engine>junit-jupiter</engine>
                             </includeJUnit5Engines>
+                            <systemPropertyVariables>
+                                <cucumber.plugin>${cucumber.plugin}</cucumber.plugin>
+                                <allure.results.directory>${allure.results.directory}</allure.results.directory>
+                                <video.dir>${video.dir}</video.dir>
+                                <retry.state.dir>${retry.state.dir}</retry.state.dir>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>

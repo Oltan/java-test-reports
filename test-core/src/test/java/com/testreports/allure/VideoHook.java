@@ -22,7 +22,9 @@ public class VideoHook {
 
     private static final Logger LOGGER = Logger.getLogger(VideoHook.class.getName());
 
-    private static final Path VIDEO_DIR = Paths.get("target/videos");
+    private static Path videoDir() {
+        return Paths.get(System.getProperty("video.dir", "target/videos"));
+    }
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private final AtomicReference<Process> ffmpegProcess = new AtomicReference<>();
@@ -40,7 +42,7 @@ public class VideoHook {
 
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMAT);
         String sanitizedName = scenario.getName().replaceAll("[^a-zA-Z0-9_-]", "_");
-        Path videoPath = VIDEO_DIR.resolve(sanitizedName + "_" + timestamp + ".mp4");
+        Path videoPath = videoDir().resolve(sanitizedName + "_" + timestamp + ".mp4");
 
         try {
             ProcessBuilder pb = new ProcessBuilder(
@@ -129,7 +131,7 @@ try {
 
     private void createVideoDirectory() {
         try {
-            Files.createDirectories(VIDEO_DIR);
+            Files.createDirectories(videoDir());
         } catch (IOException e) {
             LOGGER.warning("VideoHook: Could not create video directory: " + e.getMessage());
         }

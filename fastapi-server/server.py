@@ -4,6 +4,7 @@ import io
 import os
 import re
 import shutil
+import signal
 import subprocess
 import threading
 import asyncio
@@ -435,23 +436,25 @@ async def cancel_test(run_id: str):
             "UPDATE jobs SET status = 'cancelled', ended_at = ? WHERE job_id = ?",
             [now, job_id],
         )
+        job_run_ids = {r[0] for r in conn.execute(
+            "SELECT run_id FROM worker_runs WHERE job_id = ?", [job_id]
+        ).fetchall()}
         conn.commit()
 
     with tests_lock:
-        # Kill all running processes for this job
         cancelled_run_ids = []
         for rid, proc in list(running_tests.items()):
-            # Find run_id by checking if it's in this job
-            worker_row_check = conn.execute(
-                "SELECT run_id FROM worker_runs WHERE run_id = ? AND job_id = ?",
-                [rid, job_id],
-            ).fetchone()
-            if worker_row_check:
+            if rid in job_run_ids:
                 poll = getattr(proc, "poll", None)
                 returncode = poll() if callable(poll) else getattr(proc, "returncode", None)
-                kill = getattr(proc, "kill", None)
-                if returncode is None and callable(kill):
-                    kill()
+                if returncode is None:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    except (ProcessLookupError, OSError):
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
                 cancelled_run_ids.append(rid)
         for rid in cancelled_run_ids:
             running_tests.pop(rid, None)
@@ -487,9 +490,14 @@ async def cancel_job(job_id: str):
             if proc:
                 poll = getattr(proc, "poll", None)
                 returncode = poll() if callable(poll) else getattr(proc, "returncode", None)
-                kill = getattr(proc, "kill", None)
-                if returncode is None and callable(kill):
-                    kill()
+                if returncode is None:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    except (ProcessLookupError, OSError):
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
 
     return {"status": "cancelled", "job_id": job_id}
 
@@ -504,6 +512,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         stderr=asyncio.subprocess.PIPE,
         cwd=str(PROJECT_ROOT),
         env=_test_env(),
+        start_new_session=True,
     )
     with tests_lock:
         running_tests[run_id] = proc  # type: ignore[assignment]
@@ -571,7 +580,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         await ws_manager.broadcast(run_id, {**stats, "pct": 0, "type": "progress"})
         await asyncio.gather(consume_stream(proc.stdout), consume_stream(proc.stderr))
         await proc.wait()
-        saved = _save_results_to_duckdb(run_id, options, started_at)
+        saved = _save_results_to_duckdb(run_id, options, started_at, allure_dir=output_dir)
         if saved:
             stats.update({"total": saved["total"], "passed": saved["passed"], "failed": saved["failed"], "skipped": saved["skipped"], "running": 0})
     except Exception as e:
@@ -600,7 +609,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
     final_status = "completed" if not stats.get("error") else "failed"
     with get_connection(read_only=False) as conn:
         conn.execute(
-            "UPDATE worker_runs SET status = ?, ended_at = ? WHERE run_id = ?",
+            "UPDATE worker_runs SET status = ?, ended_at = ? WHERE run_id = ? AND status != 'cancelled'",
             [final_status, now, run_id],
         )
         pending_row = conn.execute(
@@ -615,7 +624,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             ).fetchone()
             if job_row:
                 conn.execute(
-                    "UPDATE jobs SET status = ?, ended_at = ? WHERE job_id = ?",
+                    "UPDATE jobs SET status = ?, ended_at = ? WHERE job_id = ? AND status != 'cancelled'",
                     [final_status, now, job_row[0]],
                 )
         conn.commit()
@@ -716,20 +725,20 @@ def _parse_allure_result(result_file: Path) -> dict | None:
     }
 
 
-def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: datetime | None = None) -> dict:
+def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: datetime | None = None, allure_dir: str | None = None) -> dict:
     """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
     import hashlib
 
-    allure_dir = Path(os.getenv("ALLURE_RESULTS_DIR", str(PROJECT_ROOT / "test-core" / "target" / "allure-results")))
-    print(f"[INFO] allure_dir={allure_dir}  exists={allure_dir.exists()}")
-    if allure_dir.exists():
-        files = list(allure_dir.glob("*-result.json"))
+    effective_allure_dir = Path(allure_dir) if allure_dir else Path(os.getenv("ALLURE_RESULTS_DIR", str(PROJECT_ROOT / "test-core" / "target" / "allure-results")))
+    print(f"[INFO] allure_dir={effective_allure_dir}  exists={effective_allure_dir.exists()}")
+    if effective_allure_dir.exists():
+        files = list(effective_allure_dir.glob("*-result.json"))
         print(f"[INFO] result files found: {len(files)}")
 
     # Fallback: read version from environment.properties if not provided in options
     effective_version = options.version or ""
-    if not effective_version and allure_dir.exists():
-        env_props = allure_dir / "environment.properties"
+    if not effective_version and effective_allure_dir.exists():
+        env_props = effective_allure_dir / "environment.properties"
         if env_props.exists():
             for line in env_props.read_text(errors="replace").splitlines():
                 key, _, val = line.partition("=")
@@ -747,9 +756,9 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
 
     DEP_TAG_RE = re.compile(r"@dep:(.+)", re.IGNORECASE)
 
-    if allure_dir.exists():
+    if effective_allure_dir.exists():
         all_parsed = []
-        for result_file in sorted(allure_dir.glob("*-result.json")):
+        for result_file in sorted(effective_allure_dir.glob("*-result.json")):
             parsed = _parse_allure_result(result_file)
             if parsed is not None:
                 all_parsed.append(parsed)
@@ -2365,7 +2374,7 @@ def auto_match_jira(run_id: str) -> dict:
 
 
 @app.post("/api/triage/{run_id}/scenarios/{scenario_id}/jira", response_model=JiraResponse, status_code=201, dependencies=[Depends(verify_token)])
-def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(verify_token)):
+def create_triage_jira(run_id: str, scenario_id: str, response: Response, _: TokenData = Depends(verify_token)):
     conn = get_connection(read_only=False)
     try:
         init_schema(conn)
@@ -2379,6 +2388,13 @@ def create_triage_jira(run_id: str, scenario_id: str, _: TokenData = Depends(ver
         """, [run_id, scenario_id]).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found in run '{run_id}'")
+
+        existing = conn.execute(
+            "SELECT jira_key FROM jira_mappings WHERE scenario_uid = ? LIMIT 1", [scenario_id]
+        ).fetchone()
+        if existing:
+            response.status_code = 200
+            return JiraResponse(jiraKey=existing[0], jiraUrl=jira_client.issue_url(existing[0]))
 
         scenario_uid, name_at_run, error_message, doors_number = row[0], row[1], row[2], row[3]
         scenario_name = row[4] or name_at_run
