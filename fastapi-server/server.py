@@ -48,7 +48,10 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent / "manifests")))
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 RUN_ALIASES_FILE = Path(__file__).parent.parent / "run-aliases.json"
-PROJECT_ROOT = Path(__file__).parent.parent
+# JAVA_PROJECT_ROOT: Maven parent pom.xml directory (defaults to repo root)
+PROJECT_ROOT = Path(os.getenv("JAVA_PROJECT_ROOT", str(Path(__file__).parent.parent)))
+# MAVEN_MODULE: -pl argument passed to Maven (defaults to "test-core")
+MAVEN_MODULE = os.getenv("MAVEN_MODULE", "test-core")
 
 _aliases_lock = threading.Lock()
 
@@ -215,7 +218,7 @@ def _maven_executable() -> str:
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
     cmd = [
         _maven_executable(),
-        "-pl", "test-core",
+        "-pl", MAVEN_MODULE,
         "test",
         f"-Dcucumber.filter.tags={options.tags}",
     ]
@@ -276,7 +279,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
         for i in range(options.parallel):
             run_id = f"test-{uuid4().hex[:8]}"
             worker_id = f"{job_id}-w{i}"
-            output_dir = str(PROJECT_ROOT / "test-core" / "target" / f"allure-results-{run_id}")
+            output_dir = str(PROJECT_ROOT / MAVEN_MODULE / "target" / f"allure-results-{run_id}")
             conn.execute(
                 """
                 INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
@@ -296,8 +299,8 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
             task.add_done_callback(lambda t: test_tasks.discard(t))
             task.add_done_callback(_log_task_exception)
     else:
-        for run_id in run_ids:
-            task = asyncio.create_task(execute_test_run(run_id, options))
+        for run_id, worker in zip(run_ids, workers):
+            task = asyncio.create_task(execute_test_run(run_id, options, output_dir=worker["output_dir"]))
             test_tasks.add(task)
             task.add_done_callback(lambda t: test_tasks.discard(t))
             task.add_done_callback(_log_task_exception)
@@ -729,7 +732,7 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
     import hashlib
 
-    effective_allure_dir = Path(allure_dir) if allure_dir else Path(os.getenv("ALLURE_RESULTS_DIR", str(PROJECT_ROOT / "test-core" / "target" / "allure-results")))
+    effective_allure_dir = Path(allure_dir) if allure_dir else Path(os.getenv("ALLURE_RESULTS_DIR", str(PROJECT_ROOT / MAVEN_MODULE / "target" / "allure-results")))
     print(f"[INFO] allure_dir={effective_allure_dir}  exists={effective_allure_dir.exists()}")
     if effective_allure_dir.exists():
         files = list(effective_allure_dir.glob("*-result.json"))
