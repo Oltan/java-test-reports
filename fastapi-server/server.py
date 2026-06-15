@@ -8,6 +8,7 @@ import threading
 import time
 import asyncio
 from datetime import datetime, timedelta, timezone
+from contextlib import asynccontextmanager
 from importlib import import_module
 from pathlib import Path
 from typing import List, Optional, cast
@@ -127,7 +128,70 @@ def load_manifests() -> list[RunManifest]:
 tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
 jira_client = JiraClient()
 
-app = FastAPI(title="Test Reports API", version="1.0.0")
+
+def _maybe_kill_stale(pid) -> None:
+    """Best-effort, PID-reuse-guarded kill of a leftover run process (POSIX only).
+
+    Only signals the process group if the pid still maps to what looks like our
+    Maven/test-core run, so a recycled pid belonging to something else is left
+    alone. On non-Linux (no /proc) we skip the kill and only mark interrupted.
+    """
+    if not pid:
+        return
+    try:
+        cmdline = Path(f"/proc/{int(pid)}/cmdline").read_bytes().decode(errors="replace")
+    except (OSError, ValueError):
+        return
+    if not any(m in cmdline for m in ("maven", "surefire", "test-core", MAVEN_MODULE)):
+        return
+    try:
+        os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
+    except (ProcessLookupError, OSError):
+        pass
+
+
+def _recover_orphans() -> int:
+    """Reconcile runs left 'running' by a previous (now-dead) process.
+
+    A freshly started process owns no in-flight runs, so any 'running' row is an
+    orphan: kill its leftover child if still alive, then mark run + job
+    'interrupted'. Returns the number of runs interrupted.
+    """
+    with get_connection(read_only=False) as conn:
+        init_schema(conn)
+        stale = conn.execute(
+            "SELECT run_id, pid FROM worker_runs WHERE status = 'running'"
+        ).fetchall()
+        for _run_id, pid in stale:
+            _maybe_kill_stale(pid)
+        if stale:
+            now = datetime.now()
+            conn.execute(
+                "UPDATE worker_runs SET status = 'interrupted', ended_at = ? WHERE status = 'running'",
+                [now],
+            )
+            conn.execute(
+                "UPDATE jobs SET status = 'interrupted', ended_at = ? WHERE status = 'running'",
+                [now],
+            )
+            conn.commit()
+        return len(stale)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if os.getenv("RUN_RECOVERY_ON_STARTUP", "1") == "1":
+        try:
+            recovered = _recover_orphans()
+            if recovered:
+                print(f"[startup] marked {recovered} orphaned run(s) as interrupted")
+            _dispatch_queued()
+        except Exception as exc:  # never block startup on recovery
+            print(f"[startup] orphan recovery skipped: {exc}")
+    yield
+
+
+app = FastAPI(title="Test Reports API", version="1.0.0", lifespan=lifespan)
 app.include_router(tfs_router)
 
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)

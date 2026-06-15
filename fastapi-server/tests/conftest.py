@@ -30,6 +30,9 @@ os.environ["MANIFESTS_DIR"] = str(_MANIFESTS_TMP_DIR)
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "admin123")
+# Don't run startup orphan-recovery against the real DB during tests; the
+# recovery logic is exercised directly in test_run_lifecycle.py instead.
+os.environ.setdefault("RUN_RECOVERY_ON_STARTUP", "0")
 
 from server import app  # noqa: E402
 

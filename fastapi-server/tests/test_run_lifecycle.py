@@ -163,3 +163,40 @@ def test_force_bypasses_duplicate_guard(client, in_mem_db):
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r1.json()["job_id"] != r2.json()["job_id"]
+
+
+# ── 6D: restart orphan recovery (interrupted) ────────────────────────────────
+
+def test_recover_orphans_marks_running_as_interrupted(in_mem_db):
+    import server as srv
+    with patch.object(srv, "get_connection", lambda read_only=False: in_mem_db):
+        _insert_worker(in_mem_db, job_id="job-stale", run_id="run-stale", status="running")
+        n = srv._recover_orphans()  # pid is NULL -> no kill attempted
+
+    assert n == 1
+    w = in_mem_db.execute(
+        "SELECT status, ended_at FROM worker_runs WHERE run_id = ?", ["run-stale"]
+    ).fetchone()
+    j = in_mem_db.execute(
+        "SELECT status FROM jobs WHERE job_id = ?", ["job-stale"]
+    ).fetchone()
+    assert w[0] == "interrupted" and w[1] is not None
+    assert j[0] == "interrupted"
+
+
+def test_recover_orphans_noop_when_nothing_running(in_mem_db):
+    import server as srv
+    with patch.object(srv, "get_connection", lambda read_only=False: in_mem_db):
+        _insert_worker(in_mem_db, job_id="job-done", run_id="run-done", status="completed")
+        n = srv._recover_orphans()
+
+    assert n == 0
+    j = in_mem_db.execute("SELECT status FROM jobs WHERE job_id = ?", ["job-done"]).fetchone()
+    assert j[0] == "completed"  # untouched
+
+
+def test_maybe_kill_stale_is_pid_reuse_safe():
+    import server as srv
+    # None and an almost-certainly-unrelated/nonexistent pid must not raise.
+    srv._maybe_kill_stale(None)
+    srv._maybe_kill_stale(2_000_000_000)
