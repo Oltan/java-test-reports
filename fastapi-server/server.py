@@ -26,6 +26,7 @@ from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
 from models import RunManifest, ScenarioResult, TestRunOptions
+from maven import maven_executable
 from bug_tracker import BugTracker
 from db import get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation, get_scenario_history, get_scenario_matrix
 from jira_client import JiraClient
@@ -203,24 +204,13 @@ async def trigger_pipeline(background_tasks: BackgroundTasks, run_id: Optional[s
     return {"status": "started", "run_id": job_id, "job_id": job_id}
 
 
-def _maven_executable() -> str:
-    configured = os.getenv("MAVEN_CMD")
-    if configured:
-        return configured
-    bundled = Path("/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn")
-    if bundled.exists():
-        return str(bundled)
-    # Windows: mvn.cmd is the standard wrapper
-    win_mvn = shutil.which("mvn.cmd") or shutil.which("mvn")
-    return win_mvn or "mvn"
-
-
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
     cmd = [
-        _maven_executable(),
+        maven_executable(),
         "-pl", MAVEN_MODULE,
         "test",
         f"-Dcucumber.filter.tags={options.tags}",
+        f"-Dbrowser={options.browser}",
     ]
     if options.retry_count:
         cmd.append(f"-Dretry.count={options.retry_count}")
@@ -232,7 +222,7 @@ def _test_command(options: TestRunOptions, output_dir: str | None = None) -> lis
 def _test_env() -> dict[str, str]:
     env = os.environ.copy()
     env["DISPLAY"] = env.get("DISPLAY", ":0")
-    maven_parent = Path(_maven_executable()).parent
+    maven_parent = Path(maven_executable()).parent
     if str(maven_parent) != ".":
         env["PATH"] = f"{maven_parent}{os.pathsep}{env.get('PATH', '')}"
     return env
