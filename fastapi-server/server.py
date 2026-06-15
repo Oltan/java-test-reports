@@ -5,6 +5,7 @@ import shutil
 import signal
 import subprocess
 import threading
+import time
 import asyncio
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
@@ -55,11 +56,39 @@ PROJECT_ROOT = Path(os.getenv("JAVA_PROJECT_ROOT", str(Path(__file__).parent.par
 # MAVEN_MODULE: -pl argument passed to Maven (defaults to "test-core")
 MAVEN_MODULE = os.getenv("MAVEN_MODULE", "test-core")
 
+# Run lifecycle (queue + watchdog): job-level concurrency limit and timeouts
+TEST_MAX_CONCURRENCY = int(os.getenv("TEST_MAX_CONCURRENCY", "1"))
+RUN_HARD_TIMEOUT = int(os.getenv("RUN_HARD_TIMEOUT", "3600"))
+RUN_STALL_TIMEOUT = int(os.getenv("RUN_STALL_TIMEOUT", "900"))
+
 _aliases_lock = threading.Lock()
 
 running_tests: dict[str, object] = {}
 test_tasks: set[asyncio.Task] = set()
 tests_lock = threading.Lock()
+
+
+def _persist_worker(run_id: str, **fields) -> None:
+    """Best-effort UPDATE of worker_runs lifecycle columns for a run.
+
+    Only a fixed allow-list of columns is accepted, so the dynamically-built
+    SQL is safe. Used to record pid, heartbeat (last_output_at) and exit_code.
+    """
+    allowed = {"pid", "last_output_at", "exit_code"}
+    cols = [c for c in fields if c in allowed]
+    if not cols:
+        return
+    assignments = ", ".join(f"{c} = ?" for c in cols)
+    try:
+        with get_connection(read_only=False) as conn:
+            conn.execute(
+                f"UPDATE worker_runs SET {assignments} WHERE run_id = ?",
+                [*(fields[c] for c in cols), run_id],
+            )
+            conn.commit()
+    except Exception:
+        pass
+
 
 def _load_aliases() -> dict:
     if not RUN_ALIASES_FILE.exists():
@@ -510,6 +539,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
     )
     with tests_lock:
         running_tests[run_id] = proc  # type: ignore[assignment]
+    _persist_worker(run_id, pid=proc.pid, last_output_at=started_at)
 
     stats = {
         "run_id": run_id,
@@ -537,6 +567,15 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         pct = round((completed / expected) * 100)
         await ws_manager.broadcast(run_id, {**stats, "pct": min(pct, 100), "type": "progress"})
 
+    heartbeat = {"last": time.monotonic()}
+
+    def beat() -> None:
+        # Throttled liveness marker for stall detection (at most every 5s).
+        loop_now = time.monotonic()
+        if loop_now - heartbeat["last"] >= 5:
+            heartbeat["last"] = loop_now
+            _persist_worker(run_id, last_output_at=datetime.now())
+
     async def consume_stream(stream: asyncio.StreamReader | None) -> None:
         if stream is None:
             return
@@ -545,6 +584,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             if not decoded:
                 continue
             stats["output"].append(decoded)
+            beat()
 
             if "Scenario:" in decoded or "Scenario Outline:" in decoded:
                 marker = "Scenario Outline:" if "Scenario Outline:" in decoded else "Scenario:"
@@ -601,10 +641,11 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
 
     now = datetime.now()
     final_status = "completed" if not stats.get("error") else "failed"
+    exit_code = getattr(proc, "returncode", None)
     with get_connection(read_only=False) as conn:
         conn.execute(
-            "UPDATE worker_runs SET status = ?, ended_at = ? WHERE run_id = ? AND status != 'cancelled'",
-            [final_status, now, run_id],
+            "UPDATE worker_runs SET status = ?, ended_at = ?, exit_code = ? WHERE run_id = ? AND status != 'cancelled'",
+            [final_status, now, exit_code, run_id],
         )
         pending_row = conn.execute(
             "SELECT COUNT(*) FROM worker_runs WHERE job_id = (SELECT job_id FROM worker_runs WHERE run_id = ?) AND status = 'running'",
