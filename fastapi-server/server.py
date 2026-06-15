@@ -1,6 +1,4 @@
 import json
-import csv
-import io
 import os
 import re
 import shutil
@@ -27,6 +25,9 @@ from pydantic import BaseModel
 
 from models import RunManifest, ScenarioResult, TestRunOptions
 from maven import maven_executable
+from services.identifiers import extract_doors_id
+from services.csv_export import doors_csv_row, doors_csv_document
+from services.jira_helper import build_jira_description
 from bug_tracker import BugTracker
 from db import get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation, get_scenario_history, get_scenario_matrix
 from jira_client import JiraClient
@@ -662,9 +663,9 @@ def _parse_allure_result(result_file: Path) -> dict | None:
         label_value = label.get("value") or ""
         if label_name == "tag":
             tag_str = str(label_value).strip()
-            doors_match = re.search(r"@?(?:DOORS-\d+|ABS-\d+)", tag_str, re.IGNORECASE)
-            if doors_match:
-                doors_id = doors_match.group(0).lstrip("@")
+            found_doors = extract_doors_id(tag_str)
+            if found_doors:
+                doors_id = found_doors
             else:
                 dep_match = re.match(r"@dep:(.+)", tag_str, re.IGNORECASE)
                 if dep_match:
@@ -1303,9 +1304,9 @@ async def generate_public_share(req: GenerateShareRequest):
                     continue
                 for scenario in manifest.scenarios:
                     for tag in scenario.tags:
-                        doors_match = re.search(r"@?(?:DOORS-\d+|ABS-\d+)", tag, re.IGNORECASE)
-                        if doors_match:
-                            manifest_doors_by_run_name.setdefault((manifest.runId, scenario.name), doors_match.group(0).lstrip("@"))
+                        found_doors = extract_doors_id(tag)
+                        if found_doors:
+                            manifest_doors_by_run_name.setdefault((manifest.runId, scenario.name), found_doors)
                             break
         passed = failed = skipped = 0
         for row in scenario_rows:
@@ -1494,36 +1495,25 @@ def export_csv(run_id: str, _: TokenData = Depends(verify_token_page)):
         if not rows:
             raise HTTPException(status_code=404, detail="No scenarios found for this run")
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["Senaryo", "Durum", "Açıklama"])
         manifest_doors_by_name = {}
         for manifest in load_manifests():
             if manifest.runId != run_id:
                 continue
             for scenario in manifest.scenarios:
                 for tag in scenario.tags:
-                    doors_match = re.search(r"@?(?:DOORS-\d+|ABS-\d+)", tag, re.IGNORECASE)
-                    if doors_match:
-                        manifest_doors_by_name.setdefault(scenario.name, doors_match.group(0).lstrip("@"))
+                    found_doors = extract_doors_id(tag)
+                    if found_doors:
+                        manifest_doors_by_name.setdefault(scenario.name, found_doors)
                         break
             break
 
+        csv_rows = []
         for r in rows:
             doors_id, status, jira_key, version, name = r
             doors_id = doors_id or manifest_doors_by_name.get(name, "")
-            if status == "PASSED":
-                result_status = "Yapildi - Hata Yok"
-                explanation = f"{version} sürümünde test otomasyon ile doğrulanmıştır."
-            elif status in {"FAILED", "BROKEN"}:
-                result_status = "Yapildi - Hata Var"
-                explanation = jira_key or ""
-            else:
-                result_status = "Yapilmadi"
-                explanation = "Test kapsamına alınmadığı için yapılmadı"
-            writer.writerow([doors_id or "", result_status, explanation])
+            csv_rows.append(doors_csv_row(doors_id, status, jira_key, version))
 
-        content = "\ufeff" + output.getvalue()
+        content = doors_csv_document(csv_rows)
         return Response(
             content=content,
             media_type="text/csv; charset=utf-8",
@@ -1549,27 +1539,16 @@ def export_csv_share(share_id: str):
         if not csv_export_rows:
             raise HTTPException(status_code=404, detail="No scenarios in snapshot")
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["Senaryo", "Durum", "Açıklama"])
+        csv_rows = []
         for s in csv_export_rows:
-            raw_status = (s.get("status") or "").upper()
-            doors_id = s.get("doors_id") or ""
-            version = s.get("version") or "vX.X"
-            jira_key = s.get("jira_key") or ""
+            csv_rows.append(doors_csv_row(
+                s.get("doors_id") or "",
+                s.get("status") or "",
+                s.get("jira_key") or "",
+                s.get("version") or "vX.X",
+            ))
 
-            if raw_status == "PASSED":
-                result_status = "Yapildi - Hata Yok"
-                explanation = f"{version} sürümünde test otomasyon ile doğrulanmıştır."
-            elif raw_status in {"FAILED", "BROKEN"}:
-                result_status = "Yapildi - Hata Var"
-                explanation = jira_key
-            else:
-                result_status = "Yapilmadi"
-                explanation = "Test kapsamına alınmadığı için yapılmadı"
-            writer.writerow([doors_id, result_status, explanation])
-
-        content = "\ufeff" + output.getvalue()
+        content = doors_csv_document(csv_rows)
         return Response(
             content=content,
             media_type="text/csv; charset=utf-8",
@@ -2023,15 +2002,14 @@ def create_jira_bug(run_id: str, scenario_id: str):
     )
     failed_step = next((s for s in scenario.steps if s.status == "failed"), None)
     error_message = failed_step.errorMessage if failed_step and failed_step.errorMessage else "N/A"
-    description = (
-        f"h2. Automated Test Failure\n\n"
-        f"*Run ID:* {run_id}\n"
-        f"*Scenario:* {scenario.name}\n"
-        f"*DOORS Number:* {scenario.doorsAbsNumber or 'N/A'}\n"
-        f"*Affects Version/s:* {manifest.version or 'N/A'}\n"
-        f"*Duration:* {scenario.duration}\n"
-        f"*Error:* {error_message}\n\n"
-        f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
+    description = build_jira_description(
+        run_id=run_id,
+        scenario_name=scenario.name,
+        doors_number=scenario.doorsAbsNumber,
+        version=manifest.version,
+        error_message=error_message,
+        step_lines=step_lines,
+        duration=scenario.duration,
     )
 
     try:
@@ -2410,14 +2388,13 @@ def create_triage_jira(run_id: str, scenario_id: str, response: Response, _: Tok
             f"  [FAIL] {r[0]}" if str(r[1]).upper() in ("FAILED", "BROKEN") else f"  [pass] {r[0]}"
             for r in step_rows
         )
-        description = (
-            f"h2. Automated Test Failure\n\n"
-            f"*Run ID:* {run_id}\n"
-            f"*Scenario:* {scenario_name}\n"
-            f"*DOORS Number:* {doors_number or 'N/A'}\n"
-            f"*Affects Version/s:* {run_version or 'N/A'}\n"
-            f"*Error:* {error_message or 'N/A'}\n\n"
-            f"h3. Steps\n{{noformat}}\n{step_lines or 'N/A'}\n{{noformat}}"
+        description = build_jira_description(
+            run_id=run_id,
+            scenario_name=scenario_name,
+            doors_number=doors_number,
+            version=run_version,
+            error_message=error_message,
+            step_lines=step_lines,
         )
 
         try:
