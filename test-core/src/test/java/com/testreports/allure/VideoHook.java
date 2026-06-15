@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
@@ -21,7 +22,9 @@ public class VideoHook {
 
     private static final Logger LOGGER = Logger.getLogger(VideoHook.class.getName());
 
-    private static final Path VIDEO_DIR = Paths.get("target/videos");
+    private static Path videoDir() {
+        return Paths.get(System.getProperty("video.dir", "target/videos"));
+    }
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private final AtomicReference<Process> ffmpegProcess = new AtomicReference<>();
@@ -29,19 +32,25 @@ public class VideoHook {
 
     @Before(order = 1)
     public void startVideoRecording(Scenario scenario) {
+        if (!isLinux()) {
+            LOGGER.info("VideoHook: skipping video recording - x11grab requires Linux (os.name="
+                    + System.getProperty("os.name") + ")");
+            return;
+        }
+
         createVideoDirectory();
 
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMAT);
         String sanitizedName = scenario.getName().replaceAll("[^a-zA-Z0-9_-]", "_");
-        Path videoPath = VIDEO_DIR.resolve(sanitizedName + "_" + timestamp + ".mp4");
+        Path videoPath = videoDir().resolve(sanitizedName + "_" + timestamp + ".mp4");
 
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     "ffmpeg",
                     "-f", "x11grab",
                     "-framerate", "15",
-                    "-video_size", "1920x1080",
-                    "-i", ":0.0",
+                    "-video_size", resolveVideoSize(),
+                    "-i", resolveDisplay(),
                     "-c:v", "libx264",
                     "-preset", "ultrafast",
                     "-pix_fmt", "yuv420p",
@@ -95,9 +104,34 @@ try {
         }
     }
 
+    private static boolean isLinux() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
+    }
+
+    /**
+     * X11 display to capture: {@code -Dvideo.display} if set, otherwise the
+     * {@code DISPLAY} environment variable, otherwise {@code :0.0}.
+     */
+    private static String resolveDisplay() {
+        String configured = System.getProperty("video.display");
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        String envDisplay = System.getenv("DISPLAY");
+        if (envDisplay != null && !envDisplay.isBlank()) {
+            return envDisplay;
+        }
+        return ":0.0";
+    }
+
+    /** Capture resolution: {@code -Dvideo.size}, defaulting to 1920x1080. */
+    private static String resolveVideoSize() {
+        return System.getProperty("video.size", "1920x1080");
+    }
+
     private void createVideoDirectory() {
         try {
-            Files.createDirectories(VIDEO_DIR);
+            Files.createDirectories(videoDir());
         } catch (IOException e) {
             LOGGER.warning("VideoHook: Could not create video directory: " + e.getMessage());
         }

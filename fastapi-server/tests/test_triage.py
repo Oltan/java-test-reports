@@ -12,7 +12,10 @@ os.environ.setdefault("ADMIN_PASSWORD", "admin123")
 import server
 from server import app, create_token
 
-TEST_MANIFESTS_DIR = Path(__file__).parent.parent / "manifests"
+# conftest.py points MANIFESTS_DIR at a per-session temp dir populated from
+# tests/fixtures/ before `server` is imported; reuse it here instead of the
+# gitignored manifests/ directory (absent on a fresh clone).
+TEST_MANIFESTS_DIR = Path(os.environ["MANIFESTS_DIR"])
 server.MANIFESTS_DIR = TEST_MANIFESTS_DIR
 
 client = TestClient(app, follow_redirects=False)

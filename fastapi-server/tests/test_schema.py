@@ -5,9 +5,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from models import RunManifest, ScenarioResult, StepResult, Attachment, AttemptResult
 
+# Checked-in fixture (the runtime manifests/ directory is gitignored, so tests
+# must not depend on it existing).
+SAMPLE_MANIFEST_PATH = Path(__file__).parent / "fixtures" / "sample-run-001.json"
+
 
 def test_load_sample_manifest():
-    sample_path = Path(__file__).parent.parent.parent / "manifests" / "sample-run-001.json"
+    sample_path = SAMPLE_MANIFEST_PATH
     assert sample_path.exists(), f"Sample manifest not found at {sample_path}"
 
     with open(sample_path) as f:
@@ -25,7 +29,7 @@ def test_load_sample_manifest():
 
 
 def test_round_trip_serialization():
-    sample_path = Path(__file__).parent.parent.parent / "manifests" / "sample-run-001.json"
+    sample_path = SAMPLE_MANIFEST_PATH
 
     with open(sample_path) as f:
         data = json.load(f)
@@ -42,7 +46,7 @@ def test_round_trip_serialization():
 
 
 def test_passed_scenario_validation():
-    sample_path = Path(__file__).parent.parent.parent / "manifests" / "sample-run-001.json"
+    sample_path = SAMPLE_MANIFEST_PATH
 
     with open(sample_path) as f:
         data = json.load(f)
@@ -58,7 +62,7 @@ def test_passed_scenario_validation():
 
 
 def test_failed_scenario_validation():
-    sample_path = Path(__file__).parent.parent.parent / "manifests" / "sample-run-001.json"
+    sample_path = SAMPLE_MANIFEST_PATH
 
     with open(sample_path) as f:
         data = json.load(f)
@@ -97,7 +101,7 @@ def test_attachment_model():
 
 
 def test_tags_list():
-    sample_path = Path(__file__).parent.parent.parent / "manifests" / "sample-run-001.json"
+    sample_path = SAMPLE_MANIFEST_PATH
 
     with open(sample_path) as f:
         data = json.load(f)

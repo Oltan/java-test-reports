@@ -19,6 +19,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+/**
+ * Single home for scenario dependency logic: parsing {@code @id:X} / {@code @dep:a,b} tags out of
+ * Gherkin feature files and ordering scenarios topologically by their declared dependencies.
+ */
 public final class DependencyResolver {
 
     private static final Logger LOGGER = Logger.getLogger(DependencyResolver.class.getName());
@@ -26,30 +30,92 @@ public final class DependencyResolver {
     private static final Pattern TAG_LINE = Pattern.compile("^\\s*@.+$");
     private static final Pattern ID_TAG = Pattern.compile("@id:([^\\s@]+)");
     private static final Pattern DEP_TAG = Pattern.compile("@dep:([^\\s@]+)");
-    private static final Pattern SCENARIO_LINE = Pattern.compile("^\\s*Scenario(?: Outline| Template)?\\s*:.+$");
+    private static final Pattern SCENARIO_LINE = Pattern.compile("^\\s*Scenario(?: Outline| Template)?\\s*:\\s*(.+)\\s*$");
 
     private DependencyResolver() {
     }
 
+    /**
+     * Metadata for a single scenario. {@code id} is the explicit {@code @id:} tag value, falling
+     * back to the scenario name when no {@code @id:} tag is present.
+     */
+    public record ScenarioMeta(String name, String id, Set<String> dependencies) {
+    }
+
+    /**
+     * Result of a lenient topological sort.
+     *
+     * @param ordered every node of the graph exactly once: acyclic nodes first in dependency
+     *                order, then any cycle-affected nodes appended in graph insertion order
+     * @param cyclic  the nodes that could not be ordered (members of a dependency cycle, or
+     *                nodes that transitively depend on one); empty when the graph is acyclic
+     */
+    public record SortOutcome(List<String> ordered, List<String> cyclic) {
+        public boolean hasCycle() {
+            return !cyclic.isEmpty();
+        }
+    }
+
+    /**
+     * Parses all {@code .feature} files under {@code featuresDir} into a dependency graph keyed by
+     * explicit {@code @id:} tag. Scenarios without an {@code @id:} tag are omitted, and a duplicate
+     * explicit id is rejected.
+     */
     public static Map<String, Set<String>> parseFeatureFiles(Path featuresDir) throws IOException {
         Map<String, Set<String>> graph = new LinkedHashMap<>();
 
-        try (Stream<Path> paths = Files.walk(featuresDir)) {
-            List<Path> featureFiles = paths
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".feature"))
-                    .sorted()
-                    .toList();
-
-            for (Path featureFile : featureFiles) {
-                parseFeatureFile(featureFile, graph);
+        for (ParsedScenario scenario : parseScenarios(featuresDir)) {
+            if (scenario.explicitId() == null) {
+                continue;
             }
+            if (graph.containsKey(scenario.explicitId())) {
+                throw new IllegalArgumentException("Duplicate scenario id '" + scenario.explicitId() + "' in " + scenario.file());
+            }
+            graph.put(scenario.explicitId(), new LinkedHashSet<>(scenario.dependencies()));
         }
 
         return graph;
     }
 
+    /**
+     * Parses all {@code .feature} files under {@code featuresDir} into scenario metadata keyed by
+     * scenario name (file order, first occurrence wins for position, last occurrence wins for
+     * value). Unlike {@link #parseFeatureFiles(Path)}, every scenario is included; the id falls
+     * back to the scenario name when no {@code @id:} tag is present.
+     */
+    public static Map<String, ScenarioMeta> parseScenarioMetadata(Path featuresDir) throws IOException {
+        Map<String, ScenarioMeta> metadataByName = new LinkedHashMap<>();
+
+        for (ParsedScenario scenario : parseScenarios(featuresDir)) {
+            String id = scenario.explicitId() == null ? scenario.name() : scenario.explicitId();
+            metadataByName.put(scenario.name(), new ScenarioMeta(scenario.name(), id, Set.copyOf(scenario.dependencies())));
+        }
+
+        return metadataByName;
+    }
+
+    /**
+     * Strict topological sort: throws {@link IllegalStateException} when the graph contains a
+     * dependency cycle.
+     */
     public static List<String> topologicalSort(Map<String, Set<String>> graph) {
+        SortOutcome outcome = sort(graph);
+        if (outcome.hasCycle()) {
+            throw new IllegalStateException("Dependency cycle detected: " + findCycle(graph, graph.keySet()));
+        }
+        return outcome.ordered();
+    }
+
+    /**
+     * Lenient topological sort: instead of throwing on a cycle, returns all nodes (cycle-affected
+     * nodes last, in graph insertion order) together with the set of nodes that could not be
+     * ordered. Callers can decide how to surface the cycle to the user.
+     */
+    public static SortOutcome topologicalSortLenient(Map<String, Set<String>> graph) {
+        return sort(graph);
+    }
+
+    private static SortOutcome sort(Map<String, Set<String>> graph) {
         Map<String, Integer> indegree = new LinkedHashMap<>();
         Map<String, Set<String>> dependents = new HashMap<>();
 
@@ -91,14 +157,39 @@ public final class DependencyResolver {
             }
         }
 
-        if (ordered.size() != graph.size()) {
-            throw new IllegalStateException("Dependency cycle detected: " + findCycle(graph, indegree.keySet()));
+        if (ordered.size() == graph.size()) {
+            return new SortOutcome(List.copyOf(ordered), List.of());
         }
 
-        return ordered;
+        Set<String> sorted = new HashSet<>(ordered);
+        List<String> cyclic = graph.keySet().stream().filter(id -> !sorted.contains(id)).toList();
+        List<String> all = new ArrayList<>(ordered);
+        all.addAll(cyclic);
+        return new SortOutcome(List.copyOf(all), cyclic);
     }
 
-    private static void parseFeatureFile(Path featureFile, Map<String, Set<String>> graph) throws IOException {
+    private record ParsedScenario(Path file, String name, String explicitId, Set<String> dependencies) {
+    }
+
+    private static List<ParsedScenario> parseScenarios(Path featuresDir) throws IOException {
+        List<ParsedScenario> scenarios = new ArrayList<>();
+
+        try (Stream<Path> paths = Files.walk(featuresDir)) {
+            List<Path> featureFiles = paths
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".feature"))
+                    .sorted()
+                    .toList();
+
+            for (Path featureFile : featureFiles) {
+                parseFeatureFile(featureFile, scenarios);
+            }
+        }
+
+        return scenarios;
+    }
+
+    private static void parseFeatureFile(Path featureFile, List<ParsedScenario> sink) throws IOException {
         String pendingId = null;
         Set<String> pendingDependencies = new LinkedHashSet<>();
 
@@ -123,19 +214,10 @@ public final class DependencyResolver {
                 continue;
             }
 
-            if (SCENARIO_LINE.matcher(line).matches()) {
-                if (pendingId != null) {
-                    if (graph.containsKey(pendingId)) {
-                        throw new IllegalArgumentException("Duplicate scenario id '" + pendingId + "' in " + featureFile);
-                    }
-                    graph.put(pendingId, new LinkedHashSet<>(pendingDependencies));
-                }
-                pendingId = null;
-                pendingDependencies.clear();
-                continue;
-            }
-
-            if (!line.isEmpty() && !line.startsWith("#")) {
+            Matcher scenarioMatcher = SCENARIO_LINE.matcher(line);
+            if (scenarioMatcher.matches()) {
+                String name = scenarioMatcher.group(1).trim();
+                sink.add(new ParsedScenario(featureFile, name, pendingId, new LinkedHashSet<>(pendingDependencies)));
                 pendingId = null;
                 pendingDependencies.clear();
             }

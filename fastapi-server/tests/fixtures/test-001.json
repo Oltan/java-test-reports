@@ -1,0 +1,43 @@
+{
+  "runId": "test-001",
+  "timestamp": "2026-04-27T09:15:00Z",
+  "totalScenarios": 2,
+  "passed": 1,
+  "failed": 1,
+  "skipped": 0,
+  "duration": "PT24.800S",
+  "version": "1.0.0",
+  "environment": "staging",
+  "scenarios": [
+    {
+      "id": "sc-pass-001",
+      "name": "Service Health Check",
+      "status": "passed",
+      "duration": "PT6.300S",
+      "doorsAbsNumber": "ABS-22001",
+      "tags": ["smoke"],
+      "steps": [
+        {"name": "Given the service is running", "status": "passed", "errorMessage": null},
+        {"name": "Then the health endpoint responds", "status": "passed", "errorMessage": null}
+      ],
+      "attachments": [],
+      "attempts": [],
+      "dependencies": []
+    },
+    {
+      "id": "sc-fail-001",
+      "name": "Payment Gateway Connection",
+      "status": "failed",
+      "duration": "PT18.500S",
+      "doorsAbsNumber": "ABS-22002",
+      "tags": ["payments", "regression"],
+      "steps": [
+        {"name": "Given the payment gateway is configured", "status": "passed", "errorMessage": null},
+        {"name": "When a payment request is sent", "status": "failed", "errorMessage": "Connection refused: gateway unreachable"}
+      ],
+      "attachments": [],
+      "attempts": [],
+      "dependencies": []
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "runId": "run-2026-04-26-001",
+  "timestamp": "2026-04-26T10:30:00Z",
+  "totalScenarios": 3,
+  "passed": 2,
+  "failed": 1,
+  "skipped": 0,
+  "duration": "PT58.125S",
+  "version": "1.0.0",
+  "environment": "staging",
+  "scenarios": [
+    {
+      "id": "scenario-001",
+      "name": "User Login",
+      "status": "passed",
+      "duration": "PT12.450S",
+      "doorsAbsNumber": "ABS-12345",
+      "tags": ["login", "smoke", "critical"],
+      "steps": [
+        {"name": "Given the user is on the login page", "status": "passed", "errorMessage": null},
+        {"name": "When the user enters valid credentials", "status": "passed", "errorMessage": null},
+        {"name": "Then the dashboard is displayed", "status": "passed", "errorMessage": null}
+      ],
+      "attachments": [
+        {"name": "login-success.png", "type": "image/png", "path": "run-2026-04-26-001/login-success.png"}
+      ],
+      "attempts": [],
+      "dependencies": []
+    },
+    {
+      "id": "scenario-002",
+      "name": "Order Submission",
+      "status": "failed",
+      "duration": "PT31.200S",
+      "doorsAbsNumber": "ABS-12346",
+      "tags": ["orders", "regression"],
+      "steps": [
+        {"name": "Given the user has items in the cart", "status": "passed", "errorMessage": null},
+        {"name": "When the user submits the order", "status": "passed", "errorMessage": null},
+        {"name": "Then the payment is processed", "status": "failed", "errorMessage": "Payment processing failed: card declined"}
+      ],
+      "attachments": [
+        {"name": "order-failure.png", "type": "image/png", "path": "run-2026-04-26-001/order-failure.png"},
+        {"name": "order-failure.log", "type": "text/plain", "path": "run-2026-04-26-001/order-failure.log"}
+      ],
+      "attempts": [],
+      "dependencies": []
+    },
+    {
+      "id": "scenario-003",
+      "name": "Dashboard Overview",
+      "status": "passed",
+      "duration": "PT14.475S",
+      "doorsAbsNumber": "ABS-12347",
+      "tags": ["dashboard", "smoke"],
+      "steps": [
+        {"name": "Given the user is logged in", "status": "passed", "errorMessage": null},
+        {"name": "Then the dashboard widgets are visible", "status": "passed", "errorMessage": null}
+      ],
+      "attachments": [],
+      "attempts": [],
+      "dependencies": []
+    }
+  ]
+}

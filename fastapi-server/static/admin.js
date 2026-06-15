@@ -185,6 +185,8 @@ function renderWorkerStatusBadge(status) {
     completed: { label: "tamamlandı", cls: "worker-badge--completed" },
     cancelled: { label: "iptal", cls: "worker-badge--cancelled" },
     failed: { label: "başarısız", cls: "worker-badge--failed" },
+    queued: { label: "kuyrukta", cls: "worker-badge--queued" },
+    interrupted: { label: "kesildi", cls: "worker-badge--interrupted" },
   };
   const info = map[status] || { label: status, cls: "worker-badge--unknown" };
   return `<span class="worker-badge ${info.cls}">${info.label}</span>`;
@@ -203,6 +205,9 @@ function renderJobCard(job, showCancel = false) {
     running: { label: "Çalışıyor", cls: "job-status--running" },
     completed: { label: "Tamamlandı", cls: "job-status--completed" },
     cancelled: { label: "İptal Edildi", cls: "job-status--cancelled" },
+    failed: { label: "Başarısız", cls: "job-status--failed" },
+    queued: { label: "Kuyrukta", cls: "job-status--queued" },
+    interrupted: { label: "Kesildi", cls: "job-status--interrupted" },
   };
   const statusInfo = statusMap[status] || { label: status, cls: "job-status--unknown" };
 
@@ -326,9 +331,9 @@ async function loadRunsManage() {
             <span style="font-size:12px;color:var(--text-muted);">${ts}</span>
           </div>
           <div style="display:flex;gap:12px;align-items:center;font-size:13px;flex-shrink:0;">
-            <span style="color:#00c853;">✓ ${run.passed}</span>
-            <span style="color:#ff1744;">✗ ${run.failed}</span>
-            <span style="color:#ffc107;">– ${run.skipped}</span>
+            <span style="color:var(--success);">✓ ${run.passed}</span>
+            <span style="color:var(--danger);">✗ ${run.failed}</span>
+            <span style="color:var(--warning);">– ${run.skipped}</span>
             <span style="color:var(--text-muted);">${passRate}%</span>
             <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;" onclick="deleteRun('${run.runId}')">Sil</button>
           </div>

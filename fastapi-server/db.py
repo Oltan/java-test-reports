@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 
 import duckdb
 
@@ -219,6 +220,9 @@ def init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bug_mappings_jira_key ON bug_mappings(jira_key);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_started_at ON jobs(started_at);")
+    conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS pid INTEGER")
+    conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS last_output_at TIMESTAMP")
+    conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS exit_code INTEGER")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_worker_runs_job_id ON worker_runs(job_id);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_worker_runs_run_id ON worker_runs(run_id);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_triage_decisions_run_id ON triage_decisions(run_id);")

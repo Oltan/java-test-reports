@@ -16,6 +16,13 @@
     <name>Test Core</name>
     <description>Cucumber runner, step definitions, Selenium POM</description>
 
+    <!-- Per-run isolation defaults — override via -D on the Maven CLI -->
+    <properties>
+        <allure.results.directory>target/allure-results</allure.results.directory>
+        <video.dir>target/videos</video.dir>
+        <retry.state.dir>target/retry-state</retry.state.dir>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.cucumber</groupId>
@@ -77,6 +84,11 @@
                     <includes>
                         <include>**/CucumberTestRunner.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <allure.results.directory>${allure.results.directory}</allure.results.directory>
+                        <video.dir>${video.dir}</video.dir>
+                        <retry.state.dir>${retry.state.dir}</retry.state.dir>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
@@ -102,6 +114,12 @@
                             <includeJUnit5Engines>
                                 <engine>junit-jupiter</engine>
                             </includeJUnit5Engines>
+                            <systemPropertyVariables>
+                                <cucumber.plugin>${cucumber.plugin}</cucumber.plugin>
+                                <allure.results.directory>${allure.results.directory}</allure.results.directory>
+                                <video.dir>${video.dir}</video.dir>
+                                <retry.state.dir>${retry.state.dir}</retry.state.dir>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>

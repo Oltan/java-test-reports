@@ -1,6 +1,6 @@
 # Windows — Nginx + HTTPS Kurulum Rehberi
 
-Bu rehber `WINDOWS_KURULUM.md` ile birlikte kullanılır. FastAPI uygulamasının önüne Nginx reverse proxy ve HTTPS ekler.
+Bu rehber [KURULUM.md](KURULUM.md) ile birlikte kullanılır (Windows kurulumu ve NSSM servis adımları orada). FastAPI uygulamasının önüne Nginx reverse proxy ve HTTPS ekler.
 
 ---
 
