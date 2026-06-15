@@ -104,6 +104,15 @@ def _terminate_proc(proc) -> None:
             pass
 
 
+async def _broadcast_state(run_id: str, status: str, **extra) -> None:
+    """Emit a lifecycle state frame for a run. ws_manager mirrors per-run
+    messages to the 'live' channel, so the admin/live panel sees transitions."""
+    try:
+        await ws_manager.broadcast(run_id, {"type": "state", "run_id": run_id, "status": status, **extra})
+    except Exception:
+        pass
+
+
 def _abort_reason(elapsed: float, idle: float) -> str | None:
     """Return why a run should be aborted, or None. ``elapsed`` is total wall
     time; ``idle`` is seconds since last output. A 0/false timeout disables it."""
@@ -491,6 +500,9 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
             for run_id, worker in zip(run_ids, workers):
                 _spawn_run(run_id, options, worker["output_dir"])
 
+    for run_id in run_ids:
+        await _broadcast_state(run_id, job_status, job_id=job_id)
+
     return {
         "job_id": job_id,
         "workers": workers,
@@ -828,6 +840,9 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             "UPDATE worker_runs SET status = ?, ended_at = ?, exit_code = ? WHERE run_id = ? AND status != 'cancelled'",
             [final_status, now, exit_code, run_id],
         )
+        status_row = conn.execute(
+            "SELECT status FROM worker_runs WHERE run_id = ?", [run_id]
+        ).fetchone()
         pending_row = conn.execute(
             "SELECT COUNT(*) FROM worker_runs WHERE job_id = (SELECT job_id FROM worker_runs WHERE run_id = ?) AND status = 'running'",
             [run_id],
@@ -844,6 +859,9 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
                     [final_status, now, job_row[0]],
                 )
         conn.commit()
+
+    # Emit the run's authoritative final status (cancelled survives the guard).
+    await _broadcast_state(run_id, status_row[0] if status_row else final_status, exit_code=exit_code)
 
     # A run finished — promote the next queued job now that capacity may be free.
     try:

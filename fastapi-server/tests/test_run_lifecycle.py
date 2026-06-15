@@ -225,3 +225,36 @@ def test_terminate_proc_falls_back_to_kill(monkeypatch):
     proc.pid = 2_000_000_000  # not a real process group -> getpgid raises
     srv._terminate_proc(proc)
     proc.kill.assert_called_once()
+
+
+# ── 6F: WebSocket lifecycle state events ─────────────────────────────────────
+
+def test_broadcast_state_message_shape():
+    import asyncio
+    import server as srv
+    sent = []
+
+    async def rec(run_id, message):
+        sent.append((run_id, message))
+
+    with patch.object(srv.ws_manager, "broadcast", rec):
+        asyncio.run(srv._broadcast_state("run-x", "completed", exit_code=0))
+
+    assert sent == [("run-x", {"type": "state", "run_id": "run-x", "status": "completed", "exit_code": 0})]
+
+
+def test_start_broadcasts_initial_state(client, in_mem_db):
+    import server as srv
+    spawned = []
+    sent = []
+
+    async def rec(run_id, message):
+        sent.append(message)
+
+    with _patched(in_mem_db, spawned, max_concurrency=1):
+        with patch.object(srv.ws_manager, "broadcast", rec):
+            r = _start(client, tags="@smoke")
+
+    assert r.status_code == 200
+    states = [m for m in sent if m.get("type") == "state"]
+    assert states and states[0]["status"] == "started" or states[0]["status"] == "running"
