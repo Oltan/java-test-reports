@@ -200,3 +200,28 @@ def test_maybe_kill_stale_is_pid_reuse_safe():
     # None and an almost-certainly-unrelated/nonexistent pid must not raise.
     srv._maybe_kill_stale(None)
     srv._maybe_kill_stale(2_000_000_000)
+
+
+# ── 6E: stall / hard-timeout watchdog ────────────────────────────────────────
+
+def test_abort_reason_hard_and_stall_and_none():
+    import server as srv
+    with patch.object(srv, "RUN_HARD_TIMEOUT", 100), patch.object(srv, "RUN_STALL_TIMEOUT", 30):
+        assert srv._abort_reason(elapsed=101, idle=1) == "hard timeout"
+        assert srv._abort_reason(elapsed=50, idle=31) == "stalled (no output)"
+        assert srv._abort_reason(elapsed=50, idle=10) is None
+
+
+def test_abort_reason_zero_timeout_disables_check():
+    import server as srv
+    with patch.object(srv, "RUN_HARD_TIMEOUT", 0), patch.object(srv, "RUN_STALL_TIMEOUT", 0):
+        assert srv._abort_reason(elapsed=10_000, idle=10_000) is None
+
+
+def test_terminate_proc_falls_back_to_kill(monkeypatch):
+    import server as srv
+    from unittest.mock import MagicMock
+    proc = MagicMock()
+    proc.pid = 2_000_000_000  # not a real process group -> getpgid raises
+    srv._terminate_proc(proc)
+    proc.kill.assert_called_once()

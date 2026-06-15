@@ -91,6 +91,29 @@ def _persist_worker(run_id: str, **fields) -> None:
         pass
 
 
+def _terminate_proc(proc) -> None:
+    """Terminate a run's whole process group (POSIX), falling back to the direct
+    child. Shared by cancellation and the stall/hard-timeout watchdog so no
+    orphan java/chromedriver is left behind."""
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (ProcessLookupError, OSError):
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+def _abort_reason(elapsed: float, idle: float) -> str | None:
+    """Return why a run should be aborted, or None. ``elapsed`` is total wall
+    time; ``idle`` is seconds since last output. A 0/false timeout disables it."""
+    if RUN_HARD_TIMEOUT and elapsed > RUN_HARD_TIMEOUT:
+        return "hard timeout"
+    if RUN_STALL_TIMEOUT and idle > RUN_STALL_TIMEOUT:
+        return "stalled (no output)"
+    return None
+
+
 def _load_aliases() -> dict:
     if not RUN_ALIASES_FILE.exists():
         return {}
@@ -621,13 +644,7 @@ async def cancel_test(run_id: str):
                 poll = getattr(proc, "poll", None)
                 returncode = poll() if callable(poll) else getattr(proc, "returncode", None)
                 if returncode is None:
-                    try:
-                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    except (ProcessLookupError, OSError):
-                        try:
-                            proc.kill()
-                        except Exception:
-                            pass
+                    _terminate_proc(proc)
                 cancelled_run_ids.append(rid)
         for rid in cancelled_run_ids:
             running_tests.pop(rid, None)
@@ -664,13 +681,7 @@ async def cancel_job(job_id: str):
                 poll = getattr(proc, "poll", None)
                 returncode = poll() if callable(poll) else getattr(proc, "returncode", None)
                 if returncode is None:
-                    try:
-                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    except (ProcessLookupError, OSError):
-                        try:
-                            proc.kill()
-                        except Exception:
-                            pass
+                    _terminate_proc(proc)
 
     return {"status": "cancelled", "job_id": job_id}
 
@@ -726,6 +737,22 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             heartbeat["last"] = loop_now
             _persist_worker(run_id, last_output_at=datetime.now())
 
+    async def watchdog() -> None:
+        # Abort a run that exceeds the hard timeout or stops emitting output.
+        start = time.monotonic()
+        interval = max(5, min(30, RUN_STALL_TIMEOUT or 30))
+        while getattr(proc, "returncode", None) is None:
+            await asyncio.sleep(interval)
+            if getattr(proc, "returncode", None) is not None:
+                return
+            now_m = time.monotonic()
+            reason = _abort_reason(now_m - start, now_m - heartbeat["last"])
+            if reason:
+                stats["error"] = reason
+                print(f"[WATCHDOG] aborting run {run_id}: {reason}")
+                _terminate_proc(proc)
+                return
+
     async def consume_stream(stream: asyncio.StreamReader | None) -> None:
         if stream is None:
             return
@@ -762,8 +789,12 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
 
     try:
         await ws_manager.broadcast(run_id, {**stats, "pct": 0, "type": "progress"})
-        await asyncio.gather(consume_stream(proc.stdout), consume_stream(proc.stderr))
-        await proc.wait()
+        wd = asyncio.create_task(watchdog())
+        try:
+            await asyncio.gather(consume_stream(proc.stdout), consume_stream(proc.stderr))
+            await proc.wait()
+        finally:
+            wd.cancel()
         saved = _save_results_to_duckdb(run_id, options, started_at, allure_dir=output_dir)
         if saved:
             stats.update({"total": saved["total"], "passed": saved["passed"], "failed": saved["failed"], "skipped": saved["skipped"], "running": 0})
