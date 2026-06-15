@@ -276,6 +276,76 @@ def _launch_test_run(run_id: str, options: TestRunOptions) -> subprocess.Popen:
     return proc
 
 
+def _spawn_run(run_id: str, options: TestRunOptions, output_dir: str | None) -> None:
+    """Create the background task that executes a single run.
+
+    Isolated seam so the queue/recovery logic can be tested without launching
+    a real Maven subprocess (tests monkeypatch this).
+    """
+    task = asyncio.create_task(execute_test_run(run_id, options, output_dir=output_dir))
+    test_tasks.add(task)
+    task.add_done_callback(lambda t: test_tasks.discard(t))
+    task.add_done_callback(_log_task_exception)
+
+
+def _options_from_job_row(row) -> TestRunOptions:
+    """Rebuild TestRunOptions from a persisted jobs row so a queued job can be
+    re-spawned later (in-process or after a restart). Columns:
+    (tags, retry_count, parallel, environment, version, browser)."""
+    tags, retry_count, parallel, environment, version, browser = row
+    return TestRunOptions(
+        tags=tags or "@smoke",
+        retry_count=retry_count or 0,
+        parallel=parallel or 1,
+        environment=environment or "staging",
+        version=version,
+        browser=browser or "chrome",
+    )
+
+
+def _dispatch_queued() -> list[str]:
+    """Promote FIFO-queued jobs to running while capacity is available.
+
+    Returns the job_ids that were started. Safe to call from any context with a
+    running event loop (request handler, run completion, startup recovery).
+    """
+    started: list[str] = []
+    with tests_lock:
+        with get_connection(read_only=False) as conn:
+            while True:
+                running = conn.execute(
+                    "SELECT COUNT(*) FROM jobs WHERE status = 'running'"
+                ).fetchone()[0]
+                if running >= TEST_MAX_CONCURRENCY:
+                    break
+                job = conn.execute(
+                    "SELECT job_id, tags, retry_count, parallel, environment, version, browser "
+                    "FROM jobs WHERE status = 'queued' ORDER BY started_at, job_id LIMIT 1"
+                ).fetchone()
+                if not job:
+                    break
+                job_id = job[0]
+                now = datetime.now()
+                conn.execute(
+                    "UPDATE jobs SET status = 'running', started_at = ? WHERE job_id = ?",
+                    [now, job_id],
+                )
+                conn.execute(
+                    "UPDATE worker_runs SET status = 'running', started_at = ? WHERE job_id = ?",
+                    [now, job_id],
+                )
+                worker_rows = conn.execute(
+                    "SELECT run_id, output_dir FROM worker_runs WHERE job_id = ? ORDER BY shard",
+                    [job_id],
+                ).fetchall()
+                conn.commit()
+                options = _options_from_job_row(job[1:])
+                for run_id, output_dir in worker_rows:
+                    _spawn_run(run_id, options, output_dir)
+                started.append(job_id)
+    return started
+
+
 @app.post("/api/tests/start", dependencies=[Depends(verify_token)])
 async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks):
     """Start tests with validated options. Invalid options are rejected by Pydantic."""
@@ -285,47 +355,63 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
     run_ids = []
     workers = []
 
-    with get_connection(read_only=False) as conn:
-        init_schema(conn)
-        conn.execute(
-            """
-            INSERT INTO jobs (job_id, requester, tags, retry_count, parallel, environment, version, status, started_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?)
-            """,
-            [job_id, "engineer", options.tags, options.retry_count, options.parallel,
-             options.environment, options.version, now],
-        )
-
-        for i in range(options.parallel):
-            run_id = f"test-{uuid4().hex[:8]}"
-            worker_id = f"{job_id}-w{i}"
-            output_dir = str(PROJECT_ROOT / MAVEN_MODULE / "target" / f"allure-results-{run_id}")
+    with tests_lock:
+        with get_connection(read_only=False) as conn:
+            init_schema(conn)
+            if not options.force:
+                dup = conn.execute(
+                    "SELECT job_id FROM jobs WHERE tags = ? AND environment = ? "
+                    "AND status IN ('queued', 'running') LIMIT 1",
+                    [options.tags, options.environment],
+                ).fetchone()
+                if dup:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"A run with these tags and environment is already active "
+                               f"(job {dup[0]}). Pass force=true to start anyway.",
+                    )
+            running = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE status = 'running'"
+            ).fetchone()[0]
+            admit = running < TEST_MAX_CONCURRENCY
+            job_status = "running" if admit else "queued"
             conn.execute(
                 """
-                INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
-                VALUES (?, ?, ?, ?, 'running', ?, ?)
+                INSERT INTO jobs (job_id, requester, tags, retry_count, parallel, environment, version, browser, status, started_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                [worker_id, job_id, run_id, i, output_dir, now],
+                [job_id, "engineer", options.tags, options.retry_count, options.parallel,
+                 options.environment, options.version, options.browser, job_status, now],
             )
-            run_ids.append(run_id)
-            workers.append({"worker_id": worker_id, "run_id": run_id, "shard": i, "output_dir": output_dir})
 
-        conn.commit()
+            for i in range(options.parallel):
+                run_id = f"test-{uuid4().hex[:8]}"
+                worker_id = f"{job_id}-w{i}"
+                output_dir = str(PROJECT_ROOT / MAVEN_MODULE / "target" / f"allure-results-{run_id}")
+                conn.execute(
+                    """
+                    INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [worker_id, job_id, run_id, i, job_status, output_dir, now],
+                )
+                run_ids.append(run_id)
+                workers.append({"worker_id": worker_id, "run_id": run_id, "shard": i, "output_dir": output_dir})
 
-    if options.parallel > 1:
-        for run_id, worker in zip(run_ids, workers):
-            task = asyncio.create_task(execute_test_run(run_id, options, output_dir=worker["output_dir"]))
-            test_tasks.add(task)
-            task.add_done_callback(lambda t: test_tasks.discard(t))
-            task.add_done_callback(_log_task_exception)
-    else:
-        for run_id, worker in zip(run_ids, workers):
-            task = asyncio.create_task(execute_test_run(run_id, options, output_dir=worker["output_dir"]))
-            test_tasks.add(task)
-            task.add_done_callback(lambda t: test_tasks.discard(t))
-            task.add_done_callback(_log_task_exception)
+            conn.commit()
 
-    return {"job_id": job_id, "workers": workers, "runs": run_ids, "status": "started", "mode": "serialized_safe", "parallel": options.parallel}
+        if admit:
+            for run_id, worker in zip(run_ids, workers):
+                _spawn_run(run_id, options, worker["output_dir"])
+
+    return {
+        "job_id": job_id,
+        "workers": workers,
+        "runs": run_ids,
+        "status": "started" if admit else "queued",
+        "mode": "serialized_safe",
+        "parallel": options.parallel,
+    }
 
 
 @app.get("/api/tests/running", dependencies=[Depends(verify_token)])
@@ -663,6 +749,12 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
                     [final_status, now, job_row[0]],
                 )
         conn.commit()
+
+    # A run finished — promote the next queued job now that capacity may be free.
+    try:
+        _dispatch_queued()
+    except Exception:
+        pass
 
 
 def _parse_allure_result(result_file: Path) -> dict | None:

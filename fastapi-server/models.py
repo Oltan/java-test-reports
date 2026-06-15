@@ -103,3 +103,4 @@ class TestRunOptions(BaseModel):
     notify_email: Optional[str] = None
     version: Optional[str] = None
     visibility: str = Field(default="internal", pattern=r"^(internal|public)$")
+    force: bool = Field(default=False, description="Bypass the duplicate-run guard")

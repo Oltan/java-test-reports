@@ -5,12 +5,19 @@ These exercise the orchestration logic directly against an in-memory DuckDB and
 a monkeypatched spawn seam, so no real Maven process is ever started.
 """
 from datetime import datetime
+from contextlib import ExitStack
 from unittest.mock import patch
 
 import duckdb
 import pytest
+from fastapi.testclient import TestClient
 
 from db import init_schema, NonClosingConnectionWrapper
+from server import app, create_token
+
+
+def _auth():
+    return {"Authorization": f"Bearer {create_token('admin')}"}
 
 
 @pytest.fixture
@@ -19,6 +26,31 @@ def in_mem_db():
     init_schema(conn)
     yield NonClosingConnectionWrapper(conn)
     conn.close()
+
+
+@pytest.fixture
+def client():
+    with TestClient(app, follow_redirects=False) as c:
+        yield c
+
+
+def _patched(in_mem_db, spawned, max_concurrency=1):
+    """Patch the DB, the spawn seam (records run_ids), and the concurrency limit."""
+    import server as srv
+    stack = ExitStack()
+    stack.enter_context(patch.object(srv, "get_connection", lambda read_only=False: in_mem_db))
+    stack.enter_context(patch.object(srv, "_spawn_run", lambda rid, opts, out: spawned.append(rid)))
+    stack.enter_context(patch.object(srv, "TEST_MAX_CONCURRENCY", max_concurrency))
+    return stack
+
+
+def _start(client, tags="@smoke", force=False):
+    return client.post(
+        "/api/tests/start",
+        json={"tags": tags, "retry_count": 0, "browser": "chrome",
+              "parallel": 1, "environment": "staging", "version": "1.0.0", "force": force},
+        headers=_auth(),
+    )
 
 
 def _insert_worker(conn, job_id="job-1", run_id="test-1", status="running"):
@@ -63,3 +95,71 @@ def test_persist_worker_ignores_unknown_columns(in_mem_db):
         ).fetchone()
     assert row[0] == 7
     assert row[1] == "running"  # status not in allow-list, unchanged
+
+
+# ── 6B: concurrency limit + FIFO queue ───────────────────────────────────────
+
+def test_second_job_queues_when_at_capacity(client, in_mem_db):
+    spawned = []
+    with _patched(in_mem_db, spawned, max_concurrency=1):
+        r1 = _start(client, tags="@smoke")
+        r2 = _start(client, tags="@regression")
+
+    assert r1.status_code == 200 and r1.json()["status"] == "started"
+    assert r2.status_code == 200 and r2.json()["status"] == "queued"
+    # Only the first job's run was spawned; the queued one was not.
+    assert r1.json()["runs"][0] in spawned
+    assert r2.json()["runs"][0] not in spawned
+
+    j2 = in_mem_db.execute(
+        "SELECT status FROM jobs WHERE job_id = ?", [r2.json()["job_id"]]
+    ).fetchone()
+    assert j2[0] == "queued"
+
+
+def test_dispatch_promotes_queued_job_when_capacity_frees(client, in_mem_db):
+    spawned = []
+    with _patched(in_mem_db, spawned, max_concurrency=1):
+        r1 = _start(client, tags="@smoke")
+        r2 = _start(client, tags="@regression")
+        assert r2.json()["status"] == "queued"
+
+        # First job finishes -> capacity frees.
+        in_mem_db.execute(
+            "UPDATE jobs SET status = 'completed' WHERE job_id = ?", [r1.json()["job_id"]]
+        )
+        in_mem_db.commit()
+
+        import server as srv
+        started = srv._dispatch_queued()
+
+    assert r2.json()["job_id"] in started
+    j2 = in_mem_db.execute(
+        "SELECT status FROM jobs WHERE job_id = ?", [r2.json()["job_id"]]
+    ).fetchone()
+    assert j2[0] == "running"
+    assert r2.json()["runs"][0] in spawned
+
+
+# ── 6C: duplicate-run guard (409 + force) ────────────────────────────────────
+
+def test_duplicate_active_run_returns_409(client, in_mem_db):
+    spawned = []
+    with _patched(in_mem_db, spawned, max_concurrency=2):
+        r1 = _start(client, tags="@smoke")
+        r2 = _start(client, tags="@smoke")  # same tags+environment, still active
+
+    assert r1.status_code == 200
+    assert r2.status_code == 409
+    assert "force" in r2.json()["detail"].lower()
+
+
+def test_force_bypasses_duplicate_guard(client, in_mem_db):
+    spawned = []
+    with _patched(in_mem_db, spawned, max_concurrency=2):
+        r1 = _start(client, tags="@smoke")
+        r2 = _start(client, tags="@smoke", force=True)
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.json()["job_id"] != r2.json()["job_id"]
