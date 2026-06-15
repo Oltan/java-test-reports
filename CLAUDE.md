@@ -25,27 +25,34 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - `RetryTestRunner` Java deduplication: topo-sort DependencyResolver'a devredildi (8/8 test green)
 - 14 root `.md` → `docs/` altına konsolide edildi; root'ta sadece `README.md` + `AGENTS.md` + `CLAUDE.md`
 
-### ⏳ Wave 2 — Test Koşum Yönetimi Temeli (SIRADA)
-**Bağımsız paketler, aynı anda 3'e kadar paralel agent çalıştır:**
+### ✅ Sadeleştirme S0–S1 (TAMAMLANDI)
+- S0: `maven_executable()` → `maven.py` (ol_ta hardcode kaldırıldı, server.py+pipeline.py), `-Dbrowser` wire edildi, `migrate_json_to_duckdb.py` → `docs/arsiv/`
+- S1: ortak helper'lar (`services/identifiers.py` DOORS 3→1, `services/csv_export.py` CSV 2→1, `services/jira_helper.py` description 2→1)
 
-| Paket | Kapsam | Owned Files |
-|-------|--------|-------------|
-| **RM-1** | test-core izolasyon | `CucumberTestRunner.java`, `cucumber.properties`, `pom.xml` (test-core) |
-| **RM-2** | RunManager çekirdeği | `server.py` (run yönetimi bölümü), `models.py`, `db.py` |
-| **P4** | CSS design token altyapısı | `static/dashboard.css`, `static/admin.js` |
+### ✅ Wave 2 — Koşum Yönetimi Temeli (TAMAMLANDI — paralel session)
+- RM-1: pom.xml `<systemPropertyVariables>` ile `-Dallure.results.directory`/`-Dvideo.dir`/`-Dretry.state.dir`; VideoHook `-Dvideo.dir`
+- RM-2: per-run ingest (`allure_dir`), parallel==1 izolasyon, cancel kapalı-conn fix, status-ezme guard (`AND status != 'cancelled'`), `start_new_session`+`killpg`; tags regex gevşetildi; db.py `pid/last_output_at/exit_code` kolonları
+- P4: dashboard.css token'ları + admin.js
 
-### ⏳ Wave 3 — Paralel Modlar + UI (RM-1 + RM-2 tamamlanınca)
+### ✅ Wave 2-fix #6 — Koşum Yaşam Döngüsü (TAMAMLANDI)
+- 6A: pid/exit_code/heartbeat persist (`_persist_worker`)
+- 6B: `TEST_MAX_CONCURRENCY` + FIFO kuyruk (`queued`, `_dispatch_queued`, `_spawn_run` seam, jobs.browser)
+- 6C: duplicate-run 409 + `force`
+- 6D: orphan recovery (`interrupted` + lifespan, PID-reuse korumalı kill, `RUN_RECOVERY_ON_STARTUP`)
+- 6E: stall/hard timeout watchdog (`RUN_STALL_TIMEOUT`/`RUN_HARD_TIMEOUT`, `_terminate_proc` dedup)
+- 6F: WS `type:"state"` olayları
+- 133 pytest passed; yeni testler `tests/test_run_lifecycle.py`
+
+### ⏳ SIRADA — Sadeleştirme S2/S3 + UI + Paralel modlar
+**Kararlaştırılan sıra: UI (P5/P6/P7) → RM-3/RM-4. Sadeleştirme S2/S3 araya/öncesine.**
+- S2: şişman fonksiyon bölme (`_save_results_to_duckdb`, `generate_public_share`)
+- S3: `server.py` (2543 satır/51 route) monolith → `routes/` paketi (`deps.py` ile)
+- P5: Scenario detail sayfası · P6: runDetail.js · P7: Dashboard widget'ları + email fix
 - RM-3: Matrix paralel modlar (`workers:[{tags, browser?, environment?}]`)
-- P5: Scenario detail sayfası
-- P6: runDetail.js güncellemeleri
-- P7: Dashboard widget'ları + email fix
-- RM-4: Admin UI (kuyruk paneli, per-run durdur)
+- RM-4: Admin UI (kuyruk paneli, per-run durdur; `type:"state"` WS'i tüketir)
 
-### ⏳ Wave 4 — Taşınabilirlik (W3 sonrası)
-- P8 + RM-5: Başka Java projelerine bağlama, env dokümantasyonu
-
-### ⏳ Wave 5 — Agent Zemini (W4 sonrası)
-- P9: Failures endpoint + `docs/API.md`
+### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
+- P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`
 
 ---
 
