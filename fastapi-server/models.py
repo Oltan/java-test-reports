@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class StepResult(BaseModel):
@@ -90,6 +90,14 @@ class PublicReportSnapshot(BaseModel):
         )
 
 
+class WorkerSpec(BaseModel):
+    """One worker in a matrix run: its own tag filter, optionally its own
+    browser/environment (falling back to the job-level defaults)."""
+    tags: str = Field(pattern=r"^[@\w\s\-,()]+$", description="Cucumber tag filter")
+    browser: Optional[str] = Field(default=None, pattern=r"^(chrome|firefox|edge)$")
+    environment: Optional[str] = Field(default=None, pattern=r"^(staging|prod|dev)$")
+
+
 class TestRunOptions(BaseModel):
     tags: str = Field(
         default="@smoke",
@@ -104,3 +112,11 @@ class TestRunOptions(BaseModel):
     version: Optional[str] = None
     visibility: str = Field(default="internal", pattern=r"^(internal|public)$")
     force: bool = Field(default=False, description="Bypass the duplicate-run guard")
+    mode: str = Field(default="single", pattern=r"^(single|matrix)$")
+    workers: Optional[List[WorkerSpec]] = Field(default=None, description="Per-worker specs for matrix mode")
+
+    @model_validator(mode="after")
+    def _check_matrix(self):
+        if self.mode == "matrix" and not self.workers:
+            raise ValueError("matrix mode requires a non-empty 'workers' list")
+        return self

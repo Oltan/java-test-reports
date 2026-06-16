@@ -61,10 +61,17 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - admin.js: queued job'lar "Aktif Testler" panelinde görünür ve **iptal edilebilir** (önce sadece running iptal edilebiliyordu); "Test Geçmişi" yalnız terminal durumları (completed/failed/cancelled/interrupted) gösterir; queued/interrupted rozetleri zaten vardı (P4)
 - 136 pytest passed (yeni test: /api/tests/running queued dahil)
 
-### ⏳ SIRADA
-- RM-3: Matrix paralel modlar (`workers:[{tags, browser?, environment?}]`) — backend
-- (Opsiyonel) RM-4 canlı: `/ws/test-status/live` aboneliğiyle `type:"state"` olaylarını tüketip 5sn polling yerine anlık güncelleme
-- (Opsiyonel) P5 derin: attachment path'leri ingest'te doldur (schema + test gerekir); S3 (server.* deseniyle)
+### ✅ RM-3 — Matrix Paralel Modlar (TAMAMLANDI)
+- `TestRunOptions.mode` (`single`|`matrix`) + `workers:[{tags, browser?, environment?}]` (`WorkerSpec`); matrix workers boşsa 422
+- worker_runs'a per-worker `tags`/`browser`/`environment` kolonları → kuyruğa alınan matrix job doğru re-spawn olur
+- `_worker_specs()` (single=N kopya, matrix=worker başına) + `_worker_options()`; `start_tests` ve `_dispatch_queued` per-worker config kullanıyor; job satırı temsili `job_tags` ("@a | @b") tutar
+- 139 pytest passed (yeni: matrix persist, 422 validation, kuyruk per-worker re-spawn)
+
+### ⏳ SIRADA (opsiyonel iyileştirmeler)
+- RM-4 canlı: `/ws/test-status/live` aboneliğiyle `type:"state"` olaylarını tüketip 5sn polling yerine anlık güncelleme; admin'de matrix worker satırları + mode seçici
+- P5 derin: attachment path'leri ingest'te doldur (schema + test gerekir)
+- S3 router split (`server.*` referans deseniyle), `_save_results_to_duckdb` dekompozisyonu (önce karakterizasyon testi)
+- Shard modu (dry-run discovery ile feature-dosyası bazlı bölme) — matrix'in ikincil alternatifi
 
 ### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
 - P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`

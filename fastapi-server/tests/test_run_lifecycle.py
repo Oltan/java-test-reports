@@ -275,3 +275,68 @@ def test_running_endpoint_includes_queued_jobs(client, in_mem_db):
     assert jobs.get("job-run") == "running"
     assert jobs.get("job-q") == "queued"        # queued now visible in the panel
     assert resp.json()["running"] == ["job-run"]  # but only running in the running-id list
+
+
+# ── RM-3: matrix parallel modes ──────────────────────────────────────────────
+
+def test_matrix_mode_persists_per_worker_config(client, in_mem_db):
+    spawned = []
+    with _patched(in_mem_db, spawned, max_concurrency=1):
+        resp = client.post(
+            "/api/tests/start",
+            json={
+                "mode": "matrix",
+                "environment": "staging",
+                "workers": [
+                    {"tags": "@alpha"},
+                    {"tags": "@beta", "browser": "firefox", "environment": "prod"},
+                ],
+            },
+            headers=_auth(),
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["parallel"] == 2 and len(body["runs"]) == 2
+    rows = in_mem_db.execute(
+        "SELECT tags, browser, environment FROM worker_runs WHERE job_id = ? ORDER BY shard",
+        [body["job_id"]],
+    ).fetchall()
+    assert tuple(rows[0]) == ("@alpha", "chrome", "staging")   # browser/env fall back to job
+    assert tuple(rows[1]) == ("@beta", "firefox", "prod")      # per-worker overrides
+    assert set(body["runs"]) == set(spawned)                   # both workers run concurrently
+
+
+def test_matrix_requires_workers():
+    """mode=matrix without workers is a 422 (Pydantic validation)."""
+    import server as srv
+    from fastapi.testclient import TestClient
+    with TestClient(app) as c:
+        resp = c.post("/api/tests/start", json={"mode": "matrix"}, headers=_auth())
+    assert resp.status_code == 422
+
+
+def test_matrix_queued_job_respawns_per_worker_config(client, in_mem_db):
+    import server as srv
+    captured = []
+
+    def rec_spawn(run_id, options, output_dir):
+        captured.append((options.tags, options.browser))
+
+    with patch.object(srv, "get_connection", lambda read_only=False: in_mem_db), \
+         patch.object(srv, "_spawn_run", rec_spawn), \
+         patch.object(srv, "TEST_MAX_CONCURRENCY", 1):
+        _insert_worker(in_mem_db, job_id="job-busy", run_id="r-busy", status="running")
+        resp = client.post(
+            "/api/tests/start",
+            json={"mode": "matrix", "workers": [{"tags": "@x"}, {"tags": "@y", "browser": "edge"}]},
+            headers=_auth(),
+        )
+        assert resp.json()["status"] == "queued"
+        captured.clear()  # queued -> nothing spawned yet
+
+        in_mem_db.execute("UPDATE jobs SET status='completed' WHERE job_id='job-busy'")
+        in_mem_db.commit()
+        srv._dispatch_queued()
+
+    assert ("@x", "chrome") in captured
+    assert ("@y", "edge") in captured
