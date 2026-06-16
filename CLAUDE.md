@@ -56,9 +56,14 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - P7 dashboard: version-breakdown bar chart artık `version` filtresine uyuyor
 - 135 pytest passed (yeni testler: email gerçek-metrik, dashboard version filtresi)
 
-### ⏳ SIRADA — Paralel modlar (RM-3/RM-4)
-- RM-3: Matrix paralel modlar (`workers:[{tags, browser?, environment?}]`)
-- RM-4: Admin UI (kuyruk paneli, per-run durdur; `type:"state"` WS'i tüketir — #6'da hazır)
+### ✅ RM-4 — Admin Kuyruk Paneli (TAMAMLANDI)
+- `/api/tests/running` artık `queued` job'ları + job `status` alanını da dönüyor (running önce)
+- admin.js: queued job'lar "Aktif Testler" panelinde görünür ve **iptal edilebilir** (önce sadece running iptal edilebiliyordu); "Test Geçmişi" yalnız terminal durumları (completed/failed/cancelled/interrupted) gösterir; queued/interrupted rozetleri zaten vardı (P4)
+- 136 pytest passed (yeni test: /api/tests/running queued dahil)
+
+### ⏳ SIRADA
+- RM-3: Matrix paralel modlar (`workers:[{tags, browser?, environment?}]`) — backend
+- (Opsiyonel) RM-4 canlı: `/ws/test-status/live` aboneliğiyle `type:"state"` olaylarını tüketip 5sn polling yerine anlık güncelleme
 - (Opsiyonel) P5 derin: attachment path'leri ingest'te doldur (schema + test gerekir); S3 (server.* deseniyle)
 
 ### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini

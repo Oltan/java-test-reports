@@ -258,3 +258,20 @@ def test_start_broadcasts_initial_state(client, in_mem_db):
     assert r.status_code == 200
     states = [m for m in sent if m.get("type") == "state"]
     assert states and states[0]["status"] == "started" or states[0]["status"] == "running"
+
+
+# ── RM-4: queue panel — /api/tests/running surfaces queued jobs ───────────────
+
+def test_running_endpoint_includes_queued_jobs(client, in_mem_db):
+    import server as srv
+    _insert_worker(in_mem_db, job_id="job-run", run_id="r-run", status="running")
+    _insert_worker(in_mem_db, job_id="job-q", run_id="r-q", status="queued")
+
+    with patch.object(srv, "get_connection", lambda read_only=False: in_mem_db):
+        resp = client.get("/api/tests/running", headers=_auth())
+
+    assert resp.status_code == 200
+    jobs = {j["job_id"]: j["status"] for j in resp.json()["jobs"]}
+    assert jobs.get("job-run") == "running"
+    assert jobs.get("job-q") == "queued"        # queued now visible in the panel
+    assert resp.json()["running"] == ["job-run"]  # but only running in the running-id list

@@ -224,7 +224,7 @@ function renderJobCard(job, showCancel = false) {
     </div>`;
   }
 
-  const cancelBtn = showCancel && status === "running"
+  const cancelBtn = showCancel && (status === "running" || status === "queued")
     ? `<button class="cancel-btn" onclick="window.cancelJob('${job.job_id}')">İptal</button>`
     : "";
 
@@ -281,7 +281,8 @@ async function loadJobHistory() {
       container.innerHTML = '<div class="running-tests-empty">Henüz iş yok</div>';
       return;
     }
-    const completedJobs = data.jobs.filter(j => j.status !== "running");
+    const terminal = ["completed", "failed", "cancelled", "interrupted"];
+    const completedJobs = data.jobs.filter(j => terminal.includes(j.status));
     if (completedJobs.length === 0) {
       container.innerHTML = '<div class="running-tests-empty">Tamamlanmış iş yok</div>';
       return;

@@ -520,11 +520,11 @@ async def list_running_tests():
         rows = conn.execute(
             """
             SELECT j.job_id, j.tags, j.retry_count, j.parallel, j.environment, j.version, j.started_at,
-                   w.worker_id, w.run_id, w.shard, w.status as worker_status, w.output_dir
+                   w.worker_id, w.run_id, w.shard, w.status as worker_status, w.output_dir, j.status
             FROM jobs j
             JOIN worker_runs w ON j.job_id = w.job_id
-            WHERE j.status = 'running'
-            ORDER BY j.started_at DESC
+            WHERE j.status IN ('running', 'queued')
+            ORDER BY j.status DESC, j.started_at DESC
             """
         ).fetchall()
     if not rows:
@@ -541,6 +541,7 @@ async def list_running_tests():
                 "environment": row[4],
                 "version": row[5],
                 "started_at": row[6].isoformat() if row[6] else None,
+                "status": row[12],
                 "workers": [],
             }
         jobs_map[job_id]["workers"].append({
@@ -551,7 +552,8 @@ async def list_running_tests():
             "output_dir": row[11],
         })
     jobs = list(jobs_map.values())
-    return {"running": list(jobs_map.keys()), "jobs": jobs, "count": len(jobs)}
+    running_ids = [jid for jid, j in jobs_map.items() if j["status"] == "running"]
+    return {"running": running_ids, "jobs": jobs, "count": len(jobs)}
 
 
 @app.get("/api/tests/jobs", dependencies=[Depends(verify_token)])
