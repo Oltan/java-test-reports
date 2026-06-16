@@ -994,8 +994,6 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     grouped: dict[str, list[dict]] = {}
     all_scenarios = []
 
-    DEP_TAG_RE = re.compile(r"@dep:(.+)", re.IGNORECASE)
-
     if effective_allure_dir.exists():
         all_parsed = []
         for result_file in sorted(effective_allure_dir.glob("*-result.json")):
@@ -1428,6 +1426,83 @@ class GenerateShareRequest(BaseModel):
     title: str = "Public Report"
 
 
+# Shared SELECT for public-share scenario rows; {where} is a fixed literal clause.
+_SHARE_ROW_SELECT = """
+    SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
+           sr.error_message, sd.current_name,
+           COALESCE(sr.doors_number_at_run, sd.doors_number) AS doors_number,
+           COALESCE(
+               sr.jira_key_at_run,
+               (SELECT jm.jira_key FROM jira_mappings jm WHERE jm.scenario_uid = sr.scenario_uid LIMIT 1),
+               (SELECT bm.jira_key FROM bug_mappings bm WHERE bm.doors_number = COALESCE(sr.doors_number_at_run, sd.doors_number) LIMIT 1)
+           ) AS jira_key,
+           r.version,
+           sr.run_id
+    FROM scenario_results sr
+    LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
+    LEFT JOIN runs r ON sr.run_id = r.id
+    WHERE {where}
+    LIMIT 1
+"""
+
+
+def _share_blockers(conn, parsed) -> list[dict]:
+    """Return untriaged-failure blockers for the selected scenarios. A failed
+    scenario blocks public sharing unless it has a Jira link or an override."""
+    blockers = []
+    for run_id, scenario_uid, manifest_status in parsed:
+        # Trust the manifest status when it was encoded in the compound ID.
+        if manifest_status and manifest_status.upper() not in {"FAILED", "BROKEN"}:
+            continue
+        if run_id:
+            status_row = conn.execute(
+                "SELECT status FROM scenario_results WHERE run_id = ? AND scenario_uid = ? LIMIT 1",
+                [run_id, scenario_uid],
+            ).fetchone()
+        else:
+            status_row = conn.execute(
+                "SELECT status FROM scenario_results WHERE scenario_uid = ? LIMIT 1",
+                [scenario_uid],
+            ).fetchone()
+        if not status_row or status_row[0] not in {"FAILED", "BROKEN"}:
+            continue
+        triage_row = conn.execute(
+            "SELECT decision FROM triage_decisions WHERE scenario_uid = ? LIMIT 1",
+            [scenario_uid],
+        ).fetchone()
+        if not triage_row:
+            blockers.append({
+                "scenario_id": scenario_uid,
+                "reason": "No triage decision — must be linked to Jira or accepted via override",
+            })
+        elif triage_row[0] not in {"jira_linked", "jira_created", "accepted_pass", "accepted_skip"}:
+            blockers.append({
+                "scenario_id": scenario_uid,
+                "reason": f"Triage decision is '{triage_row[0]}' — must be Jira-linked or overridden",
+            })
+    return blockers
+
+
+def _fetch_share_rows(conn, parsed) -> list:
+    """Fetch the joined scenario row for each selected id (run-scoped when the
+    compound id carries a run_id, else the latest across runs)."""
+    rows = []
+    for run_id, scenario_uid, _ in parsed:
+        if run_id:
+            row = conn.execute(
+                _SHARE_ROW_SELECT.format(where="sr.run_id = ? AND sr.scenario_uid = ?"),
+                [run_id, scenario_uid],
+            ).fetchone()
+        else:
+            row = conn.execute(
+                _SHARE_ROW_SELECT.format(where="sr.scenario_uid = ?"),
+                [scenario_uid],
+            ).fetchone()
+        if row:
+            rows.append(row)
+    return rows
+
+
 @app.post("/api/reports/generate-share", dependencies=[Depends(verify_token)])
 async def generate_public_share(req: GenerateShareRequest):
     """Create a public snapshot for selected scenario IDs (engineer-only).
@@ -1451,44 +1526,8 @@ async def generate_public_share(req: GenerateShareRequest):
             return None, raw, None
 
         parsed = [_parse_id(sid) for sid in req.scenario_ids]
-        scenario_uids = [uid for _, uid, _ in parsed]
 
-        blockers = []
-        for run_id, scenario_uid, manifest_status in parsed:
-            # Trust the manifest status when it was encoded in the compound ID.
-            if manifest_status and manifest_status.upper() not in {"FAILED", "BROKEN"}:
-                continue  # passed / skipped — no triage needed
-
-            # No manifest status: query DB to determine status.
-            if run_id:
-                status_row = conn.execute(
-                    "SELECT status FROM scenario_results WHERE run_id = ? AND scenario_uid = ? LIMIT 1",
-                    [run_id, scenario_uid],
-                ).fetchone()
-            else:
-                status_row = conn.execute(
-                    "SELECT status FROM scenario_results WHERE scenario_uid = ? LIMIT 1",
-                    [scenario_uid],
-                ).fetchone()
-
-            if not status_row or status_row[0] not in {"FAILED", "BROKEN"}:
-                continue  # passed / skipped — no triage needed
-
-            # Failed instance: check for triage decision
-            triage_row = conn.execute(
-                "SELECT decision FROM triage_decisions WHERE scenario_uid = ? LIMIT 1",
-                [scenario_uid],
-            ).fetchone()
-            if not triage_row:
-                blockers.append({
-                    "scenario_id": scenario_uid,
-                    "reason": "No triage decision — must be linked to Jira or accepted via override",
-                })
-            elif triage_row[0] not in {"jira_linked", "jira_created", "accepted_pass", "accepted_skip"}:
-                blockers.append({
-                    "scenario_id": scenario_uid,
-                    "reason": f"Triage decision is '{triage_row[0]}' — must be Jira-linked or overridden",
-                })
+        blockers = _share_blockers(conn, parsed)
 
         if blockers:
             raise HTTPException(
@@ -1499,46 +1538,7 @@ async def generate_public_share(req: GenerateShareRequest):
                 },
             )
 
-        scenario_rows = []
-        for run_id, scenario_uid, _ in parsed:
-            if run_id:
-                row = conn.execute("""
-                    SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
-                           sr.error_message, sd.current_name,
-                           COALESCE(sr.doors_number_at_run, sd.doors_number) AS doors_number,
-                           COALESCE(
-                               sr.jira_key_at_run,
-                               (SELECT jm.jira_key FROM jira_mappings jm WHERE jm.scenario_uid = sr.scenario_uid LIMIT 1),
-                               (SELECT bm.jira_key FROM bug_mappings bm WHERE bm.doors_number = COALESCE(sr.doors_number_at_run, sd.doors_number) LIMIT 1)
-                           ) AS jira_key,
-                           r.version,
-                           sr.run_id
-                    FROM scenario_results sr
-                    LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
-                    LEFT JOIN runs r ON sr.run_id = r.id
-                    WHERE sr.run_id = ? AND sr.scenario_uid = ?
-                    LIMIT 1
-                """, [run_id, scenario_uid]).fetchone()
-            else:
-                row = conn.execute("""
-                    SELECT sr.scenario_uid, sr.name_at_run, sr.status, sr.duration_seconds,
-                           sr.error_message, sd.current_name,
-                           COALESCE(sr.doors_number_at_run, sd.doors_number) AS doors_number,
-                           COALESCE(
-                               sr.jira_key_at_run,
-                               (SELECT jm.jira_key FROM jira_mappings jm WHERE jm.scenario_uid = sr.scenario_uid LIMIT 1),
-                               (SELECT bm.jira_key FROM bug_mappings bm WHERE bm.doors_number = COALESCE(sr.doors_number_at_run, sd.doors_number) LIMIT 1)
-                           ) AS jira_key,
-                           r.version,
-                           sr.run_id
-                    FROM scenario_results sr
-                    LEFT JOIN scenario_definitions sd ON sr.scenario_uid = sd.scenario_uid
-                    LEFT JOIN runs r ON sr.run_id = r.id
-                    WHERE sr.scenario_uid = ?
-                    LIMIT 1
-                """, [scenario_uid]).fetchone()
-            if row:
-                scenario_rows.append(row)
+        scenario_rows = _fetch_share_rows(conn, parsed)
 
         scenarios_internal = []
         csv_rows = []
