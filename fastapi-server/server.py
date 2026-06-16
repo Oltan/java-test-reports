@@ -2364,14 +2364,6 @@ class LinkJiraRequest(BaseModel):
     jira_key: str
 
 
-@app.post("/api/doors/run", dependencies=[Depends(verify_token)])
-async def doors_run(req: DoorsRunRequest):
-    if not is_doors_available():
-        return {"status": "unavailable", "message": "DOORS not installed"}
-    code, out, err = run_doors_dxl(req.script)
-    return {"status": "success" if code == 0 else "failed", "stdout": out, "stderr": err}
-
-
 def _run_email_context(run_id: str) -> dict:
     """Build the test_report.html email context for a run.
 
@@ -2406,87 +2398,6 @@ def _run_email_context(run_id: str) -> dict:
         "started_at": started_at,
         "dashboard_url": f"http://localhost:8000/reports/{run_id}",
     }
-
-
-@app.post("/api/email/send", dependencies=[Depends(verify_token)])
-async def email_send(to: str, run_id: str):
-    context = _run_email_context(run_id)
-    try:
-        send_email(to, f"Test Raporu - {run_id}", "test_report.html", context)
-        return {"sent": True}
-    except Exception as e:
-        return {"sent": False, "error": str(e)}
-
-
-@app.post("/api/doors/share/{share_id}", dependencies=[Depends(verify_token)])
-async def doors_share_export(share_id: str):
-    """Engineer-only: DOORS export for a public share snapshot."""
-    conn = get_connection(read_only=True)
-    try:
-        row = conn.execute(
-            "SELECT snapshot_data FROM public_snapshots WHERE share_id = ? AND status = 'active'",
-            [share_id],
-        ).fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Snapshot not found")
-        import json as _json
-        snapshot = _json.loads(row[0])
-
-        # Build DXL script content from snapshot data
-        scenario_list = snapshot.get("scenario_list", [])
-        scenario_names = [s.get("name", "") for s in scenario_list if s.get("name")]
-        scenario_block = "\n".join(f'  "{name}"' for name in scenario_names if name)
-
-        dxl_script = f"""// DOORS export for public share {share_id}
-// Scenarios: {len(scenario_list)}
-string[] scenarios = {{{scenario_block}
-}};
-print("DOORS share export: " + str(scenario_list.length()) + " scenarios\\n");
-"""
-        if not is_doors_available():
-            conn.close()
-            return {"status": "unavailable", "message": "DOORS not installed"}
-        code, out, err = run_doors_dxl(dxl_script)
-        conn.close()
-        return {"status": "success" if code == 0 else "failed", "stdout": out, "stderr": err}
-    except HTTPException:
-        raise
-    except Exception:
-        conn.close()
-        raise HTTPException(status_code=500, detail="DOORS export failed")
-
-
-@app.post("/api/email/share/{share_id}", dependencies=[Depends(verify_token)])
-async def email_share_send(share_id: str, to: str):
-    """Engineer-only: send email with public share link /public/reports/{share_id}."""
-    conn = get_connection(read_only=True)
-    try:
-        row = conn.execute(
-            "SELECT snapshot_data FROM public_snapshots WHERE share_id = ? AND status = 'active'",
-            [share_id],
-        ).fetchone()
-        if not row:
-            conn.close()
-            raise HTTPException(status_code=404, detail="Snapshot not found")
-        import json as _json
-        snapshot = _json.loads(row[0])
-        run_summary = snapshot.get("run_summary", {})
-        context = {
-            "total": run_summary.get("total_scenarios", 0),
-            "passed": run_summary.get("passed", 0),
-            "failed": run_summary.get("failed", 0),
-            "skipped": run_summary.get("skipped", 0),
-            "started_at": snapshot.get("generated_timestamp", ""),
-            "dashboard_url": f"/public/reports/{share_id}",
-        }
-        send_email(to, f"Test Raporu - {share_id}", "test_report.html", context)
-        return {"sent": True}
-    except HTTPException:
-        conn.close()
-        raise
-    except Exception as e:
-        conn.close()
-        return {"sent": False, "error": str(e)}
 
 
 @app.get("/api/triage/{run_id}", response_model=TriageStateResponse, dependencies=[Depends(verify_token)])
@@ -2807,4 +2718,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # shared symbol above is defined, so each module's `import server` + server.X
 # references resolve with no import cycle.
 from routes.bugs import router as bugs_router  # noqa: E402
+from routes.integrations import router as integrations_router  # noqa: E402
 app.include_router(bugs_router)
+app.include_router(integrations_router)
