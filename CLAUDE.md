@@ -43,13 +43,23 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - 6F: WS `type:"state"` olayları
 - 133 pytest passed; yeni testler `tests/test_run_lifecycle.py`
 
-### ⏳ SIRADA — Sadeleştirme S2/S3 + UI + Paralel modlar
-**Kararlaştırılan sıra: UI (P5/P6/P7) → RM-3/RM-4. Sadeleştirme S2/S3 araya/öncesine.**
-- S2: şişman fonksiyon bölme (`_save_results_to_duckdb`, `generate_public_share`)
-- S3: `server.py` (2543 satır/51 route) monolith → `routes/` paketi (`deps.py` ile)
-- P5: Scenario detail sayfası · P6: runDetail.js · P7: Dashboard widget'ları + email fix
+### ✅ Sadeleştirme S2 (TAMAMLANDI)
+- `generate_public_share` bölündü: `_share_blockers()` + `_fetch_share_rows()` (iki near-identical SELECT → tek `_SHARE_ROW_SELECT`); ölü `scenario_uids` ve `DEP_TAG_RE` kaldırıldı
+- `_save_results_to_duckdb` dekompozisyonu ERTELENDİ: doğrudan test kapsamı yok → önce karakterizasyon testi gerekir
+
+### ⏸️ Sadeleştirme S3 (ERTELENDİ — çapa testi kısıtı)
+- `server.py` (2600+ satır/51 route) → `routes/` paketi. Çapa testleri (`test_integration_workflow`, `test_auth_boundaries` — değiştirilemez) `server.get_connection`/`execute_test_run`/`send_email`'i monkeypatch'liyor. Temiz `deps.py` split bu patch yüzeyini kırar. Tek uyumlu yol: router'lar `server.X` üzerinden erişir (büyük/çirkin diff). Kullanıcı kararı: ertele.
+
+### ✅ UI — P5/P6/P7 (TAMAMLANDI)
+- P5/P6: run-detail senaryo kartları artık scenario-detail sayfasına linkli (`scard(scenario, run_id)` makro + `/reports/{run_id}/scenario/{id}`)
+- P7 email fix: `email_send` hardcoded sıfırlar yerine gerçek metrikleri çekiyor (`_run_email_context`: DB→manifest→sıfır)
+- P7 dashboard: version-breakdown bar chart artık `version` filtresine uyuyor
+- 135 pytest passed (yeni testler: email gerçek-metrik, dashboard version filtresi)
+
+### ⏳ SIRADA — Paralel modlar (RM-3/RM-4)
 - RM-3: Matrix paralel modlar (`workers:[{tags, browser?, environment?}]`)
-- RM-4: Admin UI (kuyruk paneli, per-run durdur; `type:"state"` WS'i tüketir)
+- RM-4: Admin UI (kuyruk paneli, per-run durdur; `type:"state"` WS'i tüketir — #6'da hazır)
+- (Opsiyonel) P5 derin: attachment path'leri ingest'te doldur (schema + test gerekir); S3 (server.* deseniyle)
 
 ### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
 - P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`

@@ -2068,6 +2068,9 @@ async def dashboard_metrics(
             "SUM(skipped) as skipped FROM runs WHERE version IS NOT NULL"
         )
         v_params: list = []
+        if version:
+            version_query += " AND version = ?"
+            v_params.append(version)
         if start:
             version_query += " AND started_at >= ?"
             v_params.append(start)
@@ -2372,16 +2375,45 @@ async def doors_run(req: DoorsRunRequest):
     return {"status": "success" if code == 0 else "failed", "stdout": out, "stderr": err}
 
 
-@app.post("/api/email/send", dependencies=[Depends(verify_token)])
-async def email_send(to: str, run_id: str):
-    context = {
-        "total": 0,
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0,
-        "started_at": "",
+def _run_email_context(run_id: str) -> dict:
+    """Build the test_report.html email context for a run.
+
+    Pulls real totals from the DuckDB ``runs`` row, falling back to the run
+    manifest, then to zeros — so the email always sends (the previous code
+    hardcoded zeros, producing a meaningless 0/0 report)."""
+    total = passed = failed = skipped = 0
+    started_at = ""
+    try:
+        with get_connection(read_only=True) as conn:
+            row = conn.execute(
+                "SELECT total_scenarios, passed, failed, skipped, started_at FROM runs WHERE id = ?",
+                [run_id],
+            ).fetchone()
+        if row:
+            total, passed, failed, skipped = row[0] or 0, row[1] or 0, row[2] or 0, row[3] or 0
+            started_at = row[4].isoformat() if row[4] else ""
+        else:
+            manifest = next((m for m in load_manifests() if m.runId == run_id), None)
+            if manifest:
+                total, passed, failed, skipped = (
+                    manifest.totalScenarios, manifest.passed, manifest.failed, manifest.skipped,
+                )
+                started_at = manifest.timestamp.isoformat() if manifest.timestamp else ""
+    except Exception:
+        pass
+    return {
+        "total": total,
+        "passed": passed,
+        "failed": failed,
+        "skipped": skipped,
+        "started_at": started_at,
         "dashboard_url": f"http://localhost:8000/reports/{run_id}",
     }
+
+
+@app.post("/api/email/send", dependencies=[Depends(verify_token)])
+async def email_send(to: str, run_id: str):
+    context = _run_email_context(run_id)
     try:
         send_email(to, f"Test Raporu - {run_id}", "test_report.html", context)
         return {"sent": True}
