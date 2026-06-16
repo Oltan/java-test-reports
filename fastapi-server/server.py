@@ -1343,124 +1343,6 @@ async def ws_test_run(websocket: WebSocket, run_id: str, token: str = Query(...)
         ws_manager.disconnect(run_id, websocket)
 
 
-@app.get("/api/v1/runs", response_model=List[RunManifest])
-def list_runs(version: Optional[str] = None):
-    manifests = load_manifests()
-    # Enrich manifests that lack a version with DuckDB data
-    needs_version = [m for m in manifests if not m.version]
-    if needs_version:
-        conn = get_connection(read_only=False)
-        db_versions = {r[0]: r[1] for r in conn.execute(
-            "SELECT id, version FROM runs WHERE id = ANY(?)",
-            [[m.runId for m in needs_version]],
-        ).fetchall()}
-        conn.close()
-        for m in needs_version:
-            if m.runId in db_versions and db_versions[m.runId]:
-                m.version = db_versions[m.runId]
-    if version:
-        manifests = [m for m in manifests if m.version == version]
-    manifests.sort(key=lambda m: str(m.timestamp), reverse=True)
-    return manifests
-
-
-@app.get("/api/v1/runs/{run_id}", response_model=RunManifest)
-def get_run(run_id: str):
-    manifests = load_manifests()
-    for m in manifests:
-        if m.runId == run_id:
-            return m
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Run '{run_id}' not found",
-    )
-
-
-@app.get("/api/v1/runs/{run_id}/failures", response_model=List[ScenarioResult])
-def get_run_failures(run_id: str):
-    manifests = load_manifests()
-    for m in manifests:
-        if m.runId == run_id:
-            return [s for s in m.scenarios if s.status in ("failed", "broken")]
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Run '{run_id}' not found",
-    )
-
-
-@app.get("/api/v1/runs/{run_id}/bug-status", response_model=List)
-def get_bug_statuses(run_id: str):
-    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
-    if not manifest_path.exists():
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    manifest = json.loads(manifest_path.read_text())
-    results = []
-    for s in manifest.get("scenarios", []):
-        doors = s.get("doorsAbsNumber")
-        result = {
-            "scenarioId": s.get("id", ""),
-            "doorsAbsNumber": doors,
-            "isReported": False,
-        }
-        if doors:
-            bug = tracker.get(doors)
-            if bug:
-                result["jiraKey"] = bug.get("jiraKey")
-                result["jiraUrl"] = jira_client.issue_url(bug["jiraKey"]) if jira_client.is_configured() else None
-                result["status"] = bug.get("status")
-                result["isReported"] = True
-        results.append(result)
-    return results
-
-
-class RenameRequest(BaseModel):
-    displayName: str
-
-
-@app.patch("/api/v1/runs/{run_id}", response_model=dict, dependencies=[Depends(verify_token)])
-def rename_run(run_id: str, req: RenameRequest, _: TokenData = Depends(verify_token)):
-    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
-    if not manifest_path.exists():
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    aliases = _load_aliases()
-    aliases[run_id] = req.displayName
-    _save_aliases(aliases)
-    return {"runId": run_id, "displayName": req.displayName}
-
-
-@app.get("/api/scenario-history", dependencies=[Depends(verify_token)])
-def list_scenario_history():
-    conn = get_connection(read_only=True)
-    try:
-        init_schema(conn)
-        return get_scenario_history(conn)
-    finally:
-        conn.close()
-
-
-@app.get("/api/scenario-history/{doors_number}", dependencies=[Depends(verify_token)])
-def get_scenario_history_item(doors_number: str):
-    conn = get_connection(read_only=True)
-    try:
-        init_schema(conn)
-        result = get_scenario_history(conn, doors_number)
-        if not result:
-            raise HTTPException(status_code=404, detail=f"DOORS number '{doors_number}' not found")
-        return result
-    finally:
-        conn.close()
-
-
-@app.get("/api/scenario-matrix", dependencies=[Depends(verify_token)])
-def list_scenario_matrix(limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)):
-    conn = get_connection(read_only=True)
-    try:
-        init_schema(conn)
-        return get_scenario_matrix(conn, limit, offset)
-    finally:
-        conn.close()
-
-
 @app.get("/api/reports/merge-data", dependencies=[Depends(verify_token)])
 async def reports_merge_data(run_ids: str = ""):
     """Return merged scenario data for selected run IDs (comma-separated)."""
@@ -2719,5 +2601,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # references resolve with no import cycle.
 from routes.bugs import router as bugs_router  # noqa: E402
 from routes.integrations import router as integrations_router  # noqa: E402
+from routes.runs import router as runs_router  # noqa: E402
 app.include_router(bugs_router)
 app.include_router(integrations_router)
+app.include_router(runs_router)
