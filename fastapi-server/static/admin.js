@@ -162,17 +162,73 @@ function connectTestRunWebSocket(runId) {
   };
 }
 
+function addWorkerRow(tags = "", browser = "") {
+  const rows = $("matrix-rows");
+  if (!rows) return;
+  const row = document.createElement("div");
+  row.className = "matrix-worker-row";
+  row.style.cssText = "display:flex;gap:8px;align-items:center;margin-bottom:6px;";
+  const sel = (b) => browser === b ? " selected" : "";
+  row.innerHTML = `
+    <input type="text" class="mw-tags" placeholder="@tag (örn. @login)" value="${tags}" style="flex:1;">
+    <select class="mw-browser">
+      <option value="">browser?</option>
+      <option value="chrome"${sel("chrome")}>chrome</option>
+      <option value="firefox"${sel("firefox")}>firefox</option>
+      <option value="edge"${sel("edge")}>edge</option>
+    </select>
+    <button type="button" class="btn mw-remove" style="font-size:12px;padding:4px 10px;">×</button>`;
+  row.querySelector(".mw-remove").addEventListener("click", () => row.remove());
+  rows.appendChild(row);
+}
+
+function collectWorkers() {
+  return Array.from(document.querySelectorAll("#matrix-rows .matrix-worker-row"))
+    .map((r) => {
+      const tags = r.querySelector(".mw-tags").value.trim();
+      if (!tags) return null;
+      const browser = r.querySelector(".mw-browser").value;
+      return browser ? { tags, browser } : { tags };
+    })
+    .filter(Boolean);
+}
+
+function applyMode() {
+  const matrix = $("test-mode")?.value === "matrix";
+  if ($("row-tags")) $("row-tags").style.display = matrix ? "none" : "";
+  if ($("field-parallel")) $("field-parallel").style.display = matrix ? "none" : "";
+  if ($("matrix-section")) $("matrix-section").style.display = matrix ? "block" : "none";
+  if (matrix && $("matrix-rows") && $("matrix-rows").children.length === 0) {
+    addWorkerRow("@smoke");
+  }
+}
+
 async function startTestRun() {
-  const tags = $("test-tags")?.value || "@smoke";
+  const mode = $("test-mode")?.value || "single";
   const retry = parseInt($("test-retry")?.value || "0");
-  const parallel = parseInt($("test-parallel")?.value || "1");
   const environment = $("test-env")?.value || "staging";
   const version = $("test-version")?.value || undefined;
   const msg = $("test-status-msg");
   try {
     msg.textContent = "Başlatılıyor…";
     msg.className = "admin-status-msg admin-status--pending";
-    const body = { tags, retry_count: retry, parallel, environment };
+    let body;
+    if (mode === "matrix") {
+      const workers = collectWorkers();
+      if (workers.length === 0) {
+        msg.textContent = "Matrix modunda en az bir worker (tag) gerekli.";
+        msg.className = "admin-status-msg admin-status--error";
+        return;
+      }
+      body = { mode: "matrix", workers, retry_count: retry, environment };
+    } else {
+      body = {
+        tags: $("test-tags")?.value || "@smoke",
+        retry_count: retry,
+        parallel: parseInt($("test-parallel")?.value || "1"),
+        environment,
+      };
+    }
     if (version) body.version = version;
     const data = await apiFetch("/api/tests/start", {
       method: "POST",
@@ -434,6 +490,8 @@ window.deleteRun = deleteRun;
   $("login-form")?.addEventListener("submit", handleLogin);
   $("logout-btn")?.addEventListener("click", handleLogout);
   $("start-test-btn")?.addEventListener("click", startTestRun);
+  $("test-mode")?.addEventListener("change", applyMode);
+  $("add-worker-btn")?.addEventListener("click", () => addWorkerRow());
   $("pipeline-btn")?.addEventListener("click", triggerPipeline);
   $("delete-all-btn")?.addEventListener("click", deleteAllRuns);
   initThemeToggle();

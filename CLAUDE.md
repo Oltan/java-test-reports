@@ -72,8 +72,12 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - **Bug fix:** `ConnectionManager.broadcast` erken `return` yüzünden per-run abonesi olmayan run'larda "live" mirror'a hiç ulaşmıyordu (live mirror ölü koddu) → düzeltildi; canlı + birim test ile doğrulandı
 - 140 pytest passed; canlı uçtan uca smoke (kuyruk/matrix/dispatch/cancel/WS) geçti
 
+### ✅ Admin matrix gönderim UI (TAMAMLANDI)
+- admin.html: `test-mode` seçici (single/matrix) + dinamik worker satırları (`matrix-rows`, "Worker ekle"/sil), single alanları (tags/parallel) matrix'te gizleniyor
+- admin.js: `addWorkerRow`/`collectWorkers`/`applyMode`; `startTestRun` matrix'te `{mode:"matrix", workers:[{tags, browser?}]}` gönderiyor
+- Doğrulama: `node --check` JS syntax OK, admin.html tüm kontrollerle render oluyor; matrix backend'i ayrıca canlı doğrulanmıştı. NOT: form'un tarayıcı-içi tıklama akışı (mod geçişi/satır ekleme) tarayıcısız ortamda otomatik test edilmedi (cache-buster v7)
+
 ### ⏳ SIRADA (opsiyonel iyileştirmeler)
-- Admin'de matrix gönderim UI (mode seçici + dinamik worker satırları) — backend hazır, sadece form
 - P5 derin: attachment path'leri ingest'te doldur (schema + test gerekir)
 - S3 router split (`server.*` referans deseniyle), `_save_results_to_duckdb` dekompozisyonu (önce karakterizasyon testi)
 - Shard modu (dry-run discovery ile feature-dosyası bazlı bölme) — matrix'in ikincil alternatifi
