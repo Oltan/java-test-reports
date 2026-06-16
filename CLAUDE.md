@@ -77,10 +77,16 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - admin.js: `addWorkerRow`/`collectWorkers`/`applyMode`; `startTestRun` matrix'te `{mode:"matrix", workers:[{tags, browser?}]}` gönderiyor
 - Doğrulama: `node --check` JS syntax OK, admin.html tüm kontrollerle render oluyor; matrix backend'i ayrıca canlı doğrulanmıştı. NOT: form'un tarayıcı-içi tıklama akışı (mod geçişi/satır ekleme) tarayıcısız ortamda otomatik test edilmedi (cache-buster v7)
 
-### ⏳ SIRADA (opsiyonel iyileştirmeler)
-- P5 derin: attachment path'leri ingest'te doldur (schema + test gerekir)
-- S3 router split (`server.*` referans deseniyle), `_save_results_to_duckdb` dekompozisyonu (önce karakterizasyon testi)
-- Shard modu (dry-run discovery ile feature-dosyası bazlı bölme) — matrix'in ikincil alternatifi
+### ✅ P5 derin — Attachment'lar (TAMAMLANDI)
+- `_parse_allure_result` artık attachment'ları (screenshot/video, test+step seviyesi) çıkarıyor + screenshot/video source'ları türetiyor
+- `_save_results_to_duckdb`: `_copy_run_attachment` ile dosyaları `MANIFESTS_DIR/{run_id}/`'e kopyalıyor (mevcut `/reports/{path}` route'u sunar), `scenario_results.screenshot_path`/`video_path` dolduruluyor; manifest `attachments` izinli tiplere (image/png, video/mp4, text/plain) filtreli — `load_manifests` validation kırılmıyor
+- scenario-detail.html gerçek `/reports/{path}` img/video gösteriyor (placeholder SVG'ler kalktı)
+- **Karakterizasyon testleri** eklendi (`tests/test_attachments_ingest.py`) — `_save_results_to_duckdb` artık ilk kez test kapsamında. 143 pytest passed
+
+### ⏳ SIRADA (kalan — özel durumlu)
+- S3 router split: ÇAPA testi kısıtı (sadece `server.*` deseniyle, büyük diff) — kullanıcı kararıyla ertelenmişti
+- Shard modu: dry-run discovery + gerçek Maven gerektirir → bu ortamda doğrulanamaz
+- `_save_results_to_duckdb` dekompozisyonu: artık karakterizasyon testi VAR → güvenle bölünebilir
 
 ### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
 - P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`

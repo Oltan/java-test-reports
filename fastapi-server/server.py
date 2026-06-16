@@ -969,6 +969,31 @@ def _parse_allure_result(result_file: Path) -> dict | None:
             "errorMessage": step_error or None,
         })
 
+    # Collect attachments from the test and its steps (screenshots, videos).
+    attachments: list[dict] = []
+
+    def _collect_atts(node):
+        for a in (node.get("attachments") or []):
+            if isinstance(a, dict) and a.get("source"):
+                attachments.append({
+                    "name": a.get("name") or a["source"],
+                    "type": a.get("type") or "",
+                    "source": a["source"],
+                })
+        for st in (node.get("steps") or []):
+            _collect_atts(st)
+
+    _collect_atts(data)
+
+    def _first_source(*, image: bool) -> str | None:
+        for a in attachments:
+            t, src = a["type"].lower(), a["source"].lower()
+            if image and ("image" in t or src.endswith((".png", ".jpg", ".jpeg"))):
+                return a["source"]
+            if not image and ("video" in t or src.endswith(".mp4")):
+                return a["source"]
+        return None
+
     return {
         "identity_key": identity_key,
         "name": name,
@@ -983,8 +1008,28 @@ def _parse_allure_result(result_file: Path) -> dict | None:
         "retry_attempt": retry_attempt,
         "attempt": attempt,
         "steps": steps,
+        "attachments": attachments,
+        "screenshot_source": _first_source(image=True),
+        "video_source": _first_source(image=False),
         "start_ts_ms": start_ts or 0,
     }
+
+
+def _copy_run_attachment(allure_dir: Path, run_id: str, source: str | None) -> str | None:
+    """Copy an Allure attachment into MANIFESTS_DIR/{run_id}/ and return its path
+    relative to MANIFESTS_DIR (servable via /reports/{path}). None if missing."""
+    if not source:
+        return None
+    src = allure_dir / source
+    if not src.exists():
+        return None
+    dest_dir = MANIFESTS_DIR / run_id
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest_dir / source)
+    except OSError:
+        return None
+    return f"{run_id}/{source}"
 
 
 def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: datetime | None = None, allure_dir: str | None = None) -> dict:
@@ -1060,6 +1105,18 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
 
         scenario_uid = hashlib.sha256(str(key).encode()).hexdigest()[:32]
 
+        # Copy this scenario's attachment files once; build servable paths.
+        att_paths: dict[str, str | None] = {}
+        atts = []
+        for a in final.get("attachments", []):
+            src = a["source"]
+            if src not in att_paths:
+                att_paths[src] = _copy_run_attachment(effective_allure_dir, run_id, src)
+            if att_paths[src]:
+                atts.append({"name": a["name"], "type": a["type"], "path": att_paths[src]})
+        screenshot_path = att_paths.get(final.get("screenshot_source"))
+        video_path = att_paths.get(final.get("video_source"))
+
         scenario_map[key] = {
             "uid": scenario_uid,
             "identity_key": key,
@@ -1076,6 +1133,9 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
             "attempt_list": attempt_list,
             "total_attempts": len(attempts_sorted),
             "steps": final["steps"],
+            "screenshot_path": screenshot_path,
+            "video_path": video_path,
+            "attachments": atts,
         }
         all_scenarios.append(scenario_map[key])
 
@@ -1133,10 +1193,10 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
             conn.execute(
                 """
                 INSERT INTO scenario_results
-                (run_id, scenario_uid, name_at_run, status, duration_seconds, error_message, feature_file_at_run, doors_number_at_run, retry_attempt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (run_id, scenario_uid, name_at_run, status, duration_seconds, error_message, feature_file_at_run, doors_number_at_run, retry_attempt, screenshot_path, video_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                [run_id, s["uid"], s["name"], s["status"], s["duration"], s["error"], s["feature_file"], s["doors_id"], s["total_attempts"]],
+                [run_id, s["uid"], s["name"], s["status"], s["duration"], s["error"], s["feature_file"], s["doors_id"], s["total_attempts"], s.get("screenshot_path"), s.get("video_path")],
             )
             if s.get("doors_id"):
                 upsert_scenario_history(
@@ -1181,7 +1241,12 @@ def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, 
                 "doorsAbsNumber": s.get("doors_id"),
                 "tags": s.get("tags", []),
                 "steps": s.get("steps", []),
-                "attachments": [],
+                # Only types allowed by the Attachment model, else load_manifests
+                # would fail validation for the whole run.
+                "attachments": [
+                    a for a in s.get("attachments", [])
+                    if a.get("type") in ("image/png", "video/mp4", "text/plain")
+                ],
                 "attempts": s.get("attempt_list", []),
                 "dependencies": s.get("dependencies", []),
                 "is_flaky": s.get("is_flaky", False),

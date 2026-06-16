@@ -165,27 +165,30 @@
     </div>
     {% endif %}
 
-    <!-- Screenshots (Failed only) -->
+    <!-- Attachments (Failed only) -->
     {% if scenario.attachments and scenario.status == 'failed' %}
+    {% set images = scenario.attachments | selectattr('type', 'equalto', 'image/png') | list %}
+    {% set videos = scenario.attachments | selectattr('type', 'equalto', 'video/mp4') | list %}
+    {% if images %}
     <div class="section-title">📸 Ekran Görüntüleri</div>
     <div class="attachments">
-      {% for att in scenario.attachments %}
-      {% if att.type == 'image/png' or 'screenshot' in att.name.lower() %}
+      {% for att in images %}
       <div class="attachment-card">
-        <img src="/static/img/fail-screenshot-{{ loop.index }}.svg" alt="{{ att.name }}" onerror="this.style.display='none'">
+        <a href="/reports/{{ att.path }}" target="_blank"><img src="/reports/{{ att.path }}" alt="{{ att.name }}" onerror="this.style.display='none'"></a>
         <div class="attachment-label">📸 {{ att.name }}</div>
       </div>
-      {% endif %}
       {% endfor %}
     </div>
+    {% endif %}
 
-    <!-- Video (Failed only) -->
-    {% if scenario.status == 'failed' %}
+    {% if videos %}
     <div class="section-title">🎬 Video Kaydı</div>
+    {% for att in videos %}
     <div class="video-player">
-      <img src="/static/img/fail-video-1.svg" alt="Video Player" style="max-width:100%;border-radius:8px;">
-      <div style="margin-top:12px;color:var(--text-muted);">15fps • ffmpeg kaydı • Sadece hata senaryolarında</div>
+      <video src="/reports/{{ att.path }}" controls style="max-width:100%;border-radius:8px;"></video>
+      <div style="margin-top:12px;color:var(--text-muted);">{{ att.name }} • ffmpeg kaydı</div>
     </div>
+    {% endfor %}
     {% endif %}
     {% endif %}
 
