@@ -1032,6 +1032,79 @@ def _copy_run_attachment(allure_dir: Path, run_id: str, source: str | None) -> s
     return f"{run_id}/{source}"
 
 
+def _persist_run(run_id, options, all_scenarios, passed, failed, skipped, effective_version, started_at, finished_at) -> None:
+    """Write the run and its scenarios (definitions, results, history) to DuckDB
+    and emit the manifest JSON. Extracted from _save_results_to_duckdb."""
+    conn = get_connection(read_only=False)
+    try:
+        init_schema(conn)
+        conn.execute("DELETE FROM scenario_results WHERE run_id = ?", [run_id])
+        run_values = [effective_version, options.environment, started_at or finished_at, finished_at, len(all_scenarios), passed, failed, skipped, options.visibility, run_id]
+        if conn.execute("SELECT 1 FROM runs WHERE id = ?", [run_id]).fetchone():
+            conn.execute(
+                """
+                UPDATE runs
+                SET version = ?, environment = ?, started_at = ?, finished_at = ?, total_scenarios = ?, passed = ?, failed = ?, skipped = ?, visibility = ?
+                WHERE id = ?
+                """,
+                run_values,
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO runs
+                (version, environment, started_at, finished_at, total_scenarios, passed, failed, skipped, visibility, id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                run_values,
+            )
+        for s in all_scenarios:
+            # Upsert scenario_definitions
+            existing_def = conn.execute("SELECT 1 FROM scenario_definitions WHERE scenario_uid = ?", [s["uid"]]).fetchone()
+            if existing_def:
+                conn.execute(
+                    """
+                    UPDATE scenario_definitions
+                    SET identity_source = 'allure', identity_key = ?, current_name = ?, current_feature_file = ?, doors_number = COALESCE(?, doors_number), last_seen_run_id = ?, last_seen_at = ?, active = true
+                    WHERE scenario_uid = ?
+                    """,
+                    [s["identity_key"], s["name"], s["feature_file"], s["doors_id"], run_id, finished_at, s["uid"]],
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO scenario_definitions
+                    (scenario_uid, identity_source, identity_key, current_name, current_feature_file, doors_number, first_seen_run_id, last_seen_run_id, first_seen_at, last_seen_at)
+                    VALUES (?, 'allure', ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [s["uid"], s["identity_key"], s["name"], s["feature_file"], s["doors_id"], run_id, run_id, started_at or finished_at, finished_at],
+                )
+            # Insert scenario_results with retry metadata
+            conn.execute(
+                """
+                INSERT INTO scenario_results
+                (run_id, scenario_uid, name_at_run, status, duration_seconds, error_message, feature_file_at_run, doors_number_at_run, retry_attempt, screenshot_path, video_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [run_id, s["uid"], s["name"], s["status"], s["duration"], s["error"], s["feature_file"], s["doors_id"], s["total_attempts"], s.get("screenshot_path"), s.get("video_path")],
+            )
+            if s.get("doors_id"):
+                upsert_scenario_history(
+                    conn,
+                    doors_number=s["doors_id"],
+                    scenario_uid=s["uid"],
+                    name=s["name"],
+                    run_id=run_id,
+                    status=s["status"],
+                    version=effective_version,
+                    timestamp=started_at or finished_at,
+                )
+        # Write manifest JSON with full metadata
+        _write_manifest_json(run_id, options, all_scenarios, passed, failed, skipped, started_at or finished_at, effective_version)
+    finally:
+        conn.close()
+
+
 def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: datetime | None = None, allure_dir: str | None = None) -> dict:
     """Parse allure-results JSON and insert run/scenario rows into DuckDB."""
     import hashlib
@@ -1145,74 +1218,7 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
     skipped = sum(1 for s in all_scenarios if s["status"] == "SKIPPED")
     finished_at = datetime.now()
 
-    conn = get_connection(read_only=False)
-    try:
-        init_schema(conn)
-        conn.execute("DELETE FROM scenario_results WHERE run_id = ?", [run_id])
-        run_values = [effective_version, options.environment, started_at or finished_at, finished_at, len(all_scenarios), passed, failed, skipped, options.visibility, run_id]
-        if conn.execute("SELECT 1 FROM runs WHERE id = ?", [run_id]).fetchone():
-            conn.execute(
-                """
-                UPDATE runs
-                SET version = ?, environment = ?, started_at = ?, finished_at = ?, total_scenarios = ?, passed = ?, failed = ?, skipped = ?, visibility = ?
-                WHERE id = ?
-                """,
-                run_values,
-            )
-        else:
-            conn.execute(
-                """
-                INSERT INTO runs
-                (version, environment, started_at, finished_at, total_scenarios, passed, failed, skipped, visibility, id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                run_values,
-            )
-        for s in all_scenarios:
-            # Upsert scenario_definitions
-            existing_def = conn.execute("SELECT 1 FROM scenario_definitions WHERE scenario_uid = ?", [s["uid"]]).fetchone()
-            if existing_def:
-                conn.execute(
-                    """
-                    UPDATE scenario_definitions
-                    SET identity_source = 'allure', identity_key = ?, current_name = ?, current_feature_file = ?, doors_number = COALESCE(?, doors_number), last_seen_run_id = ?, last_seen_at = ?, active = true
-                    WHERE scenario_uid = ?
-                    """,
-                    [s["identity_key"], s["name"], s["feature_file"], s["doors_id"], run_id, finished_at, s["uid"]],
-                )
-            else:
-                conn.execute(
-                    """
-                    INSERT INTO scenario_definitions
-                    (scenario_uid, identity_source, identity_key, current_name, current_feature_file, doors_number, first_seen_run_id, last_seen_run_id, first_seen_at, last_seen_at)
-                    VALUES (?, 'allure', ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    [s["uid"], s["identity_key"], s["name"], s["feature_file"], s["doors_id"], run_id, run_id, started_at or finished_at, finished_at],
-                )
-            # Insert scenario_results with retry metadata
-            conn.execute(
-                """
-                INSERT INTO scenario_results
-                (run_id, scenario_uid, name_at_run, status, duration_seconds, error_message, feature_file_at_run, doors_number_at_run, retry_attempt, screenshot_path, video_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [run_id, s["uid"], s["name"], s["status"], s["duration"], s["error"], s["feature_file"], s["doors_id"], s["total_attempts"], s.get("screenshot_path"), s.get("video_path")],
-            )
-            if s.get("doors_id"):
-                upsert_scenario_history(
-                    conn,
-                    doors_number=s["doors_id"],
-                    scenario_uid=s["uid"],
-                    name=s["name"],
-                    run_id=run_id,
-                    status=s["status"],
-                    version=effective_version,
-                    timestamp=started_at or finished_at,
-                )
-        # Write manifest JSON with full metadata
-        _write_manifest_json(run_id, options, all_scenarios, passed, failed, skipped, started_at or finished_at, effective_version)
-    finally:
-        conn.close()
+    _persist_run(run_id, options, all_scenarios, passed, failed, skipped, effective_version, started_at, finished_at)
 
     return {"total": len(all_scenarios), "passed": passed, "failed": failed, "skipped": skipped}
 

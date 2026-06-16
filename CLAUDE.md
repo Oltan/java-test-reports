@@ -83,10 +83,12 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - scenario-detail.html gerçek `/reports/{path}` img/video gösteriyor (placeholder SVG'ler kalktı)
 - **Karakterizasyon testleri** eklendi (`tests/test_attachments_ingest.py`) — `_save_results_to_duckdb` artık ilk kez test kapsamında. 143 pytest passed
 
-### ⏳ SIRADA (kalan — özel durumlu)
-- S3 router split: ÇAPA testi kısıtı (sadece `server.*` deseniyle, büyük diff) — kullanıcı kararıyla ertelenmişti
-- Shard modu: dry-run discovery + gerçek Maven gerektirir → bu ortamda doğrulanamaz
-- `_save_results_to_duckdb` dekompozisyonu: artık karakterizasyon testi VAR → güvenle bölünebilir
+### ✅ `_save_results_to_duckdb` dekompozisyonu (TAMAMLANDI)
+- Persist bloğu (`runs`/`scenario_definitions`/`scenario_results`/history/manifest yazımı) `_persist_run()`'a verbatim çıkarıldı; `_save` artık resolve → aggregate → count → persist akışı. Karakterizasyon testleriyle davranış-koruyan doğrulandı (143 passed)
+
+### ⏳ KALAN (ortam/karar engelli — açıkça)
+- **S3 router split**: ÇAPA testleri `server.X`'i monkeypatch'liyor → temiz `deps.py` split onları kırar; sadece `server.*` referans deseniyle (büyük/çirkin diff) yapılabilir. Kullanıcı bunu açıkça ERTELEDİ. İstenirse `server.*` deseniyle yapılır.
+- **Shard modu**: `-Dcucumber.execution.dry-run` ile senaryo keşfi + gerçek Maven gerektirir → bu başsız ortamda doğrulanamaz. Maven'lı ortamda yapılmalı.
 
 ### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
 - P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`
