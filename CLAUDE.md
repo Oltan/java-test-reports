@@ -67,8 +67,13 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - `_worker_specs()` (single=N kopya, matrix=worker başına) + `_worker_options()`; `start_tests` ve `_dispatch_queued` per-worker config kullanıyor; job satırı temsili `job_tags` ("@a | @b") tutar
 - 139 pytest passed (yeni: matrix persist, 422 validation, kuyruk per-worker re-spawn)
 
+### ✅ RM-4 canlı — WS state tüketimi (TAMAMLANDI)
+- admin.js `/ws/test-status/live` kanalına abone olup `type:"state"` olaylarında listeyi anında tazeliyor (auto-reconnect); 5sn polling yedek olarak duruyor
+- **Bug fix:** `ConnectionManager.broadcast` erken `return` yüzünden per-run abonesi olmayan run'larda "live" mirror'a hiç ulaşmıyordu (live mirror ölü koddu) → düzeltildi; canlı + birim test ile doğrulandı
+- 140 pytest passed; canlı uçtan uca smoke (kuyruk/matrix/dispatch/cancel/WS) geçti
+
 ### ⏳ SIRADA (opsiyonel iyileştirmeler)
-- RM-4 canlı: `/ws/test-status/live` aboneliğiyle `type:"state"` olaylarını tüketip 5sn polling yerine anlık güncelleme; admin'de matrix worker satırları + mode seçici
+- Admin'de matrix gönderim UI (mode seçici + dinamik worker satırları) — backend hazır, sadece form
 - P5 derin: attachment path'leri ingest'te doldur (schema + test gerekir)
 - S3 router split (`server.*` referans deseniyle), `_save_results_to_duckdb` dekompozisyonu (önce karakterizasyon testi)
 - Shard modu (dry-run discovery ile feature-dosyası bazlı bölme) — matrix'in ikincil alternatifi

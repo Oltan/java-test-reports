@@ -3,6 +3,7 @@ Chart.register(...registerables);
 
 const TOKEN_KEY = "jwt_token";
 let liveProgressSocket = null;
+let liveStateSocket = null;
 
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
@@ -72,8 +73,37 @@ function showAdmin() {
   loadJobHistory();
   loadVersions();
   loadRunsManage();
+  connectLiveStateWebSocket();
   setInterval(loadRunningTests, 5000);
   setInterval(loadJobHistory, 15000);
+}
+
+function connectLiveStateWebSocket() {
+  // Subscribe to the shared "live" channel and refresh the queue/history the
+  // moment a run changes state (queued -> running -> completed/cancelled/...),
+  // instead of waiting for the 5s poll. Auto-reconnects if the socket drops.
+  const token = getToken();
+  if (!token) return;
+  const protocol = location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = `${protocol}://${location.host}/ws/test-status/live?token=${encodeURIComponent(token)}`;
+  try {
+    const ws = new WebSocket(wsUrl);
+    liveStateSocket = ws;
+    ws.onmessage = (e) => {
+      try {
+        const m = JSON.parse(e.data);
+        if (m.type === "state") {
+          loadRunningTests();
+          loadJobHistory();
+        }
+      } catch (_) { /* ignore malformed frames */ }
+    };
+    ws.onclose = () => {
+      liveStateSocket = null;
+      setTimeout(connectLiveStateWebSocket, 5000);  // reconnect
+    };
+    ws.onerror = () => {};
+  } catch (_) { /* WebSocket unavailable — polling still covers updates */ }
 }
 
 function connectTestRunWebSocket(runId) {
