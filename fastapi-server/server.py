@@ -323,13 +323,6 @@ async def home(request: Request):
     return HTMLResponse(content=html)
 
 
-@app.post("/api/pipeline/run", dependencies=[Depends(verify_token)])
-async def trigger_pipeline(background_tasks: BackgroundTasks, run_id: Optional[str] = None):
-    job_id = run_id or f"auto-{uuid4()}"
-    background_tasks.add_task(execute_pipeline, job_id)
-    return {"status": "started", "run_id": job_id, "job_id": job_id}
-
-
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
     cmd = [
         maven_executable(),
@@ -1262,85 +1255,6 @@ def _write_manifest_json(run_id: str, options: TestRunOptions, scenarios: list, 
         ],
     }
     manifest_path.write_text(json.dumps(manifest, indent=2, default=str))
-
-
-@app.get("/api/pipeline/status/{run_id}", dependencies=[Depends(verify_token)])
-async def pipeline_status(run_id: str):
-    conn = get_connection(read_only=False)
-    try:
-        init_schema(conn)
-        rows = conn.execute(
-            """
-            SELECT stage, status, error_message
-            FROM pipeline_status
-            WHERE run_id=?
-            ORDER BY stage
-            """,
-            [run_id],
-        ).fetchall()
-    finally:
-        conn.close()
-    return {
-        "run_id": run_id,
-        "stages": [{"stage": r[0], "status": r[1], "error": r[2]} for r in rows],
-    }
-
-
-@app.post("/api/v1/auth/login", response_model=LoginResponse)
-def login(req: LoginRequest, response: Response):
-    if req.username != ADMIN_USERNAME or req.password != ADMIN_PASSWORD:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-    token = create_token(req.username)
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=False,
-        max_age=JWT_EXPIRATION_HOURS * 3600,
-        samesite="lax",
-        path="/",
-    )
-    return LoginResponse(token=token)
-
-
-@app.websocket("/ws/test-status/live")
-async def ws_test_status(websocket: WebSocket, token: str = Query(...)):
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        if payload.get("sub") is None:
-            await websocket.close(code=4001)
-            return
-    except jwt.InvalidTokenError:
-        await websocket.close(code=4001)
-        return
-
-    await ws_manager.connect("live", websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        ws_manager.disconnect("live", websocket)
-
-
-@app.websocket("/ws/test-status/{run_id}")
-async def ws_test_run(websocket: WebSocket, run_id: str, token: str = Query(...)):
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        if payload.get("sub") is None:
-            await websocket.close(code=4001)
-            return
-    except jwt.InvalidTokenError:
-        await websocket.close(code=4001)
-        return
-
-    await ws_manager.connect(run_id, websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        ws_manager.disconnect(run_id, websocket)
 
 
 @app.get("/api/reports/merge-data", dependencies=[Depends(verify_token)])
@@ -2602,6 +2516,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 from routes.bugs import router as bugs_router  # noqa: E402
 from routes.integrations import router as integrations_router  # noqa: E402
 from routes.runs import router as runs_router  # noqa: E402
+from routes.system import router as system_router  # noqa: E402
 app.include_router(bugs_router)
 app.include_router(integrations_router)
 app.include_router(runs_router)
+app.include_router(system_router)
