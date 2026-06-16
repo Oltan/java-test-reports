@@ -47,8 +47,11 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - `generate_public_share` bölündü: `_share_blockers()` + `_fetch_share_rows()` (iki near-identical SELECT → tek `_SHARE_ROW_SELECT`); ölü `scenario_uids` ve `DEP_TAG_RE` kaldırıldı
 - `_save_results_to_duckdb` dekompozisyonu ERTELENDİ: doğrudan test kapsamı yok → önce karakterizasyon testi gerekir
 
-### ⏸️ Sadeleştirme S3 (ERTELENDİ — çapa testi kısıtı)
-- `server.py` (2600+ satır/51 route) → `routes/` paketi. Çapa testleri (`test_integration_workflow`, `test_auth_boundaries` — değiştirilemez) `server.get_connection`/`execute_test_run`/`send_email`'i monkeypatch'liyor. Temiz `deps.py` split bu patch yüzeyini kırar. Tek uyumlu yol: router'lar `server.X` üzerinden erişir (büyük/çirkin diff). Kullanıcı kararı: ertele.
+### ✅ Sadeleştirme S3 — Router split (TAMAMLANDI, `server.*` deseni)
+- `server.py` **2804 → 1166 satır**; tüm **51 route** `routes/` paketine taşındı: `bugs, integrations, runs, system, admin, reports, triage, pages, tests` (9 modül).
+- **Desen:** her route modülü `import server` + paylaşılan her şeye `server.X` (get_connection, execute_test_run, send_email, _spawn_run, TEST_MAX_CONCURRENCY, tests_lock, running_tests, jira_client, tracker, ws_manager, verify_token, modeller…). server.py app/state/helper/model/lifespan'i tutar, router'ları **dosya sonunda** include eder → import cycle yok, çapa testlerinin `server.X` patch yüzeyi korunur.
+- Route sırası: pages catch-all `/reports/{artifact_path:path}` en sonda (specific /reports route'larını gölgelemesin).
+- Her grup ayrı commit + green checkpoint; 9 commit imzalı. **143 pytest passed**, çapa (`test_auth_boundaries`, `test_integration_workflow`) + `test_run_lifecycle` router üzerinden yeşil.
 
 ### ✅ UI — P5/P6/P7 (TAMAMLANDI)
 - P5/P6: run-detail senaryo kartları artık scenario-detail sayfasına linkli (`scard(scenario, run_id)` makro + `/reports/{run_id}/scenario/{id}`)
