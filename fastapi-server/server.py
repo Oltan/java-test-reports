@@ -307,22 +307,6 @@ def verify_token_page(request: Request) -> TokenData:
         raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/"})
 
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    manifests = load_manifests()
-    total_runs = len(manifests)
-    latest_run = None
-    if manifests:
-        sorted_manifests = sorted(manifests, key=lambda m: str(m.timestamp), reverse=True)
-        latest_run = sorted_manifests[0].model_dump()
-    template = jinja_env.get_template("dashboard.html")
-    html = template.render(
-        total_runs=total_runs,
-        latest_run=latest_run,
-    )
-    return HTMLResponse(content=html)
-
-
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:
     cmd = [
         maven_executable(),
@@ -1366,130 +1350,6 @@ def sync_runs() -> dict:
     return {"inserted_to_db": inserted_to_db, "created_manifests": created_manifests}
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
-    template = jinja_env.get_template("dashboard.html")
-    return HTMLResponse(content=template.render())
-
-
-@app.get("/admin", response_class=HTMLResponse)
-async def admin_page(request: Request):
-    template = jinja_env.get_template("admin.html")
-    return HTMLResponse(content=template.render())
-
-
-@app.get("/reports/merge", response_class=HTMLResponse)
-async def report_merge_page(request: Request, _: TokenData = Depends(verify_token_page)):
-    template = jinja_env.get_template("report-merge.html")
-    return HTMLResponse(content=template.render())
-
-
-@app.get("/reports/{run_id}", response_class=HTMLResponse)
-def run_detail(run_id: str, request: Request, _: TokenData = Depends(verify_token_page)):
-    # Check public visibility first (no auth required)
-    conn = get_connection(read_only=False)
-    try:
-        init_schema(conn)
-        run_row = conn.execute(
-            "SELECT id, visibility FROM runs WHERE id = ?", [run_id]
-        ).fetchone()
-        if run_row and run_row[1] == "public":
-            # Public report — no auth needed
-            scenarios = conn.execute(
-                "SELECT name_at_run, status, duration_seconds FROM scenario_results WHERE run_id = ?",
-                [run_id],
-            ).fetchall()
-            template = jinja_env.get_template("public_report.html")
-            html = template.render(
-                run_id=run_id,
-                scenarios=scenarios,
-            )
-            return HTMLResponse(content=html)
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
-    # Fall back to manifest-based detail (requires auth for non-public)
-    manifests = load_manifests()
-    manifest = None
-    for m in manifests:
-        if m.runId == run_id:
-            manifest = m
-            break
-    if manifest is None:
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-
-    display_name = get_run_alias(run_id)
-
-    template = jinja_env.get_template("run-detail.html")
-    html = template.render(
-        run_id=run_id,
-        display_name=display_name,
-        manifest=manifest.model_dump(),
-        scenarios=manifest.scenarios,
-        jira_base_url=os.getenv("JIRA_BASE_URL", ""),
-    )
-    return HTMLResponse(content=html)
-
-
-@app.get("/reports/{run_id}/scenario/{scenario_id}")
-def scenario_detail(run_id: str, scenario_id: str, _: TokenData = Depends(verify_token_page)):
-    manifest_path = MANIFESTS_DIR / f"{run_id}.json"
-    if not manifest_path.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
-    manifest = json.loads(manifest_path.read_text())
-    scenario = next((s for s in manifest.get("scenarios", []) if s.get("id") == scenario_id), None)
-    if not scenario:
-        raise HTTPException(status_code=404, detail="Scenario not found")
-    template = jinja_env.get_template("scenario-detail.html")
-    return HTMLResponse(content=template.render(run_id=run_id, scenario=scenario, manifest=manifest))
-
-
-@app.get("/reports/{run_id}/triage")
-def triage_page(run_id: str, request: Request, _: TokenData = Depends(verify_token_page)):
-    manifests = load_manifests()
-    manifest = None
-    for m in manifests:
-        if m.runId == run_id:
-            manifest = m
-            break
-    if manifest is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Run '{run_id}' not found",
-        )
-    failures = [s for s in manifest.scenarios if s.status in ("failed", "broken")]
-
-    template = jinja_env.get_template("triage.html")
-    html = template.render(
-        run_id=run_id,
-        manifest=manifest.model_dump(),
-        failures=[s.model_dump() for s in failures],
-        jira_base_url=os.getenv("JIRA_BASE_URL", ""),
-    )
-    return HTMLResponse(content=html)
-
-
-@app.get("/reports/{artifact_path:path}")
-def protected_report_artifact(artifact_path: str, _: TokenData = Depends(verify_token_page)):
-    """Serve report attachments only to authenticated engineer sessions.
-
-    Raw report artifacts can contain screenshots, videos, logs, and filesystem-derived
-    manifest paths. Keep the URL shape used by internal templates, but require a
-    bearer token and resolve paths under MANIFESTS_DIR to prevent public/static leaks.
-    """
-    candidate = (MANIFESTS_DIR / artifact_path).resolve()
-    reports_root = MANIFESTS_DIR.resolve()
-    try:
-        candidate.relative_to(reports_root)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
-    if not candidate.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
-    return FileResponse(candidate)
-
-
 class JiraResponse(BaseModel):
     jiraKey: str
     jiraUrl: Optional[str] = None
@@ -1558,6 +1418,7 @@ from routes.system import router as system_router  # noqa: E402
 from routes.admin import router as admin_router  # noqa: E402
 from routes.reports import router as reports_router  # noqa: E402
 from routes.triage import router as triage_router  # noqa: E402
+from routes.pages import router as pages_router  # noqa: E402
 app.include_router(bugs_router)
 app.include_router(integrations_router)
 app.include_router(runs_router)
@@ -1565,3 +1426,4 @@ app.include_router(system_router)
 app.include_router(admin_router)
 app.include_router(reports_router)
 app.include_router(triage_router)
+app.include_router(pages_router)
