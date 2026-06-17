@@ -57,28 +57,28 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
                  options.environment, options.version, options.browser, job_status, now],
             )
 
-            for i, (wtags, wbrowser, wenv) in enumerate(specs):
+            for i, (wtags, wbrowser, wenv, wfeatures) in enumerate(specs):
                 run_id = f"test-{uuid4().hex[:8]}"
                 worker_id = f"{job_id}-w{i}"
                 output_dir = str(server.PROJECT_ROOT / server.MAVEN_MODULE / "target" / f"allure-results-{run_id}")
                 conn.execute(
                     """
-                    INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at, tags, browser, environment)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO worker_runs (worker_id, job_id, run_id, shard, status, output_dir, started_at, tags, browser, environment, features)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [worker_id, job_id, run_id, i, job_status, output_dir, now, wtags, wbrowser, wenv],
+                    [worker_id, job_id, run_id, i, job_status, output_dir, now, wtags, wbrowser, wenv, wfeatures],
                 )
                 run_ids.append(run_id)
                 workers.append({"worker_id": worker_id, "run_id": run_id, "shard": i,
                                 "output_dir": output_dir, "tags": wtags, "browser": wbrowser,
-                                "environment": wenv})
+                                "environment": wenv, "features": wfeatures})
 
             conn.commit()
 
         if admit:
             for worker in workers:
                 wopts = server._worker_options(worker["tags"], worker["browser"], worker["environment"],
-                                               options.retry_count, options.version)
+                                               options.retry_count, options.version, worker["features"])
                 server._spawn_run(worker["run_id"], wopts, worker["output_dir"])
 
     for run_id in run_ids:
@@ -91,6 +91,22 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
         "status": "started" if admit else "queued",
         "mode": "serialized_safe",
         "parallel": len(specs),
+    }
+
+
+@router.get("/api/tests/discovery", dependencies=[Depends(server.verify_token)])
+def discovery(tags: str = "@smoke", shards: int = 1):
+    """Preview shard mode: discover scenarios (Cucumber dry-run, no browser) for
+    the tag filter and show how their feature files split into `shards` groups."""
+    scenarios = server._discover_scenarios(tags)
+    features = list(dict.fromkeys(s["feature"] for s in scenarios))
+    plan = server._shard_features(features, shards)
+    return {
+        "tags": tags,
+        "count": len(scenarios),
+        "scenarios": scenarios,
+        "features": features,
+        "shards": [{"features": s, "count": len(s)} for s in plan],
     }
 
 

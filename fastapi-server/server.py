@@ -317,9 +317,51 @@ def _test_command(options: TestRunOptions, output_dir: str | None = None) -> lis
     ]
     if options.retry_count:
         cmd.append(f"-Dretry.count={options.retry_count}")
+    # Shard workers restrict execution to their assigned feature files.
+    if getattr(options, "features", None):
+        cmd.append(f"-Dcucumber.features={options.features}")
     if output_dir:
         cmd.append(f"-Dallure.results.directory={output_dir}")
     return cmd
+
+
+_SCENARIO_LINE_RE = re.compile(r"^\s*Scenario(?: Outline)?:\s*(.+?)\s+#\s+(\S+?):(\d+)\s*$")
+
+
+def _discover_scenarios(tags: str = "@smoke") -> list[dict]:
+    """Discover scenarios + their feature files for a tag filter, using Cucumber
+    dry-run (parses features, runs no steps/hooks → no browser needed).
+    Returns [{name, feature, line}]."""
+    cmd = [
+        maven_executable(), "-pl", MAVEN_MODULE, "test",
+        f"-Dcucumber.filter.tags={tags}", "-Dcucumber.execution.dry-run=true",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(PROJECT_ROOT), env=_test_env(),
+            capture_output=True, text=True, timeout=300,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        raise RuntimeError(f"scenario discovery failed: {exc}") from exc
+    scenarios = []
+    for line in proc.stdout.splitlines():
+        m = _SCENARIO_LINE_RE.match(line)
+        if m:
+            scenarios.append({"name": m.group(1).strip(), "feature": m.group(2), "line": int(m.group(3))})
+    return scenarios
+
+
+def _shard_features(features: list[str], n: int) -> list[list[str]]:
+    """Round-robin split unique feature files into n balanced shards
+    (order-stable; empty shards dropped). Never returns more shards than files."""
+    uniq = list(dict.fromkeys(features))
+    if not uniq:
+        return []
+    n = max(1, min(n, len(uniq)))
+    shards: list[list[str]] = [[] for _ in range(n)]
+    for i, f in enumerate(uniq):
+        shards[i % n].append(f)
+    return shards
 
 
 def _test_env() -> dict[str, str]:
@@ -361,23 +403,33 @@ def _spawn_run(run_id: str, options: TestRunOptions, output_dir: str | None) -> 
     task.add_done_callback(_log_task_exception)
 
 
-def _worker_specs(options: TestRunOptions) -> list[tuple[str, str, str]]:
-    """Resolve a run into a (tags, browser, environment) tuple per worker.
+def _worker_specs(options: TestRunOptions) -> list[tuple[str, str, str, str | None]]:
+    """Resolve a run into a (tags, browser, environment, features) tuple per worker.
 
-    ``single`` mode produces ``parallel`` identical copies; ``matrix`` mode
-    produces one entry per worker spec (each with its own tags, and its own
-    browser/environment or the job-level default)."""
+    - ``single``: ``parallel`` identical copies (features=None).
+    - ``matrix``: one entry per worker spec (its own tags/browser/environment).
+    - ``shard``: discover scenarios (dry-run), split their feature files into
+      ``parallel`` shards; each worker runs one feature subset via -Dcucumber.features."""
     if options.mode == "matrix" and options.workers:
         return [
-            (w.tags, w.browser or options.browser, w.environment or options.environment)
+            (w.tags, w.browser or options.browser, w.environment or options.environment, None)
             for w in options.workers
         ]
-    return [(options.tags, options.browser, options.environment) for _ in range(options.parallel)]
+    if options.mode == "shard":
+        scenarios = _discover_scenarios(options.tags)
+        shards = _shard_features([s["feature"] for s in scenarios], options.parallel)
+        if not shards:
+            return [(options.tags, options.browser, options.environment, None)]
+        return [
+            (options.tags, options.browser, options.environment, ",".join(shard))
+            for shard in shards
+        ]
+    return [(options.tags, options.browser, options.environment, None) for _ in range(options.parallel)]
 
 
-def _worker_options(tags, browser, environment, retry_count, version) -> TestRunOptions:
+def _worker_options(tags, browser, environment, retry_count, version, features=None) -> TestRunOptions:
     """Build a single-worker TestRunOptions for executing or re-queuing one
-    matrix worker (per-worker tags/browser/environment + job-level retry/version)."""
+    worker (per-worker tags/browser/environment/features + job-level retry/version)."""
     return TestRunOptions(
         tags=tags or "@smoke",
         browser=browser or "chrome",
@@ -385,6 +437,7 @@ def _worker_options(tags, browser, environment, retry_count, version) -> TestRun
         retry_count=retry_count or 0,
         version=version,
         parallel=1,
+        features=features,
     )
 
 
@@ -420,13 +473,13 @@ def _dispatch_queued() -> list[str]:
                     [now, job_id],
                 )
                 worker_rows = conn.execute(
-                    "SELECT run_id, output_dir, tags, browser, environment "
+                    "SELECT run_id, output_dir, tags, browser, environment, features "
                     "FROM worker_runs WHERE job_id = ? ORDER BY shard",
                     [job_id],
                 ).fetchall()
                 conn.commit()
-                for run_id, output_dir, wtags, wbrowser, wenv in worker_rows:
-                    wopts = _worker_options(wtags, wbrowser, wenv, retry_count, version)
+                for run_id, output_dir, wtags, wbrowser, wenv, wfeatures in worker_rows:
+                    wopts = _worker_options(wtags, wbrowser, wenv, retry_count, version, wfeatures)
                     _spawn_run(run_id, wopts, output_dir)
                 started.append(job_id)
     return started

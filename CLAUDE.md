@@ -89,9 +89,15 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 ### ✅ `_save_results_to_duckdb` dekompozisyonu (TAMAMLANDI)
 - Persist bloğu (`runs`/`scenario_definitions`/`scenario_results`/history/manifest yazımı) `_persist_run()`'a verbatim çıkarıldı; `_save` artık resolve → aggregate → count → persist akışı. Karakterizasyon testleriyle davranış-koruyan doğrulandı (143 passed)
 
-### ⏳ KALAN (ortam/karar engelli — açıkça)
-- **S3 router split**: ÇAPA testleri `server.X`'i monkeypatch'liyor → temiz `deps.py` split onları kırar; sadece `server.*` referans deseniyle (büyük/çirkin diff) yapılabilir. Kullanıcı bunu açıkça ERTELEDİ. İstenirse `server.*` deseniyle yapılır.
-- **Shard modu**: `-Dcucumber.execution.dry-run` ile senaryo keşfi + gerçek Maven gerektirir → bu başsız ortamda doğrulanamaz. Maven'lı ortamda yapılmalı.
+### ✅ Shard modu (TAMAMLANDI — gerçek mvn ile doğrulandı)
+- `TestRunOptions.mode="shard"` + `features` alanı; shard+`retry_count>0` → 422 (validator)
+- `_discover_scenarios(tags)`: gerçek `mvn -pl test-core test -Dcucumber.execution.dry-run=true` koşar (tarayıcısız — step/hook çalışmaz), `Scenario: NAME # path:line` parse eder
+- `_shard_features(features, n)`: unique feature dosyalarını round-robin N shard'a böler; her shard worker'ı `-Dcucumber.features=<subset>` ile koşar (mekanizma gerçek dry-run ile doğrulandı: tek feature → o feature'a kısıtlı)
+- `GET /api/tests/discovery?tags=&shards=` önizleme; worker_runs'a `features` kolonu → kuyruktan shard re-spawn doğru
+- **148 pytest passed**; `tests/test_shard.py::test_discovery_real_mvn` GERÇEK mvn dry-run ile çalışır (mvn yoksa skip). NOT: shard'ların *fiili koşumu* Chrome gerektirir (bu ortamda yok) — keşif+bölme+komut gerçek doğrulandı, koşum birim testle.
+
+### Ortam notu (Java/Maven)
+Bu ortamda: `mvn` 3.9.11 + Java 21 + cache'li deps → **derleme, unit test, cucumber dry-run çalışır**. **Chrome binary yok** (sadece chromedriver) → gerçek Selenium koşumu çalışmaz; o yüzden koşum hep mock'lanır.
 
 ### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
 - P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`

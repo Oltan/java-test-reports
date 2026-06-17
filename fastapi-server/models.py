@@ -112,11 +112,14 @@ class TestRunOptions(BaseModel):
     version: Optional[str] = None
     visibility: str = Field(default="internal", pattern=r"^(internal|public)$")
     force: bool = Field(default=False, description="Bypass the duplicate-run guard")
-    mode: str = Field(default="single", pattern=r"^(single|matrix)$")
+    mode: str = Field(default="single", pattern=r"^(single|matrix|shard)$")
     workers: Optional[List[WorkerSpec]] = Field(default=None, description="Per-worker specs for matrix mode")
+    features: Optional[str] = Field(default=None, description="Comma-separated feature files (set per shard worker)")
 
     @model_validator(mode="after")
-    def _check_matrix(self):
+    def _check_mode(self):
         if self.mode == "matrix" and not self.workers:
             raise ValueError("matrix mode requires a non-empty 'workers' list")
+        if self.mode == "shard" and self.retry_count > 0:
+            raise ValueError("shard mode is incompatible with retry_count > 0")
         return self
