@@ -11,7 +11,7 @@
 <body>
 
 <!-- ── Scenario card macro ── -->
-{% macro scard(scenario) %}
+{% macro scard(scenario, run_id) %}
 {% set norm_status = 'failed' if scenario.status in ('failed', 'broken') else scenario.status %}
 <div class="scard scard--{{ norm_status }}"
      data-scenario-id="{{ scenario.id }}"
@@ -28,7 +28,7 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 12 5 19 12"/></svg>
       {% endif %}
     </span>
-    <span class="scard-name">{{ scenario.name }}</span>
+    <a class="scard-name" href="/reports/{{ run_id }}/scenario/{{ scenario.id }}">{{ scenario.name }}</a>
     <span class="scard-duration">{{ scenario.duration }}</span>
     {% if scenario.doorsAbsNumber %}
     <span class="badge badge-dep">🚪 {{ scenario.doorsAbsNumber }}</span>
@@ -236,7 +236,7 @@
     <div class="tag-group-body">
       {% for scenario in scenarios %}
         {% if tag in scenario.tags %}
-          {{ scard(scenario) }}
+          {{ scard(scenario, run_id) }}
         {% endif %}
       {% endfor %}
     </div>
@@ -253,7 +253,7 @@
     <div class="tag-group-body">
       {% for scenario in scenarios %}
         {% if not scenario.tags %}
-          {{ scard(scenario) }}
+          {{ scard(scenario, run_id) }}
         {% endif %}
       {% endfor %}
     </div>

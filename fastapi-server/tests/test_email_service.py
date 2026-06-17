@@ -45,3 +45,34 @@ def test_email_send_endpoint_reports_mock_failure():
     data = resp.json()
     assert data["sent"] is False
     assert "SMTP offline" in data["error"]
+
+def test_email_send_uses_real_run_metrics():
+    """Regression: context must carry the run's real totals, not hardcoded zeros."""
+    import duckdb
+    from datetime import datetime
+    from db import init_schema, NonClosingConnectionWrapper
+    import server as srv
+
+    conn = duckdb.connect(":memory:")
+    init_schema(conn)
+    conn.execute(
+        "INSERT INTO runs (id, version, environment, started_at, finished_at, "
+        "total_scenarios, passed, failed, skipped) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ["run-xyz", "1.0", "staging", datetime.now(), datetime.now(), 10, 7, 2, 1],
+    )
+    conn.commit()
+    wrapped = NonClosingConnectionWrapper(conn)
+
+    with patch.object(srv, "get_connection", lambda read_only=False: wrapped), \
+         patch("server.send_email", return_value=True) as send_email:
+        resp = client.post(
+            "/api/email/send",
+            params={"to": "qa@example.com", "run_id": "run-xyz"},
+            headers=_auth_headers(),
+        )
+    conn.close()
+
+    assert resp.status_code == 200
+    _, _, _, context = send_email.call_args.args
+    assert (context["total"], context["passed"], context["failed"], context["skipped"]) == (10, 7, 2, 1)
+    assert context["started_at"]

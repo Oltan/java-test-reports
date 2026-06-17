@@ -220,9 +220,16 @@ def init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bug_mappings_jira_key ON bug_mappings(jira_key);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_started_at ON jobs(started_at);")
+    # browser is needed to faithfully re-spawn a queued job when its turn comes.
+    conn.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS browser TEXT")
     conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS pid INTEGER")
     conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS last_output_at TIMESTAMP")
     conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS exit_code INTEGER")
+    # Per-worker config so matrix/shard runs re-spawn each worker with its own settings.
+    conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS tags TEXT")
+    conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS browser TEXT")
+    conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS environment TEXT")
+    conn.execute("ALTER TABLE worker_runs ADD COLUMN IF NOT EXISTS features TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_worker_runs_job_id ON worker_runs(job_id);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_worker_runs_run_id ON worker_runs(run_id);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_triage_decisions_run_id ON triage_decisions(run_id);")

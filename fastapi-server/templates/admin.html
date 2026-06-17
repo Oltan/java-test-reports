@@ -94,9 +94,23 @@
        <div class="admin-form">
         <div class="admin-form-row">
           <div class="form-field form-field--grow">
+            <label for="test-mode">Mod</label>
+            <select id="test-mode">
+              <option value="single">Tekli — aynı tag, N paralel</option>
+              <option value="matrix">Matrix — worker başına ayrı tag/browser</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-form-row" id="row-tags">
+          <div class="form-field form-field--grow">
             <label for="test-tags">Cucumber Tags</label>
             <input id="test-tags" type="text" value="@smoke" placeholder="@smoke">
           </div>
+        </div>
+        <div id="matrix-section" style="display:none; margin-bottom:12px;">
+          <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">Matrix Worker'ları</label>
+          <div id="matrix-rows"></div>
+          <button type="button" class="btn" id="add-worker-btn" style="font-size:12px;padding:6px 12px;margin-top:6px;">+ Worker ekle</button>
         </div>
         <div class="admin-form-row">
           <div class="form-field">
@@ -108,7 +122,7 @@
               <option value="3">3</option>
             </select>
           </div>
-          <div class="form-field">
+          <div class="form-field" id="field-parallel">
             <label for="test-parallel">Paralel</label>
             <select id="test-parallel">
               <option value="1">1</option>
@@ -206,6 +220,6 @@
 </footer>
 
 <script type="module" src="/static/vendor.js?v=3"></script>
-<script type="module" src="/static/admin.js?v=4"></script>
+<script type="module" src="/static/admin.js?v=7"></script>
 </body>
 </html>

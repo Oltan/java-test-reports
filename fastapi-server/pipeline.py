@@ -1,13 +1,13 @@
 import asyncio
 import os
 import shlex
-import shutil
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Awaitable, Callable
 
 from db import get_connection, init_schema
+from maven import maven_executable
 
 
 class StageStatus(str, Enum):
@@ -106,16 +106,9 @@ class PipelineRunner:
             await self._run_shell_command(command)
             return
 
-        mvn = os.getenv("MAVEN_CMD") or self._find_maven()
+        mvn = maven_executable()
         module = os.getenv("MAVEN_MODULE", "test-core")
         await self._run_exec_command([mvn, "-pl", module, "test"])
-
-    @staticmethod
-    def _find_maven() -> str:
-        bundled = Path("/home/ol_ta/tools/apache-maven-3.9.9/bin/mvn")
-        if bundled.exists():
-            return str(bundled)
-        return shutil.which("mvn.cmd") or shutil.which("mvn") or "mvn"
 
     async def write_manifest(self):
         command = os.getenv("PIPELINE_MANIFEST_COMMAND")

@@ -41,19 +41,21 @@ class ConnectionManager:
 
     async def broadcast(self, run_id: str, message: dict) -> None:
         self.last_messages[run_id] = message
-        if run_id not in self.active_connections:
-            return
-        stale: list[WebSocket] = []
-        for ws in list(self.active_connections[run_id]):
-            try:
-                await ws.send_json(message)
-            except Exception:
-                stale.append(ws)
-        for ws in stale:
-            if ws in self.active_connections.get(run_id, []):
-                self.active_connections[run_id].remove(ws)
-        if not self.active_connections[run_id]:
-            del self.active_connections[run_id]
+        # Direct per-run subscribers (if any). This must NOT short-circuit the
+        # "live" mirror below — a run often has no per-run subscriber while the
+        # admin panel is watching only the shared "live" channel.
+        if run_id in self.active_connections:
+            stale: list[WebSocket] = []
+            for ws in list(self.active_connections[run_id]):
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    stale.append(ws)
+            for ws in stale:
+                if ws in self.active_connections.get(run_id, []):
+                    self.active_connections[run_id].remove(ws)
+            if run_id in self.active_connections and not self.active_connections[run_id]:
+                del self.active_connections[run_id]
         if run_id != "live" and "live" in self.active_connections:
             live_stale: list[WebSocket] = []
             for ws in list(self.active_connections["live"]):
