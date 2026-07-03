@@ -33,8 +33,11 @@ async function handleLogin(e) {
       body: JSON.stringify({ username, password }),
     });
     setToken(data.token);
-    document.cookie = `access_token=${data.token}; path=/; SameSite=Lax; max-age=${24 * 3600}`;
     showDashboard();
+    loadVersions();
+    initDatePicker();
+    initWebSocket();
+    startLiveJobsPolling();
   } catch {
     errorEl.textContent = "Geçersiz kullanıcı adı veya şifre";
   } finally {
@@ -47,6 +50,7 @@ function handleLogout() {
   clearToken();
   document.cookie = "access_token=; Max-Age=0; path=/";
   hideNavLinks();
+  stopLiveJobsPolling();
   location.reload();
 }
 
@@ -241,6 +245,124 @@ function showEmpty() {
   }
 }
 
+// ── Canlı Koşumlar (live jobs widget) ──────────────────────────────────────
+
+const LIVE_JOBS_POLL_MS = 10000;
+let liveJobsCache = [];
+let liveJobsPollTimer = null;
+const liveRunProgress = {};
+
+function liveWorkerBadge(status) {
+  const map = {
+    running: { label: "çalışıyor", cls: "worker-badge--running" },
+    queued: { label: "kuyrukta", cls: "worker-badge--queued" },
+    completed: { label: "tamamlandı", cls: "worker-badge--completed" },
+    cancelled: { label: "iptal", cls: "worker-badge--cancelled" },
+    failed: { label: "başarısız", cls: "worker-badge--failed" },
+    interrupted: { label: "kesildi", cls: "worker-badge--interrupted" },
+  };
+  const info = map[status] || { label: status, cls: "worker-badge--unknown" };
+  return `<span class="worker-badge ${info.cls}">${info.label}</span>`;
+}
+
+function renderLiveJobCard(job) {
+  const status = job.status === "running" ? "running" : "queued";
+  const statusLabel = status === "running" ? "Çalışıyor" : "Kuyrukta";
+  const statusCls = status === "running" ? "job-status--running" : "job-status--queued";
+  const startedAt = job.started_at ? new Date(job.started_at).toLocaleString("tr-TR") : "";
+
+  const workersHtml = (job.workers || []).map(w => {
+    const prog = liveRunProgress[w.run_id];
+    const rightHtml = prog
+      ? `<div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+          <div class="prog-wrap" style="width:80px"><div class="prog-bar prog-bar--accent" style="width:${prog.pct}%"></div></div>
+          <span class="prog-label" style="margin-top:0">${Math.round(prog.pct)}%</span>
+        </div>`
+      : liveWorkerBadge(w.status);
+    return `<div class="job-worker-row">
+      <span class="worker-shard">Shard ${w.shard}</span>
+      <span class="worker-run-id">${w.run_id}</span>
+      ${rightHtml}
+    </div>`;
+  }).join("");
+
+  return `<div class="job-card ${status === "running" ? "job-card--active" : ""}">
+    <div class="job-card-header">
+      <div class="job-card-meta">
+        <span class="job-id">${job.job_id}</span>
+        <span class="job-status-badge ${statusCls}">${statusLabel}</span>
+      </div>
+    </div>
+    <div class="job-card-details">
+      ${job.tags ? `<span class="job-tag">${job.tags}</span>` : ""}
+      ${job.environment ? `<span class="job-detail">${job.environment}</span>` : ""}
+      ${job.requester ? `<span class="job-detail">👤 ${job.requester}</span>` : ""}
+      ${startedAt ? `<span class="job-detail job-detail--time">${startedAt}</span>` : ""}
+    </div>
+    ${workersHtml ? `<div class="job-workers">${workersHtml}</div>` : ""}
+  </div>`;
+}
+
+function renderLiveJobsList(jobs) {
+  const container = $("live-jobs-list");
+  if (!container) return;
+  if (!jobs || jobs.length === 0) {
+    container.innerHTML = '<div class="running-tests-empty">Şu an koşan veya kuyrukta iş yok</div>';
+    return;
+  }
+  container.innerHTML = jobs.map(renderLiveJobCard).join("");
+}
+
+async function loadLiveJobs() {
+  const section = $("live-jobs-section");
+  if (!section) return;
+  if (!getToken()) {
+    section.style.display = "none";
+    return;
+  }
+  section.style.display = "";
+  try {
+    const data = await apiFetch("/api/tests/running");
+    liveJobsCache = data.jobs || [];
+    renderLiveJobsList(liveJobsCache);
+  } catch (err) {
+    console.error("[dashboard] Failed to load live jobs:", err);
+    const container = $("live-jobs-list");
+    if (container) container.innerHTML = '<div class="running-tests-empty">Yüklenemedi</div>';
+  }
+}
+
+function startLiveJobsPolling() {
+  if (liveJobsPollTimer) clearInterval(liveJobsPollTimer);
+  loadLiveJobs();
+  liveJobsPollTimer = setInterval(loadLiveJobs, LIVE_JOBS_POLL_MS);
+}
+
+function stopLiveJobsPolling() {
+  if (liveJobsPollTimer) {
+    clearInterval(liveJobsPollTimer);
+    liveJobsPollTimer = null;
+  }
+}
+
+function updateLiveJobProgress(data) {
+  const runId = data.run_id;
+  if (!runId) return;
+  if (data.type === "complete") {
+    delete liveRunProgress[runId];
+    renderLiveJobsList(liveJobsCache);
+    setTimeout(loadLiveJobs, 1500);
+    return;
+  }
+  liveRunProgress[runId] = {
+    pct: data.pct ?? 0,
+    passed: data.passed ?? 0,
+    failed: data.failed ?? 0,
+    running: data.running ?? 0,
+  };
+  renderLiveJobsList(liveJobsCache);
+}
+
 async function loadDashboard() {
   let runs = [];
   let metrics = null;
@@ -396,6 +518,14 @@ function initWebSocket() {
           }, 2000);
         }
       }
+      // RM-4 job/run lifecycle frames ({type:"state", run_id, status}) and
+      // per-run progress/complete frames ({type:"progress"|"complete", run_id, pct, ...})
+      // both flow over this same "live" channel — handle both defensively.
+      if (data.run_id && (data.type === "progress" || data.type === "complete")) {
+        updateLiveJobProgress(data);
+      } else if (data.type === "state") {
+        loadLiveJobs();
+      }
     } catch { /* ignore non-JSON messages */ }
   };
   ws.onclose = () => { /* auto-reconnect handled by browser */ };
@@ -431,6 +561,7 @@ function initTableSearch() {
       loadVersions();
       initDatePicker();
       initWebSocket();
+      startLiveJobsPolling();
     } catch (err) {
       clearToken();
       hideNavLinks();

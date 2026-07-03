@@ -1,5 +1,8 @@
+import hashlib
+import hmac
 import json
 import os
+import secrets
 from datetime import datetime
 
 import duckdb
@@ -242,6 +245,16 @@ def init_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_public_snapshots_status ON public_snapshots(status);")
 
     conn.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+      username TEXT PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      role TEXT DEFAULT 'runner',
+      created_at TIMESTAMP DEFAULT current_timestamp
+    );
+    """)
+
+    conn.execute("""
     CREATE TABLE IF NOT EXISTS scenario_history (
       doors_number TEXT PRIMARY KEY,
       scenario_uid TEXT,
@@ -448,3 +461,68 @@ def get_scenario_matrix(conn, limit=100, offset=0):
             "runs": runs,
         })
     return matrix
+
+
+# ── User management (stdlib PBKDF2-HMAC-SHA256; no external hashing deps) ──
+
+PBKDF2_ITERATIONS = 600_000
+
+
+def hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
+    """Hash a password with PBKDF2-HMAC-SHA256. Returns (hash_hex, salt_hex).
+
+    A random 16-byte salt is generated when one isn't supplied (normal path for
+    creating a new user). Pass the stored salt bytes back in to verify a login.
+    """
+    if salt is None:
+        salt = secrets.token_bytes(16)
+    hashed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return hashed.hex(), salt.hex()
+
+
+def verify_password(password: str, password_hash: str, salt: str) -> bool:
+    """Constant-time verification of a plaintext password against a stored hash/salt."""
+    try:
+        salt_bytes = bytes.fromhex(salt)
+    except (ValueError, TypeError):
+        return False
+    computed_hash, _ = hash_password(password, salt_bytes)
+    return hmac.compare_digest(computed_hash, password_hash)
+
+
+def get_user(conn, username: str) -> dict | None:
+    row = conn.execute(
+        "SELECT username, password_hash, salt, role, created_at FROM users WHERE username = ?",
+        [username],
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "username": row[0],
+        "password_hash": row[1],
+        "salt": row[2],
+        "role": row[3],
+        "created_at": row[4],
+    }
+
+
+def create_user(conn, username: str, password: str, role: str = "runner") -> None:
+    """Insert a new user row. Caller is responsible for commit() and for checking
+    for an existing username first (e.g. to return 409 instead of a PK violation)."""
+    password_hash, salt = hash_password(password)
+    conn.execute(
+        "INSERT INTO users (username, password_hash, salt, role) VALUES (?, ?, ?, ?)",
+        [username, password_hash, salt, role],
+    )
+
+
+def delete_user(conn, username: str) -> None:
+    conn.execute("DELETE FROM users WHERE username = ?", [username])
+
+
+def list_users(conn) -> list[dict]:
+    """Return all users as dicts containing username, role, created_at — never hashes."""
+    rows = conn.execute(
+        "SELECT username, role, created_at FROM users ORDER BY username"
+    ).fetchall()
+    return [{"username": r[0], "role": r[1], "created_at": r[2]} for r in rows]

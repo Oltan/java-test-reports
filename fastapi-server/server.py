@@ -31,7 +31,11 @@ from services.identifiers import extract_doors_id
 from services.csv_export import doors_csv_row, doors_csv_document
 from services.jira_helper import build_jira_description
 from bug_tracker import BugTracker
-from db import get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation, get_scenario_history, get_scenario_matrix
+from db import (
+    get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation,
+    get_scenario_history, get_scenario_matrix, create_user, get_user, verify_password,
+    list_users, delete_user,
+)
 from jira_client import JiraClient
 from pipeline import execute_pipeline
 from doors_service import run_doors_dxl, is_doors_available  # type: ignore[reportMissingImports]
@@ -48,6 +52,14 @@ JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+
+# Refuse to boot in production with the placeholder dev secret — signing tokens with a
+# well-known default would let anyone forge a valid session.
+if os.getenv("ENV", "").lower() == "production" and JWT_SECRET == "dev-secret-change-me":
+    raise RuntimeError(
+        "JWT_SECRET is set to the default 'dev-secret-change-me' while ENV=production. "
+        "Set a strong, unique JWT_SECRET environment variable before starting in production."
+    )
 
 MANIFESTS_DIR = Path(os.getenv("MANIFESTS_DIR", str(Path(__file__).parent.parent / "manifests")))
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -210,6 +222,17 @@ def _recover_orphans() -> int:
         return len(stale)
 
 
+def _seed_env_admin_user() -> None:
+    """Best-effort: ensure the env-configured admin exists as a row in `users` too,
+    so it's manageable via /api/admin/users from first boot. Never blocks startup;
+    a no-op once the row already exists (fresh DB only)."""
+    with get_connection(read_only=False) as conn:
+        init_schema(conn)
+        if get_user(conn, ADMIN_USERNAME) is None:
+            create_user(conn, ADMIN_USERNAME, ADMIN_PASSWORD, role="admin")
+            conn.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if os.getenv("RUN_RECOVERY_ON_STARTUP", "1") == "1":
@@ -220,6 +243,10 @@ async def lifespan(app: FastAPI):
             _dispatch_queued()
         except Exception as exc:  # never block startup on recovery
             print(f"[startup] orphan recovery skipped: {exc}")
+    try:
+        _seed_env_admin_user()
+    except Exception as exc:  # never block startup on admin seeding
+        print(f"[startup] admin user seeding skipped: {exc}")
     yield
 
 
@@ -251,13 +278,34 @@ class LoginResponse(BaseModel):
 
 class TokenData(BaseModel):
     username: str
+    role: str = "runner"
 
 
-def create_token(username: str) -> str:
+def create_token(username: str, role: str = "runner") -> str:
     payload = {
         "sub": username,
+        "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS),
         "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def create_service_token(name: str, days: int) -> str:
+    """Mint a stateless JWT for an AI-agent/service caller.
+
+    `sub` is namespaced as "svc:<name>" and role is fixed to "agent" so these
+    tokens are distinguishable from human logins wherever token.username /
+    token.role are surfaced (e.g. the `requester` field on test jobs). No
+    persistence or revocation list exists for these tokens — they are valid
+    purely by JWT signature + exp, exactly like human tokens from create_token().
+    """
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": f"svc:{name}",
+        "role": "agent",
+        "iat": now,
+        "exp": now + timedelta(days=days),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -271,7 +319,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: missing subject",
             )
-        return TokenData(username=username)
+        role = payload.get("role", "runner")
+        return TokenData(username=username, role=role)
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -302,9 +351,24 @@ def verify_token_page(request: Request) -> TokenData:
         username: Optional[str] = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/"})
-        return TokenData(username=username)
+        role = payload.get("role", "runner")
+        return TokenData(username=username, role=role)
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/"})
+
+
+def require_role(*roles: str):
+    """Dependency factory: requires a valid token AND token.role in `roles`, else 403."""
+
+    def _dependency(token: TokenData = Depends(verify_token)) -> TokenData:
+        if token.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requires role in {sorted(roles)}",
+            )
+        return token
+
+    return _dependency
 
 
 def _test_command(options: TestRunOptions, output_dir: str | None = None) -> list[str]:

@@ -1,0 +1,50 @@
+# systemd unit for the Test Reports Automation FastAPI server.
+#
+# Install:
+#   sudo cp scripts/test-reports.service /etc/systemd/system/test-reports.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now test-reports
+#
+# Before installing, edit the placeholders below:
+#   - WorkingDirectory / ExecStart python path: point at your actual deploy
+#     location (this file assumes the repo is checked out at
+#     /opt/test-reports; adjust if yours lives elsewhere).
+#   - EnvironmentFile: must point at a real fastapi-server/.env (copy from
+#     fastapi-server/.env.example and fill in real values, notably
+#     JWT_SECRET and ADMIN_PASSWORD).
+#   - User/Group: use a dedicated non-root service account, not root.
+#
+# See docs/RUNBOOK.md for the full operational guide.
+
+[Unit]
+Description=Test Reports Automation FastAPI server
+After=network.target
+
+[Service]
+# EDIT: absolute path to the fastapi-server directory of your deployment.
+WorkingDirectory=/opt/test-reports/fastapi-server
+
+# EDIT: absolute path to a real .env file (copied from .env.example).
+EnvironmentFile=/opt/test-reports/fastapi-server/.env
+
+# EDIT: use the python/uvicorn from your venv if you use one, e.g.
+#   /opt/test-reports/fastapi-server/venv/bin/python -m uvicorn server:app ...
+# --workers 1 is REQUIRED: the server keeps in-memory run/WebSocket state
+# and writes to a single-writer DuckDB file, so it cannot run with more
+# than one worker process. See docs/RUNBOOK.md "Tek Worker Kısıtı".
+ExecStart=/usr/bin/python3 -m uvicorn server:app --host 0.0.0.0 --port 8000 --workers 1
+
+Restart=on-failure
+RestartSec=5
+
+# EDIT: dedicated service account (create with e.g. `useradd -r -s /usr/sbin/nologin testreports`).
+User=testreports
+Group=testreports
+
+# Logs go to stdout/stderr, captured by journald. View with:
+#   journalctl -u test-reports -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

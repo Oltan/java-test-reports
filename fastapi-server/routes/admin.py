@@ -1,8 +1,12 @@
-"""Admin (sync/delete) and read-only dashboard-metrics routes, split out of
-server.py. Shared helpers referenced as server.X."""
-from typing import Optional, cast
+"""Admin (sync/delete), user management, service tokens, and read-only
+dashboard-metrics routes, split out of server.py. Shared helpers referenced
+as server.X."""
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Literal, Optional, cast
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 import server
 
@@ -149,3 +153,98 @@ async def dashboard_metrics(
         }
     finally:
         conn.close()
+
+
+# ── User management (admin only) ─────────────────────────────────────────────
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    role: Literal["admin", "runner"]
+
+
+class UserCreateResponse(BaseModel):
+    username: str
+    role: str
+
+
+@router.get("/api/admin/users", dependencies=[Depends(server.require_role("admin"))])
+def list_admin_users():
+    conn = server.get_connection(read_only=False)
+    try:
+        server.init_schema(conn)
+        return {"users": server.list_users(conn)}
+    finally:
+        conn.close()
+
+
+@router.post(
+    "/api/admin/users",
+    response_model=UserCreateResponse,
+    status_code=201,
+    dependencies=[Depends(server.require_role("admin"))],
+)
+def create_admin_user(req: UserCreateRequest):
+    if not req.username.strip() or not req.password:
+        raise HTTPException(status_code=422, detail="username and password are required")
+    conn = server.get_connection(read_only=False)
+    try:
+        server.init_schema(conn)
+        if server.get_user(conn, req.username) is not None:
+            raise HTTPException(status_code=409, detail=f"User '{req.username}' already exists")
+        server.create_user(conn, req.username, req.password, role=req.role)
+        conn.commit()
+        return UserCreateResponse(username=req.username, role=req.role)
+    finally:
+        conn.close()
+
+
+@router.delete("/api/admin/users/{username}", dependencies=[Depends(server.require_role("admin"))])
+def delete_admin_user(username: str, token: server.TokenData = Depends(server.verify_token)):
+    if username == token.username:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    conn = server.get_connection(read_only=False)
+    try:
+        server.init_schema(conn)
+        if server.get_user(conn, username) is None:
+            raise HTTPException(status_code=404, detail=f"User '{username}' not found")
+        server.delete_user(conn, username)
+        conn.commit()
+        return {"status": "deleted"}
+    finally:
+        conn.close()
+
+
+# ── Service tokens (admin only, for AI-agent / automation clients) ──────────
+
+class ServiceTokenRequest(BaseModel):
+    name: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,31}$")
+    days: Optional[int] = Field(default=None, ge=1, le=3650)
+
+
+class ServiceTokenResponse(BaseModel):
+    token: str
+    name: str
+    sub: str
+    role: str
+    expires_at: str
+
+
+@router.post(
+    "/api/admin/service-tokens",
+    response_model=ServiceTokenResponse,
+    dependencies=[Depends(server.require_role("admin"))],
+)
+def create_service_token_route(req: ServiceTokenRequest):
+    # Read the env default at call time (rather than baking it into the Pydantic
+    # field) so SERVICE_TOKEN_DAYS can change without a process restart mattering.
+    days = req.days if req.days is not None else int(os.getenv("SERVICE_TOKEN_DAYS", "365"))
+    token = server.create_service_token(req.name, days)
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+    return ServiceTokenResponse(
+        token=token,
+        name=req.name,
+        sub=f"svc:{req.name}",
+        role="agent",
+        expires_at=expires_at,
+    )

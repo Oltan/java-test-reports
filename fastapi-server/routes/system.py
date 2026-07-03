@@ -47,13 +47,33 @@ async def pipeline_status(run_id: str):
 
 @router.post("/api/v1/auth/login", response_model=server.LoginResponse)
 def login(req: server.LoginRequest, response: Response):
-    if req.username != server.ADMIN_USERNAME or req.password != server.ADMIN_PASSWORD:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    token = server.create_token(req.username)
+    """Look up credentials in the `users` table first; fall back to the env-configured
+    admin account. DB access is best-effort — any failure (missing file, lock, corrupt
+    schema) falls straight through to the env check rather than 500ing."""
+    role = None
+    try:
+        conn = server.get_connection(read_only=False)
+        try:
+            server.init_schema(conn)
+            user = server.get_user(conn, req.username)
+            if user and server.verify_password(req.password, user["password_hash"], user["salt"]):
+                role = user["role"] or "runner"
+        finally:
+            conn.close()
+    except Exception:
+        role = None
+
+    if role is None:
+        if req.username == server.ADMIN_USERNAME and req.password == server.ADMIN_PASSWORD:
+            role = "admin"
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    token = server.create_token(req.username, role)
     response.set_cookie(
         key="access_token",
         value=token,
-        httponly=False,
+        httponly=True,
         max_age=server.JWT_EXPIRATION_HOURS * 3600,
         samesite="lax",
         path="/",

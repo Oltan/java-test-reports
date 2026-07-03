@@ -17,10 +17,15 @@ from models import TestRunOptions
 router = APIRouter()
 
 
-@router.post("/api/tests/start", dependencies=[Depends(server.verify_token)])
-async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks):
+@router.post("/api/tests/start")
+async def start_tests(
+    options: TestRunOptions,
+    background_tasks: BackgroundTasks,
+    token: server.TokenData = Depends(server.verify_token),
+):
     """Start tests with validated options. Invalid options are rejected by Pydantic."""
     del background_tasks
+    requester = token.username
     job_id = f"job-{uuid4().hex[:8]}"
     now = datetime.now()
     run_ids = []
@@ -53,7 +58,7 @@ async def start_tests(options: TestRunOptions, background_tasks: BackgroundTasks
                 INSERT INTO jobs (job_id, requester, tags, retry_count, parallel, environment, version, browser, status, started_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                [job_id, "engineer", job_tags, options.retry_count, len(specs),
+                [job_id, requester, job_tags, options.retry_count, len(specs),
                  options.environment, options.version, options.browser, job_status, now],
             )
 
@@ -117,7 +122,8 @@ async def list_running_tests():
         rows = conn.execute(
             """
             SELECT j.job_id, j.tags, j.retry_count, j.parallel, j.environment, j.version, j.started_at,
-                   w.worker_id, w.run_id, w.shard, w.status as worker_status, w.output_dir, j.status
+                   w.worker_id, w.run_id, w.shard, w.status as worker_status, w.output_dir, j.status,
+                   j.requester
             FROM jobs j
             JOIN worker_runs w ON j.job_id = w.job_id
             WHERE j.status IN ('running', 'queued')
@@ -139,6 +145,7 @@ async def list_running_tests():
                 "version": row[5],
                 "started_at": row[6].isoformat() if row[6] else None,
                 "status": row[12],
+                "requester": row[13],
                 "workers": [],
             }
         jobs_map[job_id]["workers"].append({
@@ -161,7 +168,8 @@ async def list_all_jobs():
             """
             SELECT j.job_id, j.tags, j.retry_count, j.parallel, j.environment, j.version,
                    j.status, j.started_at, j.ended_at,
-                   w.worker_id, w.run_id, w.shard, w.status as worker_status, w.output_dir
+                   w.worker_id, w.run_id, w.shard, w.status as worker_status, w.output_dir,
+                   j.requester
             FROM jobs j
             JOIN worker_runs w ON j.job_id = w.job_id
             ORDER BY j.started_at DESC
@@ -183,6 +191,7 @@ async def list_all_jobs():
                     "status": row[6],
                     "started_at": row[7].isoformat() if row[7] else None,
                     "ended_at": row[8].isoformat() if row[8] else None,
+                    "requester": row[14],
                     "workers": [],
                 }
             jobs_map[job_id]["workers"].append({

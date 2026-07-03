@@ -15,7 +15,19 @@ async function apiFetch(url, opts = {}) {
   const headers = { "Content-Type": "application/json", ...opts.headers ?? {} };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(url, { ...opts, headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body?.detail || "";
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    const err = new Error(detail || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.detail = detail;
+    throw err;
+  }
   return res.json();
 }
 
@@ -35,7 +47,6 @@ async function handleLogin(e) {
       body: JSON.stringify({ username, password }),
     });
     setToken(data.token);
-    document.cookie = `access_token=${data.token}; path=/; SameSite=Lax; max-age=${24 * 3600}`;
     showAdmin();
   } catch {
     errorEl.textContent = "Geçersiz kullanıcı adı veya şifre";
@@ -73,6 +84,7 @@ function showAdmin() {
   loadJobHistory();
   loadVersions();
   loadRunsManage();
+  loadUsers();
   connectLiveStateWebSocket();
   setInterval(loadRunningTests, 5000);
   setInterval(loadJobHistory, 15000);
@@ -338,6 +350,7 @@ function renderJobCard(job, showCancel = false) {
         ${env ? `<span class="job-detail">${env}</span>` : ""}
         ${version ? `<span class="job-detail">${version}</span>` : ""}
         ${startedAt ? `<span class="job-detail job-detail--time">${startedAt}</span>` : ""}
+        ${job.requester ? `<span class="job-detail">👤 ${job.requester}</span>` : ""}
       </div>
       ${workersHtml}
       ${flakyInfo}
@@ -470,6 +483,91 @@ async function loadVersions() {
   }
 }
 
+async function loadUsers() {
+  const container = $("users-list");
+  if (!container) return;
+  try {
+    const data = await apiFetch("/api/admin/users");
+    if (!data.users || data.users.length === 0) {
+      container.innerHTML = '<div class="running-tests-empty">Kullanıcı bulunamadı</div>';
+      return;
+    }
+    container.innerHTML = data.users.map(u => {
+      const created = u.created_at ? new Date(u.created_at).toLocaleString("tr-TR") : "";
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--card-bg);border-radius:8px;margin-bottom:8px;gap:12px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <span style="font-family:monospace;font-size:13px;">${u.username}</span>
+            ${created ? `<span style="font-size:12px;color:var(--text-muted);">${created}</span>` : ""}
+          </div>
+          <div style="display:flex;gap:12px;align-items:center;font-size:13px;flex-shrink:0;">
+            <span class="version-count">${u.role}</span>
+            <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;" onclick="window.deleteUserAccount('${u.username}')">Sil</button>
+          </div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    container.innerHTML = e?.status === 403
+      ? '<div class="running-tests-empty">Bu işlem için admin yetkisi gerekli</div>'
+      : '<div class="running-tests-empty">Yüklenemedi</div>';
+  }
+}
+
+async function addUser() {
+  const username = $("new-username")?.value?.trim();
+  const password = $("new-password")?.value;
+  const role = $("new-role")?.value || "runner";
+  const msg = $("user-status-msg");
+  if (!msg) return;
+  if (!username || !password) {
+    msg.textContent = "Kullanıcı adı ve şifre gerekli";
+    msg.className = "admin-status-msg admin-status--error";
+    return;
+  }
+  try {
+    msg.textContent = "Ekleniyor…";
+    msg.className = "admin-status-msg admin-status--pending";
+    await apiFetch("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify({ username, password, role }),
+    });
+    msg.textContent = `Kullanıcı eklendi: ${username}`;
+    msg.className = "admin-status-msg admin-status--success";
+    if ($("new-username")) $("new-username").value = "";
+    if ($("new-password")) $("new-password").value = "";
+    loadUsers();
+  } catch (e) {
+    if (e.status === 403) {
+      msg.textContent = "Bu işlem için admin yetkisi gerekli";
+    } else if (e.status === 409) {
+      msg.textContent = "Kullanıcı zaten var";
+    } else {
+      msg.textContent = `Hata: ${e.message}`;
+    }
+    msg.className = "admin-status-msg admin-status--error";
+  }
+}
+
+async function deleteUserAccount(username) {
+  if (!confirm(`"${username}" kullanıcısını silmek istediğinize emin misiniz?`)) return;
+  const msg = $("user-status-msg");
+  try {
+    await apiFetch(`/api/admin/users/${username}`, { method: "DELETE" });
+    loadUsers();
+  } catch (e) {
+    let text = `Silinemedi: ${e.message}`;
+    if (e.status === 403) text = "Bu işlem için admin yetkisi gerekli";
+    else if (e.status === 400) text = "Kendi hesabını silemezsin";
+    else if (e.status === 404) text = "Kullanıcı bulunamadı";
+    if (msg) {
+      msg.textContent = text;
+      msg.className = "admin-status-msg admin-status--error";
+    } else {
+      alert(text);
+    }
+  }
+}
+
 function initThemeToggle() {
   const saved = localStorage.getItem("theme") || "dark";
   document.documentElement.setAttribute("data-theme", saved);
@@ -485,6 +583,7 @@ function initThemeToggle() {
 window.cancelTest = cancelTest;
 window.cancelJob = cancelJob;
 window.deleteRun = deleteRun;
+window.deleteUserAccount = deleteUserAccount;
 
 (async function init() {
   $("login-form")?.addEventListener("submit", handleLogin);
@@ -494,6 +593,7 @@ window.deleteRun = deleteRun;
   $("add-worker-btn")?.addEventListener("click", () => addWorkerRow());
   $("pipeline-btn")?.addEventListener("click", triggerPipeline);
   $("delete-all-btn")?.addEventListener("click", deleteAllRuns);
+  $("add-user-btn")?.addEventListener("click", addUser);
   initThemeToggle();
 
   const token = getToken();

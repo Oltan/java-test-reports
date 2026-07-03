@@ -99,8 +99,17 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 ### Ortam notu (Java/Maven)
 Bu ortamda: `mvn` 3.9.11 + Java 21 + cache'li deps → **derleme, unit test, cucumber dry-run çalışır**. **Chrome binary yok** (sadece chromedriver) → gerçek Selenium koşumu çalışmaz; o yüzden koşum hep mock'lanır.
 
-### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
-- P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`
+### ✅ Çok Kullanıcılılık + Agent Zemini (TAMAMLANDI — cloud oturumundan uyarlandı)
+- **users tablosu** (pbkdf2 600k iter, stdlib; `hash_password`/`verify_password`/`get_user`/`create_user`/`delete_user`/`list_users` db.py'de)
+- **Roller**: `TokenData.role` (default `runner`), `create_token(username, role)`, `require_role(*roles)` (403), `create_service_token(name, days)` → `sub=svc:<name>`, `role=agent`
+- **Login** (routes/system.py): önce users tablosu, sonra env admin fallback (rol `admin`); cookie `httponly=True`; `ENV=production` + default `JWT_SECRET` → import'ta RuntimeError; lifespan'da env admin seed (korumalı)
+- **`/api/admin/users`** GET/POST/DELETE (admin; 409 dup, 400 self-delete, 404, 422) + **`/api/admin/service-tokens`** (`SERVICE_TOKEN_DAYS` default 365)
+- **requester**: `start_tests` → `token.username` (eski `"engineer"` sabiti kalktı); `/api/tests/running` + `/api/tests/jobs` yanıtlarında `requester`
+- **Failures fallback** (routes/runs.py): manifest yoksa DuckDB'den scenario_uid başına son deneme (FAILED/BROKEN), error sentetik step; bilinen run + 0 hata → `[]`; bilinmeyen → 404; public kontrat aynen. DİKKAT: `get_connection(read_only=False)` şart — read-only bağlantıda `init_schema` DDL'i patlar (canlıda bulunan bug)
+- **UI**: Admin'e Kullanıcı Yönetimi paneli; job kartlarında 👤 requester; dashboard'a "Canlı Koşumlar" widget'ı (10sn polling + WS progress/state merge; form-login sonrası da başlıyor); ölü `document.cookie` yazımları kalktı
+- **Docs**: `docs/RUNBOOK.md` (TR, tüm env varlar), `docs/API.md` (EN, agent-tüketimi; bu branch'in gerçek şekillerine göre doğrulandı), `fastapi-server/.env.example`, `scripts/test-reports.service` (`--workers 1`)
+- Ölü `services/auth.py` kopyası silindi; `tests/test_multiuser.py` eklendi (15 test)
+- **163 pytest passed**; canlı smoke: iki kullanıcı + kuyruk + requester + kullanıcı paneli + dashboard widget Playwright ile doğrulandı
 
 ---
 
