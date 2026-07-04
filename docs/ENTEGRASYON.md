@@ -535,3 +535,40 @@ Maven/Allure ajan PATH'inde olmalı; değilse `MAVEN_HOME`/`ALLURE_BIN` ortam de
 **401 Unauthorized** — Token süresi dolmuş (varsayılan 24 saat, `JWT_EXPIRATION_HOURS`). Yeniden login olun.
 
 **`mvn`/`allure` bulunamıyor** — PATH'e ekleyin veya `MAVEN_CMD` / `ALLURE_BIN` ile tam yol verin.
+
+## Ek: Cucumber dışı Java test projeleri (ör. TestFX / JavaFX)
+
+Sunucunun **ingest'i tamamen Allure-generic'tir**: `_parse_allure_result`
+yalnızca Allure sonuç JSON'unun `status / name / fullName / labels / steps /
+attachments / historyId` alanlarını okur. Allure sonucu üreten her Java test
+framework'ü (JUnit 5 + `allure-junit5`, TestNG + `allure-testng`, TestFX dahil)
+rapor/dashboard/failures/attachment boru hattını olduğu gibi kullanabilir.
+
+**Konfigürasyonla çalışan kısımlar (kod değişikliği gerekmez):**
+- `JAVA_PROJECT_ROOT` + `MAVEN_MODULE` başka bir depoyu/modülü gösterebilir.
+- Per-run izolasyon `-Dallure.results.directory` üzerinden çalışır — hedef
+  projenin surefire config'i bu property'yi forked JVM'e geçirmelidir
+  (bu depodaki `test-core/pom.xml` `<systemPropertyVariables>` bloğu örnek).
+- DOORS eşleme: JUnit 5 `@Tag("DOORS-12345")` Allure'da `tag` label'ı olur;
+  mevcut çıkarım aynen çalışır.
+- Ekran görüntüsü: fail'de `Allure.addAttachment(..., "image/png", ...)`
+  üreten bir JUnit Extension yazın (TestFX `robot.capture(...)`); P5
+  attachment kopyalama/servis boru hattı aynen çalışır.
+- TestFX'i headless koşturmak için: `openjfx-monocle` + `-Dtestfx.headless=true
+  -Dglass.platform=Monocle -Dmonocle.platform=Headless -Dprism.order=sw`
+  (Chrome gerektirmediği için Selenium'dan daha kolay CI'lanır).
+
+**Uyarlama gerektiren kısımlar (Cucumber'a özgü):**
+- `tags` filtresi her zaman `-Dcucumber.filter.tags` olarak geçilir; JUnit 5
+  bunu yok sayar → filtre sessizce etkisiz kalır (tüm testler koşar). JUnit 5
+  için surefire `-Dgroups=<tag>` beklenir; küçük bir adapter gerekir
+  (ör. `TEST_FILTER_PROPERTY` env'i ile `_test_command` genelleştirilebilir).
+- `mode=shard` + `/api/tests/discovery` Cucumber dry-run'a dayanır → kullanmayın.
+- `retry_count` `RetryTestRunner`'a (Cucumber) dayanır; JUnit 5 için surefire
+  `-Dsurefire.rerunFailingTestsCount=N` kullanılabilir ama attempt/flaky
+  raporlaması `--retry-N` historyId konvansiyonunu beklediği için retry
+  metrikleri dolmaz.
+- `browser` alanı JavaFX için anlamsızdır (zorunlu değil; default `chrome`
+  geçer, zararsız).
+- Video: `VideoHook` bir Cucumber hook'udur; JavaFX'te video isterseniz ayrı
+  bir JUnit Extension + Xvfb/ffmpeg kurmanız gerekir.
