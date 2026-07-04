@@ -33,6 +33,11 @@ os.environ.setdefault("ADMIN_PASSWORD", "admin123")
 # Don't run startup orphan-recovery against the real DB during tests; the
 # recovery logic is exercised directly in test_run_lifecycle.py instead.
 os.environ.setdefault("RUN_RECOVERY_ON_STARTUP", "0")
+# Likewise disable the startup retention sweep: TestClient lifespans would
+# otherwise sweep the REAL test-core/target dir. test_retention.py opts back
+# in via monkeypatch.setenv against tmp dirs.
+os.environ.setdefault("RUN_RETENTION_DAYS", "0")
+os.environ.setdefault("RUN_RETENTION_MAX_RUNS", "0")
 
 from server import app  # noqa: E402
 

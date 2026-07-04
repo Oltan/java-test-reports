@@ -30,6 +30,7 @@ from maven import maven_executable
 from services.identifiers import extract_doors_id
 from services.csv_export import doors_csv_row, doors_csv_document
 from services.jira_helper import build_jira_description
+from services.retention import cleanup_run_artifacts
 from bug_tracker import BugTracker
 from db import (
     get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation,
@@ -233,6 +234,20 @@ def _seed_env_admin_user() -> None:
             conn.commit()
 
 
+def _run_retention() -> None:
+    """Best-effort sweep of expired per-run artifact dirs (see services/retention.py).
+    Called on startup (after orphan recovery) and after each run finishes."""
+    try:
+        summary = cleanup_run_artifacts(
+            get_connection, PROJECT_ROOT / MAVEN_MODULE / "target", MANIFESTS_DIR
+        )
+        if summary["removed"]:
+            print(f"[retention] removed artifacts of {len(summary['removed'])} run(s): "
+                  + ", ".join(summary["removed"]))
+    except Exception as exc:  # never block the caller on cleanup
+        print(f"[retention] sweep skipped: {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if os.getenv("RUN_RECOVERY_ON_STARTUP", "1") == "1":
@@ -247,6 +262,7 @@ async def lifespan(app: FastAPI):
         _seed_env_admin_user()
     except Exception as exc:  # never block startup on admin seeding
         print(f"[startup] admin user seeding skipped: {exc}")
+    _run_retention()  # after orphan recovery so crashed runs are already terminal
     yield
 
 
@@ -719,6 +735,8 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         _dispatch_queued()
     except Exception:
         pass
+
+    _run_retention()
 
 
 def _parse_allure_result(result_file: Path) -> dict | None:
