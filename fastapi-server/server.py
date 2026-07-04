@@ -739,7 +739,31 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
     _run_retention()
 
 
-def _parse_allure_result(result_file: Path) -> dict | None:
+def _fixture_attachments(allure_dir: Path) -> dict[str, list[dict]]:
+    """Map test-result uuid -> attachments produced by its Before/After hooks.
+
+    Allure writes hook (fixture) attachments — e.g. ScreenshotHook's failure
+    screenshot — into *-container.json (befores/afters), NOT into the test's
+    own *-result.json, so ingest must merge them in from the containers."""
+    by_uuid: dict[str, list[dict]] = {}
+    for container_file in allure_dir.glob("*-container.json"):
+        try:
+            data = json.loads(container_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        atts = [
+            {"name": a.get("name") or a["source"], "type": a.get("type") or "", "source": a["source"]}
+            for fixture in (data.get("befores") or []) + (data.get("afters") or [])
+            for a in (fixture.get("attachments") or [])
+            if isinstance(a, dict) and a.get("source")
+        ]
+        if atts:
+            for child in data.get("children") or []:
+                by_uuid.setdefault(child, []).extend(atts)
+    return by_uuid
+
+
+def _parse_allure_result(result_file: Path, fixture_atts: dict[str, list[dict]] | None = None) -> dict | None:
     """Parse a single Allure result JSON file and extract full metadata."""
     try:
         data = json.loads(result_file.read_text(encoding="utf-8"))
@@ -831,6 +855,10 @@ def _parse_allure_result(result_file: Path) -> dict | None:
             _collect_atts(st)
 
     _collect_atts(data)
+    # Hook-produced attachments (e.g. failure screenshots) live in the
+    # container JSONs, keyed by this result's uuid.
+    if fixture_atts:
+        attachments.extend(fixture_atts.get(data.get("uuid") or "", []))
 
     def _first_source(*, image: bool) -> str | None:
         for a in attachments:
@@ -983,8 +1011,9 @@ def _save_results_to_duckdb(run_id: str, options: TestRunOptions, started_at: da
 
     if effective_allure_dir.exists():
         all_parsed = []
+        fixture_atts = _fixture_attachments(effective_allure_dir)
         for result_file in sorted(effective_allure_dir.glob("*-result.json")):
-            parsed = _parse_allure_result(result_file)
+            parsed = _parse_allure_result(result_file, fixture_atts)
             if parsed is not None:
                 all_parsed.append(parsed)
 

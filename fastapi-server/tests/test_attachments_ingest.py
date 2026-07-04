@@ -93,3 +93,29 @@ def test_save_results_populates_attachment_paths(tmp_path):
     atts = data["scenarios"][0]["attachments"]
     assert {"name": "shot", "type": "image/png", "path": "run-att/s1.png"} in atts
     assert {"name": "rec", "type": "video/mp4", "path": "run-att/v1.mp4"} in atts
+
+
+def test_fixture_attachments_merged_from_containers(tmp_path):
+    """Hook attachments (ScreenshotHook) land in *-container.json afters, keyed
+    to the test by children uuid — ingest must merge them into the scenario."""
+    import server as srv
+    allure = tmp_path / "allure"; allure.mkdir()
+    result = _allure_result(uuid="uuid-1", steps=[], attachments=[])
+    (allure / "x-result.json").write_text(json.dumps(result))
+    (allure / "c-container.json").write_text(json.dumps({
+        "uuid": "c-1",
+        "children": ["uuid-1"],
+        "befores": [],
+        "afters": [{
+            "name": "com.testreports.allure.ScreenshotHook.captureScreenshot",
+            "attachments": [{"name": "Screenshot", "source": "hook.png", "type": "image/png"}],
+        }],
+    }))
+
+    fixture_atts = srv._fixture_attachments(allure)
+    assert fixture_atts == {"uuid-1": [{"name": "Screenshot", "type": "image/png", "source": "hook.png"}]}
+
+    parsed = srv._parse_allure_result(allure / "x-result.json", fixture_atts)
+    assert parsed["screenshot_source"] == "hook.png"
+    # Without the container map the screenshot is invisible (the old bug).
+    assert srv._parse_allure_result(allure / "x-result.json")["screenshot_source"] is None

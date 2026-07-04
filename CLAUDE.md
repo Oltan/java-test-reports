@@ -97,7 +97,7 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 - **148 pytest passed**; `tests/test_shard.py::test_discovery_real_mvn` GERÇEK mvn dry-run ile çalışır (mvn yoksa skip). NOT: shard'ların *fiili koşumu* Chrome gerektirir (bu ortamda yok) — keşif+bölme+komut gerçek doğrulandı, koşum birim testle.
 
 ### Ortam notu (Java/Maven)
-Bu ortamda: `mvn` 3.9.11 + Java 21 + cache'li deps → **derleme, unit test, cucumber dry-run çalışır**. **Chrome binary yok** (sadece chromedriver) → gerçek Selenium koşumu çalışmaz; o yüzden koşum hep mock'lanır.
+Bu ortamda: `mvn` 3.9.11 + Java 21 + cache'li deps → **derleme, unit test, cucumber dry-run çalışır**. **GÜNCELLEME (2026-07-04): Chrome artık VAR** (`/usr/bin/google-chrome` + Selenium Manager cache) → **gerçek Selenium koşumları çalışıyor** (`@smoke`: 6 passed + 1 bilerek-broken demo, ~15-20 sn). İnternet erişimi de var (testler example.com'a gidiyor). Eski "koşum mock'lanır" varsayımı geçersiz.
 
 ### ✅ Çok Kullanıcılılık + Agent Zemini (TAMAMLANDI — cloud oturumundan uyarlandı)
 - **users tablosu** (pbkdf2 600k iter, stdlib; `hash_password`/`verify_password`/`get_user`/`create_user`/`delete_user`/`list_users` db.py'de)

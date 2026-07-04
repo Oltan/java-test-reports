@@ -43,7 +43,9 @@ public class LoginSteps {
         wait.until(d -> d.findElement(By.id("this-element-does-not-exist-12345")));
     }
 
-    @After(order = 1001)
+    // After hooks run in DESCENDING order: quit must run LAST (after
+    // VideoHook order=200 and ScreenshotHook order=100), so lowest order here.
+    @After(order = 1)
     public void cleanup() {
         if (driver != null) {
             driver.quit();
