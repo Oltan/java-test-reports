@@ -18,6 +18,9 @@
 
     <!-- Per-run isolation defaults — override via -D on the Maven CLI -->
     <properties>
+        <!-- Mirrors cucumber.properties; without a default the retry-runner profile
+             would forward the literal string ${cucumber.plugin} to the forked JVM. -->
+        <cucumber.plugin>io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,com.testreports.allure.FailureLocationCapture,pretty</cucumber.plugin>
         <allure.results.directory>target/allure-results</allure.results.directory>
         <video.dir>target/videos</video.dir>
         <retry.state.dir>target/retry-state</retry.state.dir>

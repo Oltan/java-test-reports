@@ -111,26 +111,34 @@ Runner örneği (bu depodaki `test-core/src/test/java/com/testreports/runner/Cuc
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("features")   // src/test/resources/features
-@ConfigurationParameter(key = PLUGIN_PROPERTY_NAME,
-    value = "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,"
-          + "com.sirket.proje.allure.FailureLocationCapture,"
-          + "json:target/cucumber-report.json,pretty")
-@ConfigurationParameter(key = GLUE_PROPERTY_NAME,
-    value = "com.sirket.proje.allure,com.sirket.proje.steps")
 public class CucumberTestRunner {}
 ```
 
-`GLUE_PROPERTY_NAME` içinde **iki paket zorunludur**: hook paketi (`...allure`) ve kendi step paketiniz.
+> **`@ConfigurationParameter` KULLANMAYIN.** Anotasyon, JUnit Platform'da system
+> property'leri ezer; sunucunun per-run geçtiği `-Dcucumber.plugin` /
+> `-Dcucumber.glue` override'ları çalışmaz. Plugin/glue default'larını
+> `src/test/resources/junit-platform.properties` dosyasına koyun (aşağıda).
+
+`cucumber.glue` içinde **iki paket zorunludur**: hook paketi (`...allure`) ve kendi step paketiniz.
 
 ## 5. Properties dosyaları
 
-`src/test/resources/cucumber.properties`:
+`src/test/resources/junit-platform.properties` (JUnit Platform engine yolu —
+`CucumberTestRunner`; system property'ler bu dosyayı ezebilir):
+
+```properties
+cucumber.plugin=io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,com.sirket.proje.allure.FailureLocationCapture,pretty
+cucumber.glue=com.sirket.proje.allure,com.sirket.proje.steps
+cucumber.publish.quiet=true
+```
+
+`src/test/resources/cucumber.properties` (Cucumber CLI yolu — `RetryTestRunner`
+bu dosyayı okur; JUnit Platform engine bunu OKUMAZ):
 
 ```properties
 cucumber.publish.quiet=true
 cucumber.plugin=io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,\
   com.sirket.proje.allure.FailureLocationCapture,\
-  json:target/cucumber-report.json,\
   pretty
 cucumber.glue=com.sirket.proje.allure,com.sirket.proje.steps
 ```
@@ -142,7 +150,7 @@ allure.results.directory=target/allure-results
 allure.report.directory=target/allure-report
 ```
 
-> `cucumber.plugin` hem runner'da hem properties dosyasında tanımlıysa Cucumber ikisini birleştirir ve Allure plugin iki kez çalışabilir. Tek kaynak seçin.
+> `json:target/cucumber-report.json` plugin'i kaldırıldı: sabit yol paralel koşumlarda çakışır ve sistemdeki ingest tamamen Allure sonuçlarını okur — JSON raporu tüketen yoktur.
 
 ## 6. Feature yazım kuralları: DOORS ve bağımlılık etiketleri
 

@@ -127,9 +127,10 @@ Bu ortamda: `mvn` 3.9.11 + Java 21 + cache'li deps → **derleme, unit test, cuc
 **models.py:**
 - Tags regex `^@[\w,\-]+$` (models.py:96) gerçek Cucumber ifadelerini (`@a and not @b`) reddediyor
 
-**Java engeli:**
-- `CucumberTestRunner.java:16`'daki `@ConfigurationParameter(PLUGIN...)` JUnit Platform'da system property'yi eziyor → `-Dcucumber.plugin` override'ı çalışmıyor
-- Çözüm: anotasyonu kaldır, default'ları `cucumber.properties`'e taşı
+**Java engeli (ÇÖZÜLDÜ):**
+- `@ConfigurationParameter(PLUGIN/GLUE)` anotasyonları kaldırıldı; default'lar `junit-platform.properties`'e taşındı (DİKKAT: JUnit Platform engine `cucumber.properties`'i OKUMAZ — o dosya sadece RetryTestRunner'ın CLI yolu için). `-Dcucumber.plugin` override artık çalışıyor (bogus-plugin testiyle kanıtlandı)
+- `json:target/cucumber-report.json` plugin'i tamamen kaldırıldı (tüketen yoktu; sabit yol paralelde çakışıyordu)
+- pom `<properties>`'e `cucumber.plugin` default'u eklendi — yoksa retry-runner profili forked JVM'e literal `${cucumber.plugin}` geçiriyordu
 
 ### RM-1 hedef davranış
 Per-run izole edilecek çıktılar:
