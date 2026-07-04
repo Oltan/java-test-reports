@@ -70,6 +70,7 @@ Kaynak: `fastapi-server/.env.example` (bu dosyayla senkron tutulmalıdır).
 | `RUN_RECOVERY_ON_STARTUP` | `1` | Açılışta önceki süreçten kalan `running`/`queued` satırları `interrupted` işaretle | Hayır |
 | `RUN_RETENTION_DAYS` | `30` | Bu kadar günden eski (terminal durumdaki) koşumların ağır artifact'ları silinir: `target/allure-results-{run_id}/` + `manifests/{run_id}/` ek dosyaları. Manifest JSON'ları ve DuckDB satırları KALIR (geçmiş/dashboard bozulmaz; eski ekran görüntüsü/videolar 404 olur). `0` = yaş kuralı kapalı | Hayır |
 | `RUN_RETENTION_MAX_RUNS` | `0` | Ek üst sınır: en yeni N koşum dışındakilerin artifact'ları silinir. `0` = sınırsız | Hayır |
+| `TEST_HEADLESS` | `1` | `0`/`false` → tarayıcı görünür modda koşar (`-Dbrowser.headless=false`). Video kaydı (VideoHook/x11grab) için gerekli; forked JVM'in erişebildiği bir `DISPLAY` şart (Xvfb önerilir — WSLg `:0` root'u siyah kaydedilir) | Hayır |
 | `REPORTS_DUCKDB_PATH` | `reports.duckdb` | DuckDB dosya yolu (göreli ise çalışma dizinine göredir) | Önerilir (mutlak yol verin) |
 | `MANIFESTS_DIR` | `<repo_kökü>/manifests` | Run manifest JSON'larının okunduğu/yazıldığı dizin | Hayır |
 | `JAVA_PROJECT_ROOT` | `<repo_kökü>` | Maven parent `pom.xml` dizini | Hayır |

@@ -402,6 +402,10 @@ def _test_command(options: TestRunOptions, output_dir: str | None = None) -> lis
         cmd.append(f"-Dcucumber.features={options.features}")
     if output_dir:
         cmd.append(f"-Dallure.results.directory={output_dir}")
+    # TEST_HEADLESS=0/false runs the browser visibly (needs a display, e.g.
+    # WSLg/Xvfb) so VideoHook's x11grab recording captures the actual test.
+    if os.getenv("TEST_HEADLESS", "1").lower() in ("0", "false"):
+        cmd.append("-Dbrowser.headless=false")
     return cmd
 
 
