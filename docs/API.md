@@ -521,7 +521,16 @@ to `image/png|video/mp4|text/plain`.
 
 ## 6. Agent integration recipe
 
-A minimal end-to-end sequence an AI agent can follow literally:
+**Reference client:** `scripts/agent_run.py` (repo root; Python stdlib only)
+implements this whole recipe as a CLI — start, poll, per-run summary, failure
+details, meaningful exit codes (0 green, 1 failures, 2 not completed, 3 error):
+
+```bash
+REPORTS_TOKEN=<service-token> python3 scripts/agent_run.py \
+  --base-url http://localhost:8000 --tags @smoke
+```
+
+The raw sequence, step by step:
 
 1. **Log in** (or use a pre-minted service token — skip to step 2 if so):
    ```bash
