@@ -187,15 +187,15 @@ git add -A && git commit -m "Wave N: ..." && git push -u origin claude/dreamy-he
 
 ---
 
-## KABUL KRİTERLERİ (Proje tamamlandığında)
+## KABUL KRİTERLERİ (TAMAMLANDI — canlı kabul turu 2026-07-04)
 
-- [ ] Farklı tag'li iki eşzamanlı koşu DuckDB'de çakışmasız tamamlanır
-- [ ] Durdurulan koşum: yetim süreç kalmaz (`pgrep -f test-core` boş), kardeş etkilenmez
-- [ ] Restart sonrası takılı `running` kalmaz (→ `interrupted`)
-- [ ] Kuyruk: limit doluyken `queued` görünür, sıra gelince başlar; duplicate 409 → `force` ile geçilir
-- [ ] Admin UI'da per-run durdurma ve kuyruk paneli çalışır
-- [ ] `python3 -m pytest tests/ -v` → 0 fail
-- [ ] `mvn clean compile` → BUILD SUCCESS
+- [x] Farklı tag'li iki eşzamanlı koşu DuckDB'de çakışmasız tamamlanır (TEST_MAX_CONCURRENCY=2, gerçek mvn, iki ayrı ingest doğrulandı)
+- [x] Durdurulan koşum: yetim süreç kalmaz (java süreç sayısı 0), kardeş etkilenmez (kardeş `completed`, iptal edilen `cancelled` kaldı)
+- [x] Restart sonrası takılı `running` kalmaz (→ `interrupted`; PID-korumalı kill canlı doğrulandı — cmdline'ında test-core olan decoy süreç öldürüldü, worker+job `interrupted`)
+- [x] Kuyruk: limit doluyken `queued` görünür, sıra gelince başlar (FIFO drain canlı doğrulandı); duplicate 409 → `force` ile geçilir
+- [x] Admin UI'da per-run durdurma ve kuyruk paneli çalışır (RM-4 + multiuser oturumunda Playwright ile canlı doğrulanmıştı)
+- [x] `python3 -m pytest tests/ -v` → 0 fail (169 passed)
+- [x] `mvn clean compile` → BUILD SUCCESS
 
 ---
 
