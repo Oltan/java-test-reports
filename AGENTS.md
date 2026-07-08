@@ -88,6 +88,22 @@ python3 -m pytest tests/ -v
 mvn test -Dtest=DependencyResolverTest
 ```
 
+## AJAN ÇALIŞMA KURALLARI
+
+Otonom test otomasyonunun tam kural kitabı: **`docs/OTOMASYON_KURALLARI.md`**.
+Mekanik senaryo kuralları `fastapi-server/tests/test_feature_conventions.py`
+lint kapısıyla zorlanır (pytest suite'in parçası).
+
+L1 karar ağacı özeti (aktif otonomi seviyesi):
+1. Koşum HEP `POST /api/tests/start` ile; koşum sonrası `GET /api/v1/runs/{id}/failures`
+2. Her failure için önce auto-match (`POST /api/triage/{run}/auto-match-jira`) — eski bug varsa linkle, yeni bug AÇMA
+3. Eşleşmeyen FAILED (assertion) → triage jira-create ile bug aç (duplicate'ı sistem engeller)
+4. BROKEN (infra) ve `@sample-fail` → bug açma; raporla / insana devret
+5. Kapanış: DOORS CSV (`/api/csv/export?run_id=`) + run raporu + özet (sessiz başarısızlık yasak)
+
+İnsan onayı gerektirenler: `DRY_RUN`'ı kapatmak, senaryo silmek, main'e dokunmak,
+kural kitabını veya çapa testleri değiştirmek.
+
 ## NOTES
 
 - **ffmpeg**: Video kaydı için gerekli ama opsiyonel — yoksa graceful skip
