@@ -22,6 +22,18 @@ def test_dry_run_returns_deterministic_results(monkeypatch):
     assert client.attach_screenshot("DRY-RUN-001", "/tmp/screenshot.png") is True
 
 
+def test_dry_run_search_matches_doors_number_in_description(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
+
+    client = JiraClient()
+    # doors_number not passed separately — only mentioned inside the description,
+    # mirroring issues created before the custom field was dropped.
+    created = client.create_issue("summary", "h2. Failure\n*DOORS Number:* DOORS-777")
+
+    results = client.search_by_doors_number("DOORS-777")
+    assert [r["key"] for r in results] == [created["key"]]
+
+
 def test_create_issue_uses_atlassian_with_wiki_renderer_description(monkeypatch):
     monkeypatch.delenv("JIRA_DRY_RUN", raising=False)
     monkeypatch.delenv("JIRA_VERIFY_SSL", raising=False)
@@ -37,13 +49,14 @@ def test_create_issue_uses_atlassian_with_wiki_renderer_description(monkeypatch)
 
     # JiraClient passes verify_ssl (from JIRA_VERIFY_SSL, default true) to Jira.
     jira_class.assert_called_once_with(url="https://jira.local", token="pat", verify_ssl=True)
+    # No DOORS custom field exists in the Jira project: the DOORS number is
+    # appended to the description instead (searchable via description ~ JQL).
     jira.create_issue.assert_called_once_with(
         fields={
             "project": {"key": "BUG"},
             "summary": "Failed scenario",
-            "description": "h2. Failure",
+            "description": "h2. Failure\n\n*DOORS Number:* DOORS-42",
             "issuetype": {"name": "Bug"},
-            "DOORS Number": "DOORS-42",
         }
     )
     assert result == {"key": "BUG-123", "status": "Open"}
@@ -66,7 +79,7 @@ def test_search_status_comment_and_attachment_use_atlassian(monkeypatch):
         assert client.add_comment("BUG-1", "wiki comment") is True
         assert client.attach_screenshot("BUG-1", "/tmp/failure.png") is True
 
-    jira.jql.assert_called_once_with('project = BUG AND "DOORS Number" ~ "DOORS-42"')
+    jira.jql.assert_called_once_with('project = BUG AND description ~ "\\"DOORS-42\\""')
     jira.issue.assert_called_once_with("BUG-1")
     jira.issue_add_comment.assert_called_once_with("BUG-1", "wiki comment")
     jira.add_attachment.assert_called_once_with("BUG-1", "/tmp/failure.png")

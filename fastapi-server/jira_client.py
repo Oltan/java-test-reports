@@ -62,7 +62,15 @@ class JiraClient:
         description: str,
         doors_number: Optional[str] = None,
     ) -> dict[str, str]:
-        """Create Jira bug with wiki-renderer description."""
+        """Create Jira bug with wiki-renderer description.
+
+        The Jira project has no custom field for the DOORS number, so it lives
+        in the description text (search_by_doors_number queries it there). When
+        ``doors_number`` is given but missing from ``description``, a
+        ``*DOORS Number:*`` line is appended so the issue stays searchable.
+        """
+        if doors_number and doors_number not in description:
+            description = f"{description}\n\n*DOORS Number:* {doors_number}"
         if self.dry_run:
             if os.getenv(DRY_RUN_JIRA_RESULT_ENV, "success").lower() == "failure":
                 raise RuntimeError("Jira dry-run failure requested")
@@ -77,8 +85,6 @@ class JiraClient:
             "description": description,
             "issuetype": {"name": self.issue_type},
         }
-        if doors_number:
-            fields["DOORS Number"] = doors_number
 
         jira = self._active_jira()
         result = self._with_retry(lambda: jira.create_issue(fields=fields))
@@ -88,7 +94,12 @@ class JiraClient:
         }
 
     def search_by_doors_number(self, doors_number: str) -> list[dict[str, str]]:
-        """Find existing Jira issues by DOORS number (custom field)."""
+        """Find existing Jira issues whose description mentions the DOORS number.
+
+        There is no DOORS custom field in the Jira project; create_issue writes
+        the number into the description, so the JQL does an exact-phrase text
+        search on the description.
+        """
         if self.dry_run:
             if os.getenv(DRY_RUN_JIRA_RESULT_ENV, "success").lower() == "failure":
                 raise RuntimeError("Jira dry-run failure requested")
@@ -96,10 +107,12 @@ class JiraClient:
                 {"key": issue["key"], "status": issue["status"]}
                 for issue in self._dry_run_issues.values()
                 if issue.get("doors_number") == doors_number
+                or doors_number in issue.get("description", "")
             ]
         self._require_configuration()
 
-        jql = f'project = {self.project_key} AND "DOORS Number" ~ "{doors_number}"'
+        phrase = doors_number.replace("\\", "\\\\").replace('"', '\\"')
+        jql = f'project = {self.project_key} AND description ~ "\\"{phrase}\\""'
         jira = self._active_jira()
         result = self._with_retry(lambda: jira.jql(jql))
         return [
@@ -175,4 +188,5 @@ class JiraClient:
             "status": "Dry Run",
             "url": self.issue_url(key),
             "doors_number": doors_number or "",
+            "description": description,
         }

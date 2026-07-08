@@ -57,7 +57,7 @@ def create_jira_bug(run_id: str, scenario_id: str):
     )
 
     try:
-        issue = server.jira_client.create_issue(summary, description)
+        issue = server.jira_client.create_issue(summary, description, scenario.doorsAbsNumber)
         key = issue["key"] if isinstance(issue, dict) else issue
     except httpx.HTTPStatusError as exc:
         raise HTTPException(
