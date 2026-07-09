@@ -70,16 +70,26 @@ Koşum bittiğinde ajan her run için sırasıyla:
 | Seviye | Kapsam | Durum |
 |---|---|---|
 | **L1** | Koş + triage + bug + rapor/CSV. **Test koduna dokunmaz.** | **AKTİF** |
-| **L2** | + BROKEN test onarımı | KAPALI (taslak) |
+| **L2** | + LLM destekli test onarımı | **ALTYAPI HAZIR** (`/api/repair`) |
 | **L3** | + DOORS gereksiniminden yeni senaryo yazımı | KAPALI (taslak) |
 
-**L2 taslak kuralları** (etkinleştirilmeden uygulanamaz):
-- Yalnız **BROKEN** senaryolara dokunulur; **assertion FAILED'a dokunmak
-  yasaktır** (gerçek ürün hatası olabilir — bug akışına gider).
-- Değişiklik yalnız `test-core/src/test/**` altında yapılabilir; üretim/sunucu
-  koduna dokunulamaz.
-- Her onarımdan sonra kapı komutları + aynı tag'in yeniden koşumu zorunludur;
-  onarım failure'ı çözmediyse değişiklik geri alınır ve insana devredilir.
+**L2 altyapısı** (`services/repair.py` + `routes/repair.py`):
+- `POST /api/repair/{run_id}/propose` — düşen senaryonun bağlamını (hata mesajı,
+  konsol logu kuyruğu, feature dosyası, ilgili step-definition kaynakları) toplar,
+  **OpenAI-uyumlu LLM endpoint'ine** gönderir (`OPENAI_BASE_URL`/`OPENAI_API_KEY`/
+  `OPENAI_MODEL`), yapılandırılmış düzeltme önerisi döner. **Dosyaya yazmaz.**
+- `POST /api/repair/{run_id}/apply` — öneriyi uygular ve (varsayılan) aynı
+  tag'lerle **otomatik yeniden koşum** başlatır.
+- Konsol logu artık kalıcı: `manifests/{run_id}/console.log`.
+- `OPENAI_API_KEY` boşsa endpoint'ler 503 döner — özellik anahtar girilene kadar fiilen kapalı.
+
+**L2 kuralları:**
+- Uygulanan yama **yalnız `test-core/src/test/**` altına** yazılabilir; üretim/
+  sunucu koduna dokunulamaz (yol koruması kodda zorlanır, LLM önerisi bile olsa reddedilir).
+- Assertion'ı sırf geçsin diye zayıflatmak yasaktır (prompt'ta da kodlanmıştır);
+  şüpheli öneri insana devredilir.
+- Onarım sonrası yeniden koşum failure'ı çözmediyse değişiklik geri alınır
+  (`git checkout`) ve konu insana devredilir; ikinci kör deneme yapılmaz.
 
 **L3 taslak kuralları:**
 - Yeni senaryo §1'deki tüm yazım kurallarına uyar (lint kapısı zorlar).
