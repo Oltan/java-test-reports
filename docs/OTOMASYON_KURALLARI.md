@@ -74,10 +74,18 @@ Koşum bittiğinde ajan her run için sırasıyla:
 | **L3** | + DOORS gereksiniminden yeni senaryo yazımı | KAPALI (taslak) |
 
 **L2 altyapısı** (`services/repair.py` + `routes/repair.py`):
-- `POST /api/repair/{run_id}/propose` — düşen senaryonun bağlamını (hata mesajı,
-  konsol logu kuyruğu, feature dosyası, ilgili step-definition kaynakları) toplar,
+- `POST /api/repair/{run_id}/propose` — düşen senaryonun bağlamını toplar,
   **OpenAI-uyumlu LLM endpoint'ine** gönderir (`OPENAI_BASE_URL`/`OPENAI_API_KEY`/
   `OPENAI_MODEL`), yapılandırılmış düzeltme önerisi döner. **Dosyaya yazmaz.**
+- LLM'e giden bağlam paketi: **mimari brief** (`docs/TEST_MIMARISI.md` — özel sınıf
+  yapısının açıklaması; yapı değişince güncellenmesi zorunlu), **pom.xml'ler**
+  (salt-okunur), **proje dosya haritası**, hata mesajı + konsol logu, feature
+  dosyası, ilgili step-definition'lar, **stack trace'te adı geçen proje sınıfları**
+  ve step'lerin referans verdiği `com.testreports.*` yardımcı sınıfları
+  (WebDriverFactory, WebDriverHolder…).
+- Düzeltme ajanın yetki alanı dışındaysa (pom/bağımlılık/üretim kodu) model
+  `{"needs_human": true, "explanation": ...}` döner — sistem yama uygulamaz,
+  konu insana devredilir.
 - `POST /api/repair/{run_id}/apply` — öneriyi uygular ve (varsayılan) aynı
   tag'lerle **otomatik yeniden koşum** başlatır.
 - Konsol logu artık kalıcı: `manifests/{run_id}/console.log`.

@@ -69,11 +69,62 @@ def test_collect_context_gathers_failure_console_and_sources(seeded_db):
     assert any("UnitDemoSteps.java" in p for p in ctx["step_sources"])
 
 
+def test_context_includes_poms_architecture_and_project_map(seeded_db):
+    ctx = collect_context(seeded_db, RUN_ID, Path(server.MANIFESTS_DIR))
+    assert "test-core/pom.xml" in ctx["pom_sources"]
+    assert "pom.xml" in ctx["pom_sources"]
+    assert "WebDriverFactory" in ctx["architecture"]  # docs/TEST_MIMARISI.md
+    assert "com/testreports/steps/UnitDemoSteps.java" in ctx["project_map"]
+    assert "features/unit-demo.feature" in ctx["project_map"]
+    # everything reaches the prompt
+    user_msg = repair.build_messages(ctx)[1]["content"]
+    for chunk in ("Architecture brief", "Maven poms (READ-ONLY)", "Project file map"):
+        assert chunk in user_msg
+
+
+def test_stack_trace_pulls_implicated_project_sources(seeded_db):
+    seeded_db.execute(
+        """UPDATE scenario_results SET error_message =
+           'org.openqa.selenium.SessionNotCreatedException: boom
+        at com.testreports.config.WebDriverFactory.createChromeDriver(WebDriverFactory.java:58)
+        at com.testreports.steps.LoginSteps.user_is_on_the_login_page(LoginSteps.java:24)'
+           WHERE run_id = ?""",
+        [RUN_ID],
+    )
+    ctx = collect_context(seeded_db, RUN_ID, Path(server.MANIFESTS_DIR))
+    assert any("WebDriverFactory.java" in p for p in ctx["trace_sources"])
+    assert any("LoginSteps.java" in p for p in ctx["trace_sources"])
+
+
+def test_class_references_in_steps_pull_custom_helpers():
+    # LoginSteps calls com.testreports.config.WebDriverFactory and
+    # com.testreports.allure.WebDriverHolder with fully-qualified names —
+    # the one-hop expansion must surface those custom classes.
+    login_steps = (repair.STEPS_DIR / "com/testreports/steps/LoginSteps.java").read_text()
+    found = repair._referenced_class_sources([login_steps], already=set())
+    assert any("WebDriverFactory.java" in p for p in found)
+    assert any("WebDriverHolder.java" in p for p in found)
+
+
 # ── proposal parsing ──
 
 def test_parse_proposal_accepts_fenced_json():
     raw = '```json\n{"file": "a.java", "new_content": "x", "explanation": "fix"}\n```'
     assert parse_proposal(raw)["file"] == "a.java"
+
+
+def test_parse_proposal_accepts_needs_human_handoff():
+    parsed = parse_proposal('{"needs_human": true, "explanation": "pom dependency conflict"}')
+    assert parsed == {"needs_human": True, "explanation": "pom dependency conflict"}
+
+
+def test_propose_returns_needs_human_without_target_validation(seeded_db):
+    reply = json.dumps({"needs_human": True, "explanation": "selenium version mismatch in pom"})
+    with patch.object(server.llm_client, "is_configured", return_value=True), \
+         patch.object(server.llm_client, "chat", return_value=reply):
+        response = client.post(f"/api/repair/{RUN_ID}/propose", headers=_auth(), json={})
+    assert response.status_code == 200
+    assert response.json()["proposal"]["needs_human"] is True
 
 
 def test_parse_proposal_rejects_non_json_and_missing_fields():

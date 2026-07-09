@@ -52,7 +52,8 @@ def propose_repair(run_id: str, req: ProposeRequest | None = None):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"LLM error: {exc}")
     try:
         proposal = parse_proposal(raw)
-        validate_target(proposal["file"])
+        if not proposal.get("needs_human"):
+            validate_target(proposal["file"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 

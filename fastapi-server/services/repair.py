@@ -25,8 +25,14 @@ import httpx
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_ROOT = REPO_ROOT / "test-core" / "src" / "test"
 STEPS_DIR = ALLOWED_ROOT / "java"
+ARCHITECTURE_DOC = REPO_ROOT / "docs" / "TEST_MIMARISI.md"
+POM_FILES = (REPO_ROOT / "pom.xml", REPO_ROOT / "test-core" / "pom.xml")
 CONSOLE_TAIL_LINES = 120
 MAX_SOURCE_CHARS = 20_000
+
+# 'at pkg.Class.method(Class.java:42)' stack frames and com.testreports.X.Y references
+STACK_FILE_RE = re.compile(r"\((\w[\w$]*)\.java:\d+\)")
+PROJECT_CLASS_RE = re.compile(r"com\.testreports(?:\.\w+)*\.([A-Z]\w*)")
 
 
 class OpenAIClient:
@@ -105,6 +111,18 @@ def collect_context(conn, run_id: str, manifests_dir: Path, scenario_uid: Option
         feature_source = _read_feature(target["feature_file"])
         step_sources = _matching_step_sources(feature_source)
 
+    # Selenium/infra failures usually point at the class to fix via the stack
+    # trace, and step files reach the custom classes (WebDriverFactory,
+    # WebDriverHolder, page objects…) via com.testreports.* references — pull
+    # both in so the model sees the actual code involved, not just the steps.
+    error_text = (target or {}).get("error_message") or ""
+    trace_sources = _stack_frame_sources(error_text, console_tail)
+    referenced = _referenced_class_sources(
+        [error_text, console_tail, *step_sources.values()],
+        already=set(step_sources) | set(trace_sources),
+    )
+    trace_sources.update(referenced)
+
     return {
         "run_id": run_id,
         "failures": failures,
@@ -112,6 +130,10 @@ def collect_context(conn, run_id: str, manifests_dir: Path, scenario_uid: Option
         "console_tail": console_tail,
         "feature_source": feature_source,
         "step_sources": step_sources,
+        "trace_sources": trace_sources,
+        "pom_sources": _pom_sources(),
+        "project_map": _project_map(),
+        "architecture": _architecture_doc(),
     }
 
 
@@ -164,31 +186,112 @@ def _matching_step_sources(feature_source: str) -> dict[str, str]:
     return matched
 
 
+def _stack_frame_sources(*texts: str) -> dict[str, str]:
+    """Project source files named in java stack frames ('(Foo.java:42)')."""
+    names = set()
+    for text in texts:
+        names.update(STACK_FILE_RE.findall(text or ""))
+    found: dict[str, str] = {}
+    for name in sorted(names):
+        for path in STEPS_DIR.rglob(f"{name}.java"):
+            rel = str(path.relative_to(REPO_ROOT))
+            found[rel] = path.read_text(encoding="utf-8", errors="replace")[:MAX_SOURCE_CHARS]
+    return found
+
+
+def _referenced_class_sources(texts: list[str], already: set[str]) -> dict[str, str]:
+    """One-hop expansion: com.testreports.X.Y references in the given texts
+    (imports or fully-qualified uses in step files, error text, console) pull in
+    the referenced class files — this is how custom helpers like
+    WebDriverFactory/WebDriverHolder reach the model."""
+    class_names = set()
+    for text in texts:
+        class_names.update(PROJECT_CLASS_RE.findall(text or ""))
+    found: dict[str, str] = {}
+    total = 0
+    for name in sorted(class_names):
+        for path in STEPS_DIR.rglob(f"{name}.java"):
+            rel = str(path.relative_to(REPO_ROOT))
+            if rel in already or rel in found:
+                continue
+            found[rel] = path.read_text(encoding="utf-8", errors="replace")[:MAX_SOURCE_CHARS]
+            total += len(found[rel])
+            if total > MAX_SOURCE_CHARS:
+                return found
+    return found
+
+
+def _pom_sources() -> dict[str, str]:
+    """Maven poms, context-only: dependency/plugin/system-property questions are
+    answered from here, but pom edits are out of the repair agent's mandate."""
+    return {
+        str(p.relative_to(REPO_ROOT)): p.read_text(encoding="utf-8", errors="replace")[:MAX_SOURCE_CHARS]
+        for p in POM_FILES
+        if p.is_file()
+    }
+
+
+def _project_map() -> str:
+    """Compact tree of every test source/resource so the model can ask for the
+    right file instead of hallucinating paths."""
+    lines = []
+    if STEPS_DIR.is_dir():
+        lines += [str(p.relative_to(REPO_ROOT)) for p in sorted(STEPS_DIR.rglob("*.java"))]
+    resources = ALLOWED_ROOT / "resources"
+    if resources.is_dir():
+        lines += [str(p.relative_to(REPO_ROOT)) for p in sorted(resources.rglob("*")) if p.is_file()]
+    return "\n".join(lines)
+
+
+def _architecture_doc() -> str:
+    """docs/TEST_MIMARISI.md — the maintained brief that explains the project's
+    custom class structure (driver factory/holder pattern, hooks, runners)."""
+    if ARCHITECTURE_DOC.is_file():
+        return ARCHITECTURE_DOC.read_text(encoding="utf-8", errors="replace")[:MAX_SOURCE_CHARS]
+    return ""
+
+
 SYSTEM_PROMPT = (
-    "You are a test-automation repair agent for a Java Cucumber project. "
-    "You receive a failing scenario, its error, the console log and the relevant sources. "
-    "Propose a fix by rewriting exactly ONE file. Constraints: "
-    "(1) you may only modify files under test-core/src/test/ (test code, step definitions, feature files); "
-    "(2) never weaken an assertion just to make it pass unless the expected value is clearly a test-data mistake; "
-    "(3) respond with ONLY a JSON object, no markdown fences, in the form "
+    "You are a test-automation repair agent for a Java Cucumber/Selenium project. "
+    "You receive the project's architecture brief, the maven poms (READ-ONLY context), "
+    "a project file map, a failing scenario with its error, the console log, and the "
+    "source files implicated by the stack trace and class references. Constraints: "
+    "(1) you may only modify files under test-core/src/test/ (test code, step definitions, "
+    "feature files, test resources) and the file you name must appear in the project map; "
+    "(2) poms and production code are read-only — if the real fix requires them, do not "
+    "guess a workaround; "
+    "(3) never weaken an assertion just to make it pass unless the expected value is "
+    "clearly a test-data mistake; "
+    "(4) follow the conventions in the architecture brief (drivers only via "
+    "WebDriverFactory, hooks reach the driver via WebDriverHolder, no hardcoded paths). "
+    "Respond with ONLY a JSON object, no markdown fences, in ONE of these forms: "
     '{"file": "<path relative to repo root>", "new_content": "<full new file content>", '
-    '"explanation": "<one short sentence>"}.'
+    '"explanation": "<one short sentence>"} '
+    "OR, when the fix is outside your mandate (pom/production/infra), "
+    '{"needs_human": true, "explanation": "<what a human must change and why>"}.'
 )
+
+
+def _render_sources(sources: dict[str, str]) -> str:
+    return "\n\n".join(f"--- {path} ---\n{content}" for path, content in sources.items())
 
 
 def build_messages(context: dict[str, Any]) -> list[dict[str, str]]:
     target = context["target"] or {}
-    sources = "\n\n".join(
-        f"--- {path} ---\n{content}" for path, content in context["step_sources"].items()
-    )
     user = (
+        f"## Architecture brief\n{context.get('architecture', '')}\n\n"
+        f"## Project file map\n{context.get('project_map', '')}\n\n"
+        f"## Maven poms (READ-ONLY)\n{_render_sources(context.get('pom_sources', {}))}\n\n"
+        f"## Failure\n"
         f"Run: {context['run_id']}\n"
         f"Failing scenario: {target.get('name')}\n"
         f"DOORS: {target.get('doors_number')}\n"
         f"Error message:\n{target.get('error_message') or 'N/A'}\n\n"
-        f"Feature file ({target.get('feature_file')}):\n{context['feature_source']}\n\n"
-        f"Step definition sources:\n{sources}\n\n"
-        f"Console log tail:\n{context['console_tail']}"
+        f"## Feature file ({target.get('feature_file')})\n{context['feature_source']}\n\n"
+        f"## Step definition sources\n{_render_sources(context['step_sources'])}\n\n"
+        f"## Sources implicated by stack trace / class references\n"
+        f"{_render_sources(context.get('trace_sources', {}))}\n\n"
+        f"## Console log tail\n{context['console_tail']}"
     )
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -196,8 +299,13 @@ def build_messages(context: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
-def parse_proposal(raw: str) -> dict[str, str]:
-    """Parse the model reply into {file, new_content, explanation}; tolerant of fences."""
+def parse_proposal(raw: str) -> dict[str, Any]:
+    """Parse the model reply; tolerant of fences.
+
+    Two valid shapes: a patch ({file, new_content, explanation}) or a hand-off
+    ({needs_human: true, explanation}) for fixes outside the repair mandate
+    (pom, production code, infrastructure).
+    """
     text = raw.strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
@@ -206,6 +314,8 @@ def parse_proposal(raw: str) -> dict[str, str]:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"LLM yanıtı JSON değil: {exc}") from exc
+    if data.get("needs_human"):
+        return {"needs_human": True, "explanation": str(data.get("explanation", ""))}
     missing = {"file", "new_content"} - set(data)
     if missing:
         raise ValueError(f"LLM yanıtında eksik alanlar: {sorted(missing)}")
