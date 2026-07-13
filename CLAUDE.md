@@ -5,10 +5,11 @@ Bu dosyayı Claude Code otomatik okur. Projenin mevcut durumu, tamamlanan işler
 ## AKTİF BRANCH
 
 ```
-claude/dreamy-heisenberg-li4yol
+claude/software-functionality-review-ysd70a
 ```
 
 Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main/master'a dokunulmaz.
+(Önceki `claude/dreamy-heisenberg-li4yol` PR #3 ile master'a merge edildi.)
 
 ---
 
@@ -99,8 +100,18 @@ Tüm geliştirme bu branch'te yapılır. Commit/push'lar bu branch'e gider; main
 ### Ortam notu (Java/Maven)
 Bu ortamda: `mvn` 3.9.11 + Java 21 + cache'li deps → **derleme, unit test, cucumber dry-run çalışır**. **Chrome binary yok** (sadece chromedriver) → gerçek Selenium koşumu çalışmaz; o yüzden koşum hep mock'lanır.
 
-### ⏳ Wave 4/5 — Taşınabilirlik + Agent zemini
-- P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: Failures endpoint + `docs/API.md`
+### ✅ Agent zemini — Kural kitabı + lint kapısı (TAMAMLANDI)
+- `docs/OTOMASYON_KURALLARI.md`: otonom ajan kural kitabı — senaryo yazım kuralları,
+  koşum kuralları, L1 failure karar ağacı (auto-match önce → FAILED'a bug → BROKEN'a bug yok),
+  otonomi seviyeleri (L1 aktif; L2 onarım / L3 yeni-test taslak+kapalı), insan-onayı listesi
+- `fastapi-server/tests/test_feature_conventions.py`: feature-lint kapısı (pytest'in parçası) —
+  senaryo başına tam 1 DOORS tag'i, repo genelinde DOORS/@id tekilliği, @dep hedef+döngü kontrolü;
+  saf `lint_features()` + negatif fixture'lar
+- AGENTS.md'ye "Ajan Çalışma Kuralları" özeti eklendi
+- Jira notu: DOORS için custom field YOK — numara description'a yazılır, dedup `description ~` JQL ile
+
+### ⏳ Wave 4/5 — Taşınabilirlik (kalan)
+- P8+RM-5: env dokümantasyonu (kısmen `.env.example`'da) · P9: `docs/API.md`
 
 ---
 

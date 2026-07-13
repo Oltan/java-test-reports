@@ -33,6 +33,7 @@ from services.jira_helper import build_jira_description
 from bug_tracker import BugTracker
 from db import get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation, get_scenario_history, get_scenario_matrix
 from jira_client import JiraClient
+from services.repair import OpenAIClient
 from pipeline import execute_pipeline
 from doors_service import run_doors_dxl, is_doors_available  # type: ignore[reportMissingImports]
 from email_service import send_email  # type: ignore[reportMissingImports]
@@ -159,6 +160,7 @@ def load_manifests() -> list[RunManifest]:
 
 tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
 jira_client = JiraClient()
+llm_client = OpenAIClient()  # LLM repair (L2); unconfigured → repair routes 503
 
 
 def _maybe_kill_stale(pid) -> None:
@@ -552,6 +554,12 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
                 _terminate_proc(proc)
                 return
 
+    # Persist console output so post-run tooling (triage, LLM repair) can read
+    # what the human saw live over the WebSocket.
+    console_log_path = MANIFESTS_DIR / run_id / "console.log"
+    console_log_path.parent.mkdir(parents=True, exist_ok=True)
+    console_log = open(console_log_path, "a", encoding="utf-8")
+
     async def consume_stream(stream: asyncio.StreamReader | None) -> None:
         if stream is None:
             return
@@ -560,6 +568,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             if not decoded:
                 continue
             stats["output"].append(decoded)
+            console_log.write(decoded + "\n")
             beat()
 
             if "Scenario:" in decoded or "Scenario Outline:" in decoded:
@@ -604,6 +613,7 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
         stats["error"] = str(e)
         stats["running"] = 0
     finally:
+        console_log.close()
         with tests_lock:
             running_tests.pop(run_id, None)
 
@@ -1208,6 +1218,7 @@ from routes.reports import router as reports_router  # noqa: E402
 from routes.triage import router as triage_router  # noqa: E402
 from routes.tests import router as tests_router  # noqa: E402
 from routes.pages import router as pages_router  # noqa: E402
+from routes.repair import router as repair_router  # noqa: E402
 app.include_router(bugs_router)
 app.include_router(integrations_router)
 app.include_router(runs_router)
@@ -1216,4 +1227,5 @@ app.include_router(admin_router)
 app.include_router(reports_router)
 app.include_router(triage_router)
 app.include_router(tests_router)
+app.include_router(repair_router)
 app.include_router(pages_router)

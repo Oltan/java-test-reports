@@ -89,7 +89,8 @@ def rename_run(run_id: str, req: RenameRequest, _: server.TokenData = Depends(se
 
 @router.get("/api/scenario-history", dependencies=[Depends(server.verify_token)])
 def list_scenario_history():
-    conn = server.get_connection(read_only=True)
+    # read_only=False: init_schema needs CREATE, which DuckDB rejects on read-only connections
+    conn = server.get_connection(read_only=False)
     try:
         server.init_schema(conn)
         return server.get_scenario_history(conn)
@@ -99,7 +100,7 @@ def list_scenario_history():
 
 @router.get("/api/scenario-history/{doors_number}", dependencies=[Depends(server.verify_token)])
 def get_scenario_history_item(doors_number: str):
-    conn = server.get_connection(read_only=True)
+    conn = server.get_connection(read_only=False)
     try:
         server.init_schema(conn)
         result = server.get_scenario_history(conn, doors_number)
@@ -112,7 +113,7 @@ def get_scenario_history_item(doors_number: str):
 
 @router.get("/api/scenario-matrix", dependencies=[Depends(server.verify_token)])
 def list_scenario_matrix(limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)):
-    conn = server.get_connection(read_only=True)
+    conn = server.get_connection(read_only=False)
     try:
         server.init_schema(conn)
         return server.get_scenario_matrix(conn, limit, offset)
