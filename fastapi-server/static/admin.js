@@ -4,6 +4,7 @@ Chart.register(...registerables);
 const TOKEN_KEY = "jwt_token";
 let liveProgressSocket = null;
 let liveStateSocket = null;
+let activeTerminalRunId = null;
 
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
@@ -73,9 +74,40 @@ function showAdmin() {
   loadJobHistory();
   loadVersions();
   loadRunsManage();
+  loadAgentStatus();
   connectLiveStateWebSocket();
   setInterval(loadRunningTests, 5000);
   setInterval(loadJobHistory, 15000);
+}
+
+function renderLiveProgress(d) {
+  const progress = $("live-progress");
+  const output = $("live-output");
+  if (progress) progress.style.display = "block";
+  if ($("live-run-id")) $("live-run-id").textContent = activeTerminalRunId || d.run_id || "-";
+  if ($("live-passed")) $("live-passed").textContent = d.passed ?? 0;
+  if ($("live-failed")) $("live-failed").textContent = d.failed ?? 0;
+  if ($("live-skipped")) $("live-skipped").textContent = d.skipped ?? 0;
+  if ($("live-running")) $("live-running").textContent = d.running ?? 0;
+  if ($("live-pct")) $("live-pct").textContent = `${d.pct ?? 0}%`;
+  if (output && d.output) {
+    output.textContent = d.output.slice(-500).join("\n");
+    output.scrollTop = output.scrollHeight;
+  }
+}
+
+async function loadConsoleTail(runId) {
+  const output = $("live-output");
+  if (!runId || !output) return;
+  try {
+    const data = await apiFetch(`/api/tests/${encodeURIComponent(runId)}/console?lines=500`);
+    if (data.lines && data.lines.length > 0) {
+      output.textContent = data.lines.join("\n");
+      output.scrollTop = output.scrollHeight;
+    }
+  } catch (e) {
+    console.error("Console tail failed:", e);
+  }
 }
 
 function connectLiveStateWebSocket() {
@@ -92,9 +124,21 @@ function connectLiveStateWebSocket() {
     ws.onmessage = (e) => {
       try {
         const m = JSON.parse(e.data);
+        const d = m.data || m;
         if (m.type === "state") {
           loadRunningTests();
           loadJobHistory();
+        } else if (m.type === "progress" || d.type === "progress" || m.type === "complete" || d.type === "complete") {
+          if (!activeTerminalRunId && d.run_id) activeTerminalRunId = d.run_id;
+          if (!activeTerminalRunId || activeTerminalRunId === d.run_id) {
+            renderLiveProgress(d);
+          }
+          if (m.type === "complete" || d.type === "complete") {
+            setTimeout(() => {
+              loadRunningTests();
+              loadJobHistory();
+            }, 1500);
+          }
         }
       } catch (_) { /* ignore malformed frames */ }
     };
@@ -110,15 +154,20 @@ function connectTestRunWebSocket(runId) {
   // Connect WebSocket for live test progress
   if (!runId) { console.log("[WS] runId empty, returning"); return; }
   if (liveProgressSocket) { console.log("[WS] closing old socket"); liveProgressSocket.close(); }
+  activeTerminalRunId = runId;
+  if ($("agent-run-id") && !$("agent-run-id").value) $("agent-run-id").value = runId;
 
   const progress = $("live-progress");
   const output = $("live-output");
   if (progress) progress.style.display = "block";
+  if ($("live-run-id")) $("live-run-id").textContent = runId;
   if ($("live-passed")) $("live-passed").textContent = "0";
   if ($("live-failed")) $("live-failed").textContent = "0";
+  if ($("live-skipped")) $("live-skipped").textContent = "0";
   if ($("live-running")) $("live-running").textContent = "0";
   if ($("live-pct")) $("live-pct").textContent = "0%";
   if (output) output.textContent = "";
+  loadConsoleTail(runId);
 
   const protocol = location.protocol === "https:" ? "wss" : "ws";
   const token = getToken();
@@ -133,17 +182,10 @@ function connectTestRunWebSocket(runId) {
       const raw = JSON.parse(e.data);
       const d = raw.data || raw;
       if (raw.type === "progress" || d.type === "progress" || raw.type === "update") {
-        if ($("live-passed")) $("live-passed").textContent = d.passed ?? 0;
-        if ($("live-failed")) $("live-failed").textContent = d.failed ?? 0;
-        if ($("live-running")) $("live-running").textContent = d.running ?? 0;
-        if ($("live-pct")) $("live-pct").textContent = `${d.pct ?? 0}%`;
-        if (output) {
-          output.textContent = (d.output || []).slice(-50).join("\n");
-          output.scrollTop = output.scrollHeight;
-        }
+        renderLiveProgress(d);
       } else if (raw.type === "complete" || d.type === "complete") {
         if ($("live-pct")) $("live-pct").textContent = "100% - Tamamlandı!";
-        if (output && d.output) output.textContent = d.output.slice(-50).join("\n");
+        renderLiveProgress(d);
         setTimeout(() => {
           loadRunningTests();
           loadJobHistory();
@@ -160,6 +202,10 @@ function connectTestRunWebSocket(runId) {
       $("test-status-msg").className = "admin-status-msg admin-status--error";
     }
   };
+}
+
+function openRunTerminal(runId) {
+  connectTestRunWebSocket(runId);
 }
 
 function addWorkerRow(tags = "", browser = "") {
@@ -265,6 +311,58 @@ async function triggerPipeline() {
   }
 }
 
+async function loadAgentStatus() {
+  const msg = $("agent-status-msg");
+  if (!msg) return;
+  try {
+    const status = await apiFetch("/api/agent/opencode/status");
+    if (status.configured) {
+      msg.textContent = `OpenCode hazır: ${status.executable}`;
+      msg.className = "admin-status-msg admin-status--success";
+    } else {
+      msg.textContent = `OpenCode bulunamadı. OPENCODE_CMD ayarlayın veya opencode'u PATH'e ekleyin.`;
+      msg.className = "admin-status-msg admin-status--pending";
+    }
+  } catch (e) {
+    msg.textContent = `OpenCode durum okunamadı: ${e.message}`;
+    msg.className = "admin-status-msg admin-status--error";
+  }
+}
+
+async function requestAgentAdvice() {
+  const msg = $("agent-status-msg");
+  const out = $("agent-output");
+  const runId = $("agent-run-id")?.value.trim() || activeTerminalRunId;
+  const intent = $("agent-intent")?.value || "both";
+  if (!runId) {
+    msg.textContent = "Önce bir run seçin veya Run ID girin.";
+    msg.className = "admin-status-msg admin-status--error";
+    return;
+  }
+  try {
+    msg.textContent = "OpenCode agent çalışıyor…";
+    msg.className = "admin-status-msg admin-status--pending";
+    if (out) {
+      out.style.display = "block";
+      out.textContent = "Agent çıktısı bekleniyor…";
+    }
+    const data = await apiFetch(`/api/agent/runs/${encodeURIComponent(runId)}/advise`, {
+      method: "POST",
+      body: JSON.stringify({ intent }),
+    });
+    msg.textContent = data.advice ? "Agent önerisi hazır." : `Agent tamamlandı; JSON öneri parse edilemedi (exit ${data.exit_code}).`;
+    msg.className = data.advice ? "admin-status-msg admin-status--success" : "admin-status-msg admin-status--pending";
+    if (out) out.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    msg.textContent = `Agent hatası: ${e.message}`;
+    msg.className = "admin-status-msg admin-status--error";
+    if (out) {
+      out.style.display = "block";
+      out.textContent = e.message;
+    }
+  }
+}
+
 function renderWorkerStatusBadge(status) {
   const map = {
     running: { label: "çalışıyor", cls: "worker-badge--running" },
@@ -305,6 +403,7 @@ function renderJobCard(job, showCancel = false) {
           <span class="worker-shard">Shard ${w.shard}</span>
           <span class="worker-run-id">${w.run_id}</span>
           ${renderWorkerStatusBadge(w.status)}
+          <button class="cancel-btn" onclick="window.openRunTerminal('${w.run_id}')">Terminal</button>
         </div>
       `).join("")}
     </div>`;
@@ -354,6 +453,11 @@ async function loadRunningTests() {
       return;
     }
     container.innerHTML = data.jobs.map(job => renderJobCard(job, true)).join("");
+    if (!activeTerminalRunId) {
+      const runningJob = data.jobs.find(j => j.status === "running");
+      const firstRunId = runningJob?.workers?.[0]?.run_id;
+      if (firstRunId) openRunTerminal(firstRunId);
+    }
   } catch {
     container.innerHTML = '<div class="running-tests-empty">Yüklenemedi</div>';
   }
@@ -374,6 +478,10 @@ async function loadJobHistory() {
       return;
     }
     container.innerHTML = completedJobs.map(job => renderJobCard(job, false)).join("");
+    if (!activeTerminalRunId) {
+      const latestRunId = completedJobs[0]?.workers?.[0]?.run_id;
+      if (latestRunId) openRunTerminal(latestRunId);
+    }
   } catch {
     container.innerHTML = '<div class="running-tests-empty">Yüklenemedi</div>';
   }
@@ -484,6 +592,7 @@ function initThemeToggle() {
 
 window.cancelTest = cancelTest;
 window.cancelJob = cancelJob;
+window.openRunTerminal = openRunTerminal;
 window.deleteRun = deleteRun;
 
 (async function init() {
@@ -493,6 +602,7 @@ window.deleteRun = deleteRun;
   $("test-mode")?.addEventListener("change", applyMode);
   $("add-worker-btn")?.addEventListener("click", () => addWorkerRow());
   $("pipeline-btn")?.addEventListener("click", triggerPipeline);
+  $("agent-advice-btn")?.addEventListener("click", requestAgentAdvice);
   $("delete-all-btn")?.addEventListener("click", deleteAllRuns);
   initThemeToggle();
 
@@ -501,6 +611,7 @@ window.deleteRun = deleteRun;
     try {
       await apiFetch("/api/v1/runs", { method: "GET" });
       showAdmin();
+      loadAgentStatus();
     } catch (err) {
       clearToken();
       hideNavLinks();

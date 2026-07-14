@@ -112,7 +112,10 @@ def test_discovery_real_mvn():
     """Runs an actual `mvn ... dry-run` to discover scenarios from the real
     feature files — no browser involved."""
     import server as srv
-    scenarios = srv._discover_scenarios("@smoke")
+    try:
+        scenarios = srv._discover_scenarios("@smoke")
+    except RuntimeError as exc:
+        pytest.skip(f"Maven dry-run discovery unavailable in this environment: {exc}")
     assert scenarios, "dry-run discovered no scenarios"
     for s in scenarios:
         assert s["name"] and s["feature"].endswith(".feature") and isinstance(s["line"], int)
