@@ -6,15 +6,17 @@ as server.X — get_connection, _spawn_run, TEST_MAX_CONCURRENCY, tests_lock,
 running_tests, _terminate_proc, _worker_specs/_worker_options, _broadcast_state —
 so patch.object(server, ...) in the tests still applies through this router.
 """
+import re
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 import server
 from models import TestRunOptions
 
 router = APIRouter()
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 @router.post("/api/tests/start", dependencies=[Depends(server.verify_token)])
@@ -220,6 +222,22 @@ async def list_all_jobs():
             job["flaky_count"] = flaky_count
             job["retry_total"] = retry_total
     return {"jobs": jobs, "count": len(jobs)}
+
+
+@router.get("/api/tests/{run_id}/console", dependencies=[Depends(server.verify_token)])
+async def get_test_console(run_id: str, lines: int = Query(default=500, ge=1, le=5000)):
+    """Return the shared persisted terminal output for a test run.
+
+    WebSockets cover live updates; this endpoint lets any operator who opens the
+    admin page later replay the same terminal tail from disk.
+    """
+    if not _RUN_ID_RE.fullmatch(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id")
+    log_path = server.MANIFESTS_DIR / run_id / "console.log"
+    if not log_path.exists():
+        return {"run_id": run_id, "lines": [], "exists": False}
+    content = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return {"run_id": run_id, "lines": content[-lines:], "exists": True}
 
 
 @router.post("/api/tests/{run_id}/cancel", dependencies=[Depends(server.verify_token)])

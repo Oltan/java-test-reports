@@ -277,6 +277,27 @@ def test_running_endpoint_includes_queued_jobs(client, in_mem_db):
     assert resp.json()["running"] == ["job-run"]  # but only running in the running-id list
 
 
+def test_console_endpoint_returns_persisted_tail(client, tmp_path, monkeypatch):
+    import server as srv
+
+    manifests = tmp_path / "manifests"
+    run_dir = manifests / "test-console"
+    run_dir.mkdir(parents=True)
+    (run_dir / "console.log").write_text("one\ntwo\nthree\n", encoding="utf-8")
+    monkeypatch.setattr(srv, "MANIFESTS_DIR", manifests)
+
+    resp = client.get("/api/tests/test-console/console?lines=2", headers=_auth())
+
+    assert resp.status_code == 200
+    assert resp.json() == {"run_id": "test-console", "lines": ["two", "three"], "exists": True}
+
+
+def test_console_endpoint_rejects_path_traversal(client):
+    resp = client.get("/api/tests/bad%20id/console", headers=_auth())
+
+    assert resp.status_code == 400
+
+
 # ── RM-3: matrix parallel modes ──────────────────────────────────────────────
 
 def test_matrix_mode_persists_per_worker_config(client, in_mem_db):
