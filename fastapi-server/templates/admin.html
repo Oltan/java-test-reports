@@ -60,7 +60,7 @@
    <!-- Live Progress — top of page, full width -->
    <div id="live-progress" style="display:none; background:var(--card-bg); border:2px solid var(--accent); border-radius:12px; padding:20px; margin-bottom:20px;">
      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
-       <h3 style="margin:0">Canlı Test</h3>
+       <h3 style="margin:0">Ortak Canlı Terminal <span id="live-run-id" style="font-size:12px;color:var(--text-muted);font-family:monospace;"></span></h3>
        <div style="display:flex; gap:24px; font-size:16px; align-items:center;">
          <span style="display:flex;align-items:center;gap:6px;">
            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00c853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -73,6 +73,10 @@
          <span style="display:flex;align-items:center;gap:6px;">
            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 12 5 19 12"/></svg>
            <strong id="live-skipped" style="color:#ffc107">0</strong>
+         </span>
+         <span style="display:flex;align-items:center;gap:6px;">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+           <strong id="live-running" style="color:#29b6f6">0</strong>
          </span>
          <span style="display:flex;align-items:center;gap:6px;">
            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -173,12 +177,38 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Aktif Testler
       </div>
-      <div id="running-tests-list" class="running-tests-list">
-        <div class="running-tests-empty">Yükleniyor…</div>
-      </div>
-    </div>
+	      <div id="running-tests-list" class="running-tests-list">
+	        <div class="running-tests-empty">Yükleniyor…</div>
+	      </div>
+	    </div>
 
-  </div>
+	    <!-- Agent Advisor Panel -->
+	    <div class="admin-panel">
+	      <div class="admin-panel-title">
+	        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+	        OpenCode Repair / Jira Advisor
+	      </div>
+	      <p class="admin-desc">Failed run için OpenCode sidecar'dan repair ve Jira açma/açmama önerisi al.</p>
+	      <div class="admin-form-row">
+	        <div class="form-field">
+	          <label for="agent-run-id">Run ID</label>
+	          <input id="agent-run-id" type="text" placeholder="test-...">
+	        </div>
+	        <div class="form-field">
+	          <label for="agent-intent">Amaç</label>
+	          <select id="agent-intent">
+	            <option value="both">Repair + Jira karar</option>
+	            <option value="repair">Sadece repair</option>
+	            <option value="jira">Sadece Jira karar</option>
+	          </select>
+	        </div>
+	      </div>
+	      <button class="btn btn-primary" id="agent-advice-btn">Agent Önerisi Al</button>
+	      <div id="agent-status-msg" class="admin-status-msg"></div>
+	      <pre id="agent-output" style="display:none;background:#111827;color:#d1fae5;padding:12px;border-radius:8px;max-height:260px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+	    </div>
+
+	  </div>
 
   <div class="version-section">
     <div class="admin-panel-title">

@@ -34,6 +34,7 @@ from bug_tracker import BugTracker
 from db import get_connection, init_schema, upsert_scenario_history, update_scenario_history_explanation, get_scenario_history, get_scenario_matrix
 from jira_client import JiraClient
 from services.repair import OpenAIClient
+from services.opencode_agent import OpenCodeAgent
 from pipeline import execute_pipeline
 from doors_service import run_doors_dxl, is_doors_available  # type: ignore[reportMissingImports]
 from email_service import send_email  # type: ignore[reportMissingImports]
@@ -161,6 +162,7 @@ def load_manifests() -> list[RunManifest]:
 tracker = BugTracker(str(Path(__file__).parent.parent / "bug-tracker.json"))
 jira_client = JiraClient()
 llm_client = OpenAIClient()  # LLM repair (L2); unconfigured → repair routes 503
+opencode_agent = OpenCodeAgent()  # OpenCode sidecar; unconfigured → agent routes 503
 
 
 def _maybe_kill_stale(pid) -> None:
@@ -345,6 +347,13 @@ def _discover_scenarios(tags: str = "@smoke") -> list[dict]:
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         raise RuntimeError(f"scenario discovery failed: {exc}") from exc
+    if proc.returncode != 0:
+        details = (proc.stderr or proc.stdout or "").strip()
+        if len(details) > 1000:
+            details = details[-1000:]
+        raise RuntimeError(
+            f"scenario discovery failed with exit code {proc.returncode}: {details}"
+        )
     scenarios = []
     for line in proc.stdout.splitlines():
         m = _SCENARIO_LINE_RE.match(line)
@@ -603,6 +612,9 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
             await proc.wait()
         finally:
             wd.cancel()
+        exit_code = getattr(proc, "returncode", None)
+        if exit_code:
+            stats["error"] = f"test command exited with code {exit_code}"
         saved = _save_results_to_duckdb(run_id, options, started_at, allure_dir=output_dir)
         if saved:
             stats.update({"total": saved["total"], "passed": saved["passed"], "failed": saved["failed"], "skipped": saved["skipped"], "running": 0})
@@ -630,8 +642,8 @@ async def execute_test_run(run_id: str, options: TestRunOptions, output_dir: str
     )
 
     now = datetime.now()
-    final_status = "completed" if not stats.get("error") else "failed"
     exit_code = getattr(proc, "returncode", None)
+    final_status = "completed" if not stats.get("error") and exit_code == 0 else "failed"
     with get_connection(read_only=False) as conn:
         conn.execute(
             "UPDATE worker_runs SET status = ?, ended_at = ?, exit_code = ? WHERE run_id = ? AND status != 'cancelled'",
@@ -1219,6 +1231,7 @@ from routes.triage import router as triage_router  # noqa: E402
 from routes.tests import router as tests_router  # noqa: E402
 from routes.pages import router as pages_router  # noqa: E402
 from routes.repair import router as repair_router  # noqa: E402
+from routes.agents import router as agents_router  # noqa: E402
 app.include_router(bugs_router)
 app.include_router(integrations_router)
 app.include_router(runs_router)
@@ -1228,4 +1241,5 @@ app.include_router(reports_router)
 app.include_router(triage_router)
 app.include_router(tests_router)
 app.include_router(repair_router)
+app.include_router(agents_router)
 app.include_router(pages_router)
